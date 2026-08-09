@@ -29,6 +29,7 @@ from enum import Enum, auto
 from pathlib import Path
 
 from .smart_turn_adapter import SmartTurnAdapter
+from .vad_bypass import VadBypass
 
 logger = logging.getLogger("joyai.jarvis")
 
@@ -144,6 +145,22 @@ class JarvisConfig:
     kws_max_active_paths: int = 10
     """Beam search width (community default 4 不够, 用 10 提高 recall)."""
 
+    # VAD bypass (Silero, sherpa-onnx) — form A: bypass + soft-gate, fail-open.
+    # Default OFF. When off / disabled / model-missing, VAD is transparent and
+    # KWS receives ALL audio. Enabling only adds a speech/silence annotation +
+    # (optional) soft-gate that skips kws.feed_audio on silence chunks. This is
+    # NOT the T-VAD-1-rejected "is-anyone-speaking" detector — it is HF-style
+    # turn/segment management (see doc/research/kws-vad-bt-wakeword.md §7).
+    vad_enabled: bool = False
+    vad_model_dir: str = ""
+    vad_min_silence_duration: float = 0.5
+    vad_min_speech_duration: float = 0.25
+    vad_threshold: float = 0.5
+    vad_window_size: int = 512
+    vad_softgate: bool = False
+    """When True AND vad available, skip self._kws.feed_audio on silence chunks
+    (soft-gate). Default False = VAD annotation only, KWS gets all audio."""
+
     # ASR
     asr_model_dir: str = "D:/AI/models/sherpa-onnx/models/asr/streaming-paraformer-bilingual-zh-en"
     asr_num_threads: int = 2
@@ -226,6 +243,13 @@ class JarvisConfig:
           JARVIS_KWS_FRESH_PROBE_INTERVAL_S (float)
           JARVIS_KWS_FRESH_PROBE_MIN_S (float)
           JARVIS_KWS_FRESH_DIRECT_WAKE (bool)
+          JARVIS_VAD_ENABLED          (bool)  default false (fail-open passthrough)
+          JARVIS_VAD_MODEL_DIR        (str)   dir containing silero_vad.onnx
+          JARVIS_VAD_MIN_SILENCE_S    (float) default 0.5
+          JARVIS_VAD_MIN_SPEECH_S     (float) default 0.25
+          JARVIS_VAD_THRESHOLD        (float) default 0.5
+          JARVIS_VAD_WINDOW_SIZE      (int)   default 512
+          JARVIS_VAD_SOFTGATE         (bool)  default false (annotation only)
         Invalid float/int values fall back to defaults and log a WARNING so
         config typos surface instead of crashing the webui at boot.
         """
@@ -320,6 +344,17 @@ class JarvisConfig:
             tts_api_url=_get_str("JARVIS_TTS_API_URL", cls.tts_api_url),
             tts_voice_id=_get_str("JARVIS_TTS_VOICE_ID", cls.tts_voice_id),
             events_dir=_get_str("JARVIS_EVENTS_DIR", cls.events_dir),
+            vad_enabled=_get_bool("JARVIS_VAD_ENABLED", cls.vad_enabled),
+            vad_model_dir=_get_str("JARVIS_VAD_MODEL_DIR", cls.vad_model_dir),
+            vad_min_silence_duration=_get_float(
+                "JARVIS_VAD_MIN_SILENCE_S", cls.vad_min_silence_duration
+            ),
+            vad_min_speech_duration=_get_float(
+                "JARVIS_VAD_MIN_SPEECH_S", cls.vad_min_speech_duration
+            ),
+            vad_threshold=_get_float("JARVIS_VAD_THRESHOLD", cls.vad_threshold),
+            vad_window_size=_get_int("JARVIS_VAD_WINDOW_SIZE", cls.vad_window_size),
+            vad_softgate=_get_bool("JARVIS_VAD_SOFTGATE", cls.vad_softgate),
         )
 
     def __post_init__(self) -> None:
@@ -431,6 +466,27 @@ class JarvisStateMachine:
             "true",
             "yes",
         )
+
+        # VAD bypass (Silero, sherpa-onnx) — form A fail-open. Default OFF via
+        # JARVIS_VAD_ENABLED. When unavailable it is transparent (KWS gets all
+        # audio). Mirrors the Smart Turn fail-open pattern above.
+        self._vad = VadBypass(
+            enabled=self.config.vad_enabled,
+            model_dir=self.config.vad_model_dir,
+            threshold=self.config.vad_threshold,
+            min_silence_duration=self.config.vad_min_silence_duration,
+            min_speech_duration=self.config.vad_min_speech_duration,
+            window_size=self.config.vad_window_size,
+        )
+        logger.info(
+            "VAD bypass initialized (enabled=%s available=%s softgate=%s)",
+            self.config.vad_enabled,
+            self._vad.available,
+            self.config.vad_softgate,
+        )
+        # Latest VAD speech annotation for the most recent fed chunk. Default
+        # True (speech) so a missing/early annotation never soft-gates KWS off.
+        self._last_vad_speech: bool = True
         # Rolling recent-audio buffer (~8s @ 16kHz mono int16) for Smart Turn
         # context, matching the model's 8s window. Capped to avoid unbounded
         # growth.
@@ -566,6 +622,22 @@ class JarvisStateMachine:
         if len(self._recent_audio) > 256000:  # ~8s @ 16kHz mono int16 (model window)
             del self._recent_audio[: len(self._recent_audio) - 256000]
 
+        # VAD bypass annotation (form A). Convert int16 PCM to float32 [-1,1]
+        # and feed the Silero VAD. Fail-open: if VAD is unavailable this is a
+        # no-op and is_speech() returns True (KWS keeps receiving all audio).
+        if self._vad.available and pcm and len(pcm) % 2 == 0:
+            try:
+                import numpy as np
+
+                float32 = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                self._vad.accept_waveform(float32)
+                self._last_vad_speech = self._vad.is_speech()
+            except Exception as exc:  # never break the audio feed
+                logger.debug("[vad] feed_audio annotation failed (%s)", exc)
+                self._last_vad_speech = True
+        else:
+            self._last_vad_speech = True
+
     # ------------------------------------------------------------------
     # State machine runner
     # ------------------------------------------------------------------
@@ -618,6 +690,12 @@ class JarvisStateMachine:
         WAKE_DETECTED and continue as before.  Otherwise the wake is
         treated as a false alarm and the session returns to KWS_LISTENING.
         """
+        # VAD soft-gate (form A): if VAD is available AND soft-gate is ON AND
+        # the latest chunk was classified as silence, skip feeding KWS entirely
+        # (do NOT rebuild the KWS stream). Fail-open: if VAD is unavailable or
+        # soft-gate is OFF, KWS always receives the chunk (default behaviour).
+        if self._vad.available and self.config.vad_softgate and not self._last_vad_speech:
+            return
         self._init_kws()
         peak, rms = self._observe_kws_diagnostics(pcm)
 
