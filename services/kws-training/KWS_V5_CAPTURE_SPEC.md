@@ -283,15 +283,15 @@ Windows PowerShell（环境 `D:\AI\envs\joyai-sherpa`，需 `sounddevice soundfi
 ```powershell
 # 第一批：NVIDIA Broadcast 域（≥100 段）
 & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
-    --label positive --count 100 --device 1
+    --label positive --count 100 --device 1 --skip-existing
 
 # 第二批：GameDAC Chat 原始域（≥100 段）
 & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
-    --label positive --count 100 --device 3
+    --label positive --count 100 --device 3 --skip-existing
 ```
 
 - 每按一次 Enter 说一句 "BT"，脚本自动裁剪静音、写 wav。
-- 脚本跳过已存在的 wav，可分批累加（今天录 60，明天再 `--count 40` 补到 100）。
+- **⚠️ 必须带 `--skip-existing`**：脚本默认（不带此 flag）重跑时会从 `positive_0001.wav` **从头覆盖**已录文件（计数归零）；带 `--skip-existing` 才按"已有 N 条 → 只补录缺的"累加（今天录 60，明天再 `--count 40` 补到 100）。
 - **两域等量，不预设主次**：用户明确「只要识别率高、无偏好偏差」；GameDAC Chat 声纹更完整，Broadcast 是常见部署场景，两者都要覆盖。
 - **Jarvis 接哪个麦事后由实测决定**：验收阶段（§9.5）分别用两个设备测 recall/FAR，识别率高的作为最终部署设备。
 - 负样本已有 200 段，通常不必补；要补同理 `--label negative`。
@@ -352,3 +352,86 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
 - **int8 量化**：当前 ONNX float32（encoder ~56 MB），未量化（对比 `zh-en-3M` int8 仅 4.6 MB）。
 - **mic_captures 喂训练效果**：代码已支持（§6），但 v5 双源迄今未实测端到端 recall 提升数字。
 - 详细链路/踩坑/实测见 `docs/kws-training-manual-local.md` 与 `docs/kws-training-manual-local-reality-check.md`（Codex 实跑记录，SSOT 补）。
+
+---
+
+## 10. 回归测试与验收闭环（常驻 — 防"准确率不如意才临时设计"）
+
+> 用户 2026-08-09 明确：不要等准确率不如意才开始设计调整策略；要事前把**纠错 / 调整变量 / 整套路归测试**固化成闭环。
+> 本节目"事后补救"改"事前约定"。企业级 ML 流程（数据版本化 + 冻结测试集 + CI 门禁 + 实验登记 + 模型注册表）对单人项目过重，**只借最必要的四件**：冻结留出集、按域验收、运行记录、调整 playbook。
+
+### 10.0 现状盘点（诚实）
+
+**已有的（可复用，别再造）：**
+- `services/kws-training/test_kws.py`（WSL2）：加载 sherpa 模型 → 评估 `manifests/positive_test.jsonl.gz` / `negative_test.jsonl.gz` → 输出 recall + FAR + per-file 详情，且**已内置基础调整提示**（recall<80% → 加正样本/调阈值；FAR>10% → 加负样本/调阈值）。
+- `services/scripts/kws_param_sweep.py`：扫 (score, threshold) 找 recall/FAR 最优权衡。
+- `manifests/positive_test.jsonl.gz` / `negative_test.jsonl.gz`：历史 v4 时代留出集（**positive_test 仅 10 条 / negative_test 40 条，且无 device 标签**）。
+
+**缺的（闭环未闭合）：**
+1. **测试集陈旧且小**：10 正 / 40 负，来自旧分布，不代表 v5 双域数据；未随 v5 重训刷新。
+2. **无按域拆分**：manifest 无 `device` 字段，无法分别测 NVIDIA Broadcast / GameDAC Chat 的 recall/FAR —— 而你恰恰要靠这个决定 Jarvis 接哪个麦。
+3. **无运行记录**：每次评估只打印，不落表，跑两次没法对比。
+4. **无验收门禁**：`test_kws.py` 只打印警告，不 `sys.exit(非0)`，无法当 CI/手动 gate。
+5. **无模型版本标注**：导出目录同名覆盖，重训后分不清哪版。
+
+### 10.1 冻结留出集（按域，永不作为训练）
+
+- 第一批录完后，**从两域各抽 ≥15 段 BT** 移入 `D:/AI/data/kws/bt-en/test/positive/{broadcast,gameDAC}/`（不进 `positive/`，训练绝不吃）；负样本留 ≥40 段入 `test/negative/`。
+- 每条 manifest entry 加 `device` 字段（`nvidia_broadcast` / `gameDAC_chat`），供按域分组。
+- 重建测试 manifest（WSL2）：
+  ```bash
+  source ~/kws-train/bin/activate
+  python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/build_test_manifest.py \
+      --test-root /mnt/d/AI/data/kws/bt-en/test --out /mnt/d/AI/data/kws/bt-en/manifests
+  ```
+  > 注：`build_test_manifest.py` 尚未写（轻量 ~30 行，从 `test/` 扫 wav + 读 device 目录名生成带标签 gz manifest）；写时走正常实现流程 + reviewer 门禁。
+- 留出集**只增不删、不训练**，保证跨次评估可比。
+
+### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）
+
+- 基于 `test_kws.py` 扩展（不另起炉灶）：按 `device` 字段分组输出
+  `recall_broadcast / recall_gameDAC / FAR_overall / recall_overall`，
+  并在末尾断言 **recall_overall ≥ 90% 且 FAR_overall ≤ 2%** → 不达标 `sys.exit(1)`（即验收门禁）。
+- 扩展点（给实现者）：`test_one_sherpa` 不变；`main` 里把 pos/neg 按 `e["device"]` 分组后分别算命中率；加 `--bar-recall 0.9 --bar-far 0.02` 参数；达标打印 `PASS` 否则 `FAIL` + 退出码。
+- 跑法（WSL2）：
+  ```bash
+  source ~/kws-train/bin/activate
+  python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/test_kws.py \
+      --model-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en && echo "验收通过"
+  ```
+
+### 10.3 运行记录表（轻量实验追踪）
+
+每次「加数据 + 重训 + 验收」后，append 一行到 `services/kws-training/REGRESSION_LOG.md`：
+
+```
+| 日期 | 模型 tag | 数据配方(域:段) | 参数(epoch/lr) | recall_broadcast | recall_gameDAC | FAR | 总recall | 结论 |
+|------|----------|----------------|---------------|------------------|----------------|-----|----------|------|
+| 2026-08-09 | bt-en-v5-0809 | B:100 G:100 + live | 30/ep | 92% | 88% | 1.5% | 90% | PASS |
+```
+
+- 不引入 MLflow/DVC；markdown 表即"单人实验登记"，够用。
+- **纪律**：未记此表、未跑 §10.2，不得宣称"模型更好"。
+
+### 10.4 调整 playbook（决策树，按域）
+
+验收不达标时**按表查因**，不临时拍脑袋：
+
+| 现象 | 优先动作 |
+|------|---------|
+| `recall_broadcast` < 90% | 加 NVIDIA Broadcast 域正样本（重录该域）；检查该域静音裁剪是否过激 |
+| `recall_gameDAC` < 90% | 加 GameDAC Chat 域正样本；检查原始麦电平是否过低 |
+| `FAR_overall` > 2% | 加负样本（噪声/对话/其他词）；或降 `keywords_threshold`；查 `negative` 是否误含 "bt" |
+| 两域 recall 都低 | 加 epoch / 查 lr；查标签纯度（live 用 `all` 是否引入太多静音→切 `asr-bt`）；查 train/valid manifest 时长越界 |
+| 单域 recall 波动大 | 该域录音多样性不足（距离/音量/语速），补多样性而非单纯加量 |
+
+### 10.5 模型版本标注
+
+导出目录按配方命名，避免覆盖分不清：
+`D:/AI/models/sherpa-onnx/models/kws/bt-en-v5-YYYYMMDD-{recipe}/`
+（如 `bt-en-v5-0809-B100G100live`）；`bt-en`（无后缀）仅作"当前生效"软链/副本。
+
+### 10.6 闭环纪律（一句话）
+
+**每次加数据 + 重训 → 必跑 §10.2 验收 + 记 §10.3 一行 → 对比上一行 → 才断言"更好"。**
+准确率不如意时，翻 §10.4 按域查因，而非从头设计。
