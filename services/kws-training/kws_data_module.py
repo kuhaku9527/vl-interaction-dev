@@ -8,6 +8,7 @@ KWS 自定义 lhotse 数据模块（替代 icefall 的 WenetSpeechAsrDataModule�
 
 输出 lhotse CutSet，喂给 icefall 的 Zipformer2 训练。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,6 @@ import json
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import List
 
 from lhotse import CutSet, Recording
 from lhotse.cut import MonoCut
@@ -33,7 +33,7 @@ def _jsonl_gz_to_cuts(path: Path) -> CutSet:
          "duration": 1.2, "sampling_rate": 16000, "channels": 1,
          "text": "bt 在吗", "tokens": "B T z ai m a", "keyword": "bt_zai_ma"}
     """
-    cuts: List[MonoCut] = []
+    cuts: list[MonoCut] = []
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt", encoding="utf-8") as f:
         for line in f:
@@ -59,8 +59,10 @@ def _jsonl_gz_to_cuts(path: Path) -> CutSet:
                         duration=e["duration"],
                         text=e.get("text", ""),
                         language="Chinese",
-                        custom={"tokens": e.get("tokens", "").split(),
-                                "keyword": e.get("keyword", "")},
+                        custom={
+                            "tokens": e.get("tokens", "").split(),
+                            "keyword": e.get("keyword", ""),
+                        },
                     )
                 ],
             )
@@ -106,9 +108,10 @@ class KwsAsrDataModule:
         from lhotse.dataset import K2SpeechRecognitionDataset
         from lhotse.dataset.sampling import SimpleCutSampler
         from torch.utils.data import DataLoader
+
         sampler = SimpleCutSampler(
             cuts,
-            max_duration=self.args.max_duration,
+            max_duration=getattr(self.args, "max_duration", 200.0),
             shuffle=True,
         )
         if sampler_state_dict is not None:
@@ -124,8 +127,11 @@ class KwsAsrDataModule:
         from lhotse.dataset import K2SpeechRecognitionDataset
         from lhotse.dataset.sampling import SimpleCutSampler
         from torch.utils.data import DataLoader
+
         sampler = SimpleCutSampler(
-            cuts_valid, max_duration=self.args.max_duration, shuffle=False,
+            cuts_valid,
+            max_duration=getattr(self.args, "max_duration", 200.0),
+            shuffle=False,
         )
         return DataLoader(
             K2SpeechRecognitionDataset(),
