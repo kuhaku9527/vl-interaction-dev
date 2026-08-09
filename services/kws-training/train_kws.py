@@ -104,7 +104,7 @@ class FbankDataset(torch.utils.data.Dataset):
         audio = cut.load_audio()  # ndarray (channels, samples)
         sr = cut.sampling_rate
         if audio.shape[0] > 1:
-            audio = audio.mean(dim=0, keepdim=True)
+            audio = audio.mean(axis=0, keepdims=True)
         wav = torch.from_numpy(audio).squeeze(0).float()
         fbank = compute_fbank(wav, sr, self.n_mels)  # (T, n_mels)
         sup = cut.supervisions[0]
