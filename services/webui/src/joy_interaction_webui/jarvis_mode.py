@@ -632,7 +632,7 @@ class JarvisStateMachine:
                 float32 = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
                 self._vad.accept_waveform(float32)
                 self._last_vad_speech = self._vad.is_speech()
-            except Exception as exc:  # noqa: BLE001 - never break the audio feed
+            except Exception as exc:  # never break the audio feed
                 logger.debug("[vad] feed_audio annotation failed (%s)", exc)
                 self._last_vad_speech = True
         else:
@@ -694,11 +694,7 @@ class JarvisStateMachine:
         # the latest chunk was classified as silence, skip feeding KWS entirely
         # (do NOT rebuild the KWS stream). Fail-open: if VAD is unavailable or
         # soft-gate is OFF, KWS always receives the chunk (default behaviour).
-        if (
-            self._vad.available
-            and self.config.vad_softgate
-            and not self._last_vad_speech
-        ):
+        if self._vad.available and self.config.vad_softgate and not self._last_vad_speech:
             return
         self._init_kws()
         peak, rms = self._observe_kws_diagnostics(pcm)

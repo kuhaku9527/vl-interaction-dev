@@ -90,8 +90,7 @@ class VadBypass:
             import sherpa_onnx
         except Exception as exc:  # noqa: BLE001 - fail-open, never crash pipeline
             logger.warning(
-                "[vad] sherpa_onnx/numpy import failed (%s); bypass in fail-open "
-                "passthrough mode",
+                "[vad] sherpa_onnx/numpy import failed (%s); bypass in fail-open passthrough mode",
                 exc,
             )
             return
@@ -104,13 +103,10 @@ class VadBypass:
             config.min_speech_duration = min_speech_duration
             config.window_size = window_size
             config.max_speech_duration = 20.0
-            self._detector = sherpa_onnx.VoiceActivityDetector(
-                config, buffer_size_in_seconds=60
-            )
+            self._detector = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=60)
             self._available = True
             logger.info(
-                "[vad] Silero VAD loaded from %s (thr=%.2f min_sil=%.2f win=%d); "
-                "available=True",
+                "[vad] Silero VAD loaded from %s (thr=%.2f min_sil=%.2f win=%d); available=True",
                 model_path,
                 threshold,
                 min_silence_duration,
@@ -153,8 +149,8 @@ class VadBypass:
             return
         try:
             self._detector.pop()
-        except Exception:  # noqa: BLE001 - fail-open
-            pass
+        except Exception as exc:  # noqa: BLE001 - fail-open
+            logger.debug("[vad] pop_segment failed (fail-open): %s", exc)
 
     def current_segment(self):
         """Return the in-progress partial segment (streaming speech_start).
@@ -174,5 +170,5 @@ class VadBypass:
             return
         try:
             self._detector.reset()
-        except Exception:  # noqa: BLE001 - fail-open
-            pass
+        except Exception as exc:  # noqa: BLE001 - fail-open
+            logger.debug("[vad] reset failed (fail-open): %s", exc)
