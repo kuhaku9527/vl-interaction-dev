@@ -224,9 +224,9 @@ WSL2（拾音设备走 Windows 侧，录制在 WSL2 内跑同理）：
 
 ### 8.3 待澄清 / 注意
 
-- **数量口径**：是「4 组合共 ≥200 段」还是「每组合 ≥200 段（共 ≥800）」？spec §1 约定主动录音 ≥200 段总量，建议按总量摊（每组合 ~50 段起，越多越好）。
-- **Win 录音机格式**：默认录制多为 44.1k/48k 立体声，须落入 `D:/AI/data/kws/bt-en/positive/`（或经 corpus 脚本重建 manifest），训练侧 lhotse 会重采样到 16k；勿直接丢 `mic_captures/`（那是 live 源 B 目录）。
-- 与 §2 多样性矩阵（距离/音量/语速）正交，可叠加。
+- **数量口径（已定）**：主动录音（源B）按 **总量 ≥200 段** 摊（§1 约定），不要求每组合 200。Broadcast 开/关 两域各约 100 段起，越多越好；与 §2 多样性矩阵（距离/音量/语速）正交，可叠加。
+- **采集入口事实澄清**：**没有前端网页"录制 BT 语料"的入口**——`index.html` 的 `getUserMedia` 仅用于 jarvis_mode 实时监听（喂 KWS/ASR 引擎），语料**不落盘**。主动录音（源B）唯一入口是 **`record_kws_corpus.py`**（Windows 脚本，见 §9）；live 自动采集（源A）由 jarvis_mode KWS_LISTENING 监听被动落盘（§5.2）。§8.1 原"网页采集路径"措辞指的就是这条脚本路径，非前端 UI，特此订正。
+- **Win 录音机格式**：默认录制多为 44.1k/48k 立体声，须落入 `D:/AI/data/kws/bt-en/positive/`（或经 corpus 脚本重建 manifest），训练侧 lhotse 会重采样到 16k；勿直接丢 `mic_captures/`（那是 live 源 A 目录）。
 
 ### 交叉引用
 
@@ -235,3 +235,93 @@ WSL2（拾音设备走 Windows 侧，录制在 WSL2 内跑同理）：
 - 金样本标注逻辑：`services/scripts/analyze_kws_captures.py`（`analyze_one` 打 `file/kws_hit/asr_text`）。
 - 双源摄入实现：`services/scripts/prep_kws_data.py`（`build_live_positives` / `--live-capture-dir` / `--live-filter`）。
 - 一键编排：`services/kws-training/run_kws_v5.sh`。
+
+---
+
+## 9. 数据闭环 Runbook（常驻 — 之后会反复跑）
+
+> 本节目「采集 → 训练 → 导出 → 验收」全链路，固化为本 spec 常驻章节（2026-08-09 补）。
+> 立项以来会反复跑：每次补录语料 / live 累积后，都要重跑本链路刷模型。
+> 环境已实测就绪（见 `docs/kws-training-manual-local.md` §0.1），**无需重装依赖**。
+
+### 9.1 环境（实测就绪，不要重建）
+
+训练在 **WSL2 用户 `ku` 的 `~/kws-train` venv** 跑（不在 Windows `D:/AI/envs/*`，也不在 WSL `ai-base`）。实测栈：
+
+```
+torch 2.12.1+cu130 | torchaudio 2.11.0+cu130 | lhotse 1.33.0 | k2 OK | sherpa_onnx 1.13.4 | onnx 1.22.0 | onnxruntime 1.27.0
+GPU: NVIDIA RTX 5060 Ti (sm_120) WSL 透传 OK；30 epoch 约 5-10 min
+```
+
+> ⚠️ 激活用 `source ~/kws-train/bin/activate`（WSL 内），不是 Windows 的 `D:\AI\envs\*`。
+> 拾音（主动录音）走 Windows 侧 `record_kws_corpus.py`（见 §9.2）；训练/导出全在 WSL2 内。
+
+### 9.2 采集（主动录音，源B — 用户侧）
+
+Windows PowerShell（环境 `D:\AI\envs\joyai-sherpa`，需 `sounddevice soundfile numpy`）：
+
+```powershell
+# 正样本：说 "BT"，按 Enter 开始 → 自动裁剪静音 → 写 wav；脚本跳过已存在，可分批累加
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
+    --label positive --count 200
+# （负样本已有 200 段，通常不必补；要补同理 --label negative）
+```
+
+- **变量**：NVIDIA Broadcast 开 / 关 各录一批（§8.1），共 ≥200 段总量摊。
+- 落点：`D:/AI/data/kws/bt-en/positive/`（脚本跑完自动重建 `positive.jsonl`）。
+- 运行前**先决定 Broadcast 开关状态**再录——每批保持同一状态，便于之后按域分析。
+
+### 9.3 live 自动采集（源A — 被动，零操作）
+
+- 正常用 Jarvis（KWS_LISTENING 监听开，`kws_capture_enabled=True` 默认开）即可。
+- `D:/AI/data/kws/mic_captures/kws_live_*.wav` 自动累积真实 live 域样本（含 Broadcast 重塑域）。
+- 不用你特意录；监听越久、说 "BT" 越多，live 正样本越足。训练时由 `prep_kws_data.py` 自动摄入（§6）。
+
+### 9.4 训练 + 导出（WSL2 内一键）
+
+```bash
+# WSL2 用户 ku 家目录
+source ~/kws-train/bin/activate
+
+# 一键：prep（双源 + MUSAN 增广）→ train（30 epoch）→ export ONNX
+bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws_v5.sh
+```
+
+- `run_kws_v5.sh` 已透传 `--live-capture-dir` / `--live-filter`（对应 `KWS_LIVE_CAPTURE_DIR` / `KWS_LIVE_FILTER`）。
+- 当前策略：标签纯度先用 **`all`**（§0.6 ②）；要提纯时设 `KWS_LIVE_FILTER=asr-bt`（需 ASR 在训练环境可用）。
+- 产物：`D:/AI/models/sherpa-onnx/models/kws/bt-en/{encoder,decoder,joiner}.onnx` + `tokens.txt` + `keywords.txt`。
+
+> 手动分步（调试用，等价于一键）：
+> ```bash
+> python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/scripts/prep_kws_data.py \
+>     --data-root /mnt/d/AI/data/kws/bt-en --test-ratio 0.2
+> python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/train_kws.py \
+>     --manifests-dir /mnt/d/AI/data/kws/bt-en/manifests --exp-dir /mnt/d/AI/data/kws/bt-en/exp --num-epochs 30
+> python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/export_kws_onnx.py \
+>     --ckpt /mnt/d/AI/data/kws/bt-en/exp/best.pt --out-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en
+> ```
+
+### 9.5 验收 + 推理自测
+
+```bash
+# 1) sherpa-onnx 加载 + 检测自测（用仓库既有脚本，别自己造轮子）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\test_sherpa_load.py `
+    --encoder D:/AI/models/sherpa-onnx/models/kws/bt-en/encoder.onnx `
+    --decoder D:/AI/models/sherpa-onnx/models/kws/bt-en/decoder.onnx `
+    --joiner  D:/AI/models/sherpa-onnx/models/kws/bt-en/joiner.onnx `
+    --tokens  D:/AI/models/sherpa-onnx/models/kws/bt-en/tokens.txt `
+    --keywords D:/AI/models/sherpa-onnx/models/kws/bt-en/keywords.txt `
+    --test-wav D:/AI/data/kws/bt-en/test_bt.wav
+# 期望：稳定 HIT 'bt'
+
+# 2) JARVIS 端到端 recall/FAR（需 webui 配合，目标 recall≥90% / FAR≤2%）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\test_jarvis_kws_e2e.py
+```
+
+### 9.6 已知未跑 / 待补（诚实标注，非阻塞）
+
+- **JARVIS webui 端到端**（`test_jarvis_kws_e2e.py` 需 webui 跑起来）— 至今未在本机跑过。
+- **MUSAN 实测**：prep 默认 fail-open，本机当前未装 MUSAN，纯录制数据训练。
+- **int8 量化**：当前 ONNX float32（encoder ~56 MB），未量化（对比 `zh-en-3M` int8 仅 4.6 MB）。
+- **mic_captures 喂训练效果**：代码已支持（§6），但 v5 双源迄今未实测端到端 recall 提升数字。
+- 详细链路/踩坑/实测见 `docs/kws-training-manual-local.md` 与 `docs/kws-training-manual-local-reality-check.md`（Codex 实跑记录，SSOT 补）。
