@@ -384,7 +384,7 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
   python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/build_test_manifest.py \
       --test-root /mnt/d/AI/data/kws/bt-en/test --out /mnt/d/AI/data/kws/bt-en/manifests
   ```
-  > 注：`build_test_manifest.py` 已实现（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；走正常实现流程 + reviewer 门禁合入。
+  > 注：`build_test_manifest.py` 已实现（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；附带 `test_build_test_manifest.py`（7 用例，纯本地守卫——CI 的 pytest 矩阵与 ruff 门禁均不含 `kws-training`）。走正常实现流程 + reviewer 门禁合入。
 - 留出集**只增不删、不训练**，保证跨次评估可比。
 
 ### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）
