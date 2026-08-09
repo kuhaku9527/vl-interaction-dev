@@ -107,17 +107,13 @@ def _assert_start_and_done(caplog) -> None:
     entry or exit marker (e.g. deleting the ``logger.info`` call) fails loudly
     instead of degrading the audit trail.
     """
-    records = [
-        r for r in caplog.records if r.levelno >= logging.INFO and r.name == LOGGER_NAME
-    ]
+    records = [r for r in caplog.records if r.levelno >= logging.INFO and r.name == LOGGER_NAME]
     messages = [r.getMessage() for r in records]
     assert any("hermes solve start" in m for m in messages), (
-        "solve() must emit an INFO+ 'hermes solve start' marker "
-        "(entry audit record missing)"
+        "solve() must emit an INFO+ 'hermes solve start' marker (entry audit record missing)"
     )
     assert any("hermes solve done" in m for m in messages), (
-        "solve() must emit an INFO+ 'hermes solve done' marker "
-        "(exit audit record missing)"
+        "solve() must emit an INFO+ 'hermes solve done' marker (exit audit record missing)"
     )
 
 
