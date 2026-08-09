@@ -13,6 +13,8 @@
 #   KWS_PY        python 解释器（默认 python；WSL2 建议 ~/kws-train/bin/python）
 #   KWS_DATA_ROOT 训练数据根（默认 /mnt/d/AI/data/kws/bt-en）
 #   KWS_MUSAN_DIR MUSAN 目录（空=自动探测 <repo>/.cache/musan）；--no-musan 见下
+#   KWS_LIVE_CAPTURE_DIR live 采集目录（默认 /mnt/d/AI/data/kws/mic_captures，jarvis_mode 落盘）
+#   KWS_LIVE_FILTER live 样本过滤（默认 all；可选 asr-bt，需 analyze_kws_captures 依赖）
 #   KWS_OUT_DIR   导出目标（默认 /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en，
 #                 须 == JarvisConfig.kws_model_dir）
 #   KWS_EPOCHS    训练轮数（默认 30）
@@ -27,6 +29,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"   # services/kws-training -> repo
 PY="${KWS_PY:-python}"
 DATA_ROOT="${KWS_DATA_ROOT:-/mnt/d/AI/data/kws/bt-en}"
 MUSAN_DIR="${KWS_MUSAN_DIR:-}"            # 空 = 自动探测 .cache/musan
+LIVE_CAPTURE_DIR="${KWS_LIVE_CAPTURE_DIR:-/mnt/d/AI/data/kws/mic_captures}"
+LIVE_FILTER="${KWS_LIVE_FILTER:-all}"
 OUT_DIR="${KWS_OUT_DIR:-/mnt/d/AI/models/sherpa-onnx/models/kws/bt-en}"
 NUM_EPOCHS="${KWS_EPOCHS:-30}"
 
@@ -40,6 +44,7 @@ echo "    PY=$PY"
 echo "    DATA_ROOT=$DATA_ROOT"
 echo "    OUT_DIR=$OUT_DIR"
 echo "    MUSAN_DIR=${MUSAN_DIR:-<auto-detect .cache/musan>}"
+echo "    LIVE_CAPTURE_DIR=$LIVE_CAPTURE_DIR (filter=$LIVE_FILTER)"
 
 echo
 echo "==> [1/3] prep（MUSAN fail-open）"
@@ -47,6 +52,7 @@ PREP_ARGS=(--data-root "$DATA_ROOT" --test-ratio 0.2)
 if [ -n "$MUSAN_DIR" ]; then
   PREP_ARGS+=(--musan-dir "$MUSAN_DIR")
 fi
+PREP_ARGS+=(--live-capture-dir "$LIVE_CAPTURE_DIR" --live-filter "$LIVE_FILTER")
 "$PY" "$PREP" "${PREP_ARGS[@]}"
 
 echo

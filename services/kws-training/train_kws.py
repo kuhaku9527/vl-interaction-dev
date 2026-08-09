@@ -53,14 +53,6 @@ def get_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=5)
     p.add_argument("--tokens-file", type=Path, default=None)
-    # KwsAsrDataModule.train_dataloaders/valid_dataloaders 需要 max_duration
-    # （与 SimpleCutSampler 对齐，避免超大负样本拖垮 batch）
-    p.add_argument(
-        "--max-duration",
-        type=float,
-        default=200.0,
-        help="单 batch 最大音频时长(s)，用于 lhotse SimpleCutSampler",
-    )
     return p.parse_args()
 
 

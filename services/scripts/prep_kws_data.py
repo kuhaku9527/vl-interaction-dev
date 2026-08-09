@@ -5,8 +5,13 @@ KWS 数据准备（WSL2 侧）：把 Windows 录好的 positive/negative 转成 
 - 词表：~30 token（B/T/A/I + 必要静音 + 兜底 <unk>）
 - keywords.txt: `B T @bt`
 
-输入：
-  /mnt/d/AI/data/kws/bt-en/positive/   （N wav，positive.jsonl）
+输入（**双源正样本**）：
+  A. 主动录音：/mnt/d/AI/data/kws/bt-en/positive/（N wav，positive.jsonl）
+     —— 由 record_kws_corpus.py 生成，保留。
+  B. live 采集：D:/AI/data/kws/mic_captures/kws_live_*.wav
+     —— jarvis_mode KWS 监听时**自动落盘**的 live 域正样本（双源之一）。
+        修 49% live 漏唤醒的根因 = live 域样本（NVIDIA Broadcast 重塑短辅音/尾静音），
+        单吃干净主动录音修不好，故必须双源合并（详见 KWS_V5_CAPTURE_SPEC.md §0）。
   /mnt/d/AI/data/kws/bt-en/negative/   （M wav，negative.jsonl）
 
 MUSAN 接入（fail-open）：
@@ -133,27 +138,44 @@ def resolve_musan_dir(args: argparse.Namespace, data_root: Path) -> Path | None:
     """探测 MUSAN 目录；找不到则 fail-open 返回 None。
 
     探测顺序：
-      1. --musan-dir（若显式给出）
+      1. --musan-dir（若显式给出且有效，即 noise/ + music/ + speech/ 三类齐全）
       2. <repo>/.cache/musan          （本仓库约定落点，gitignored）
       3. <repo>/services/kws-training/data/musan
       4. <data-root>/musan
     要求 noise/ + music/ + speech/ 三类子目录齐全才算命中。
+
+    约法三章（无静默 fallback）：显式 --musan-dir 指向无效目录时，打**独立、明确**
+    的 warning 说明「显式路径无效，将回落自动探测」，再走自动探测；不静默 return None。
+    未传 --musan-dir 时的自动探测静默回落仍 OK。
     """
     if getattr(args, "no_musan", False):
         logger.info("[musan] --no-musan 指定，跳过 MUSAN 增广")
         return None
-    candidates: list[Path] = []
-    if args.musan_dir is not None:
-        candidates.append(Path(args.musan_dir))
+
+    explicit = getattr(args, "musan_dir", None)
+    if explicit is not None:
+        explicit_path = Path(explicit)
+        if explicit_path.is_dir() and all((explicit_path / sub).is_dir() for sub in MUSAN_SUBDIRS):
+            logger.info(f"[musan] 命中（显式 --musan-dir）: {explicit_path}")
+            return explicit_path
+        # 显式传入但无效：明确告警并回落自动探测（不静默 return None）
+        logger.warning(
+            "[musan] 显式 --musan-dir=%s 无效（目录不存在或缺少 noise/music/speech 子目录），"
+            "将回落到自动探测；若确需使用请检查路径。",
+            explicit_path,
+        )
+    else:
+        logger.info("[musan] 未显式指定 --musan-dir，自动探测 .cache/musan 等")
+
     repo = Path(__file__).resolve().parents[2]
-    candidates += [
+    candidates = [
         repo / ".cache" / "musan",
         repo / "services" / "kws-training" / "data" / "musan",
         data_root / "musan",
     ]
     for cand in candidates:
         if cand.is_dir() and all((cand / sub).is_dir() for sub in MUSAN_SUBDIRS):
-            logger.info(f"[musan] 命中: {cand}")
+            logger.info(f"[musan] 命中（自动探测）: {cand}")
             return cand
     logger.warning(
         "[musan] 未找到 MUSAN（需 noise/ + music/ + speech/ 三类齐全），"
@@ -323,6 +345,110 @@ def build_augmented_positives(
     return entries
 
 
+# ============== 双源摄入：live 采集（fail-open） ==============
+
+
+def _make_live_entry(wav: Path) -> dict:
+    """把单个 live wav 转成正样本 manifest 条目（字段与主动录音一致）。
+
+    读取失败（损坏/不完整）时抛异常，由调用方 fail-open 跳过。
+    """
+    import soundfile as sf
+
+    info = sf.info(str(wav))
+    return {
+        "id": wav.stem,
+        "audio": str(wav.resolve()),
+        "duration": float(info.duration),
+        "sampling_rate": int(info.samplerate),
+        "channels": int(info.channels),
+        "text": "BT",
+        "tokens": "B T",
+        "keyword": "bt",
+    }
+
+
+def _build_live_positives_asr(wavs: list[Path]) -> list[dict]:
+    """可选过滤：复用 analyze_kws_captures 标注逻辑，只保留 ASR 命中 "bt" 的 live 样本。
+
+    这是 spec 提到的「KWS 没触发但 ASR shadow 听到 BT」金样本过滤策略入口，
+    **默认不启用**（--live-filter 默认 all）。具体策略待用户拍板。
+    懒加载 analyze_kws_captures，确保默认 all 路径零额外依赖。
+    """
+    import sys
+
+    try:
+        repo = Path(__file__).resolve().parents[2]
+        if str(repo) not in sys.path:
+            sys.path.insert(0, str(repo))
+        from services.scripts.analyze_kws_captures import (
+            _WAKE_PATTERNS,
+            JarvisConfig,
+            analyze_one,
+        )
+    except Exception as exc:
+        logger.error("[live] asr-bt 过滤需要 analyze_kws_captures 依赖，导入失败: %s", exc)
+        raise
+
+    cfg = JarvisConfig.from_env()
+    kept: list[dict] = []
+    for w in wavs:
+        try:
+            row = analyze_one(w, cfg)
+        except Exception as exc:
+            logger.warning("[live] asr-bt 跳过无法分析的 live 样本 %s: %s", w.name, exc)
+            continue
+        if any(pat in row["asr_text"] for pat in _WAKE_PATTERNS):
+            try:
+                kept.append(_make_live_entry(w))
+            except Exception as exc:
+                logger.warning("[live] asr-bt 跳过无法读取元数据的 live 样本 %s: %s", w.name, exc)
+                continue
+    return kept
+
+
+def build_live_positives(args: argparse.Namespace) -> list[dict]:
+    """摄入 jarvis_mode KWS 监听时自动落盘的 live 域正样本（双源之一）。
+
+    fail-open：目录缺失/无 kws_live_*.wav/全部损坏 → 跳过并 logger.warning，不阻断管线。
+    合并后总正样本 = 主动录音 + live 采集；增广（MUSAN 混 SNR）对整个正样本池生效。
+    --live-filter 默认 all（全部当正样本，零额外依赖）；asr-bt 仅保留 ASR 命中 "bt" 的样本。
+    """
+    if not getattr(args, "use_live_captures", True):
+        logger.info("[live] --no-live-captures 指定，跳过 live 采集摄入")
+        return []
+
+    live_dir = args.live_capture_dir
+    if not live_dir.is_dir():
+        logger.warning(
+            "[live] live 采集目录不存在: %s，fail-open 跳过（不影响主动录音训练）", live_dir
+        )
+        return []
+
+    wavs = sorted(live_dir.glob("kws_live_*.wav"))
+    if not wavs:
+        logger.warning("[live] live 采集目录无 kws_live_*.wav: %s，fail-open 跳过", live_dir)
+        return []
+
+    logger.info(
+        "[live] 发现 %d 个 live 采集 wav @ %s（filter=%s）", len(wavs), live_dir, args.live_filter
+    )
+
+    if getattr(args, "live_filter", "all") == "asr-bt":
+        kept = _build_live_positives_asr(wavs)
+    else:
+        kept = []
+        for w in wavs:
+            try:
+                kept.append(_make_live_entry(w))
+            except Exception as exc:
+                logger.warning("[live] 跳过无法读取的 live 样本 %s: %s", w.name, exc)
+                continue
+
+    logger.info("[live] 摄入 live 正样本 %d 段", len(kept))
+    return kept
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="KWS 数据准备：lhotse manifest + tokens + keywords（含 MUSAN fail-open）"
@@ -372,6 +498,34 @@ def main() -> int:
     parser.add_argument("--aug-snr-min", type=float, default=0.0, help="增广 SNR 下限(dB)")
     parser.add_argument("--aug-snr-max", type=float, default=20.0, help="增广 SNR 上限(dB)")
     parser.add_argument("--aug-seg-sec", type=float, default=2.0, help="MUSAN 片段长度(s)")
+    # ---- 双源摄入：live 采集（jarvis_mode 监听时自动落盘） ----
+    live_grp = parser.add_mutually_exclusive_group()
+    live_grp.add_argument(
+        "--use-live-captures",
+        action="store_true",
+        dest="use_live_captures",
+        default=True,
+        help="摄入 jarvis_mode 自动落盘的 live 域正样本（kws_live_*.wav），默认开。",
+    )
+    live_grp.add_argument(
+        "--no-live-captures",
+        action="store_false",
+        dest="use_live_captures",
+        help="禁用 live 采集摄入，仅用主动录音 positive.jsonl。",
+    )
+    parser.add_argument(
+        "--live-capture-dir",
+        type=Path,
+        default=Path("D:/AI/data/kws/mic_captures"),
+        help="jarvis_mode KWS 监听自动落盘的 live 采集目录（glob kws_live_*.wav）。",
+    )
+    parser.add_argument(
+        "--live-filter",
+        choices=["all", "asr-bt"],
+        default="all",
+        help="live 样本过滤：all=全部当正样本（默认，零额外依赖）；"
+        "asr-bt=复用 analyze_kws_captures 标注逻辑，仅保留 ASR 识别到 'bt' 的样本。",
+    )
     args = parser.parse_args()
 
     data_root: Path = args.data_root
@@ -391,7 +545,16 @@ def main() -> int:
     # 数据就绪校验：manifest 引用的 wav 必须存在，否则 fail-fast
     validate_entries(pos, "positive")
     validate_entries(neg, "negative")
-    print(f"  [load] positive={len(pos)}, negative={len(neg)}")
+
+    # 双源摄入：live 采集（jarvis_mode 自动落盘）作为正样本补充，fail-open
+    live_pos = build_live_positives(args)
+    n_live = len(live_pos)
+    pos = pos + live_pos
+    print(
+        f"  [load] positive={len(pos)}"
+        f"（主动录音 {len(pos) - n_live} + live {n_live}）"
+        f", negative={len(neg)}"
+    )
 
     # ---- MUSAN（fail-open） ----
     musan_dir = resolve_musan_dir(args, data_root)
