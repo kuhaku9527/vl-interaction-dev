@@ -16,6 +16,7 @@ KWS 自训入口：CTC + Zipformer2 + 自定义 lhotse 数据。
       --exp-dir /mnt/d/AI/data/kws/bt-en/exp \\
       --num-epochs 30
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,6 +53,14 @@ def get_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-every", type=int, default=5)
     p.add_argument("--tokens-file", type=Path, default=None)
+    # KwsAsrDataModule.train_dataloaders/valid_dataloaders 需要 max_duration
+    # （与 SimpleCutSampler 对齐，避免超大负样本拖垮 batch）
+    p.add_argument(
+        "--max-duration",
+        type=float,
+        default=200.0,
+        help="单 batch 最大音频时长(s)，用于 lhotse SimpleCutSampler",
+    )
     return p.parse_args()
 
 
@@ -121,7 +130,11 @@ def collate(batch):
     for i, f in enumerate(fbanks):
         feats[i, : f.shape[0]] = f
     target_lens = torch.tensor([len(t) for t in targets], dtype=torch.long)
-    flat_targets = torch.cat([t for t in targets if len(t) > 0]) if any(len(t) > 0 for t in targets) else torch.tensor([], dtype=torch.long)
+    flat_targets = (
+        torch.cat([t for t in targets if len(t) > 0])
+        if any(len(t) > 0 for t in targets)
+        else torch.tensor([], dtype=torch.long)
+    )
     return feats, feat_lens, flat_targets, target_lens, ids
 
 
@@ -133,10 +146,9 @@ def evaluate(model, dl, device, loss_fn):
         for feats, feat_lens, targets, target_lens, _ in dl:
             feats = feats.to(device)
             targets = targets.to(device)
-            out = model(feats, feat_lens, targets if targets.numel() > 0 else None,
-                        target_lens)
-            ctc_l = out['ctc_loss']
-            join_l = out['joiner_loss']
+            out = model(feats, feat_lens, targets if targets.numel() > 0 else None, target_lens)
+            ctc_l = out["ctc_loss"]
+            join_l = out["joiner_loss"]
             if ctc_l is None and join_l is None:
                 loss = torch.tensor(0.0, device=device)
             elif ctc_l is None:
@@ -145,7 +157,7 @@ def evaluate(model, dl, device, loss_fn):
                 loss = ctc_l
             else:
                 loss = ctc_l + join_l
-            total_loss += loss.item() if loss.requires_grad is False or True else 0.0
+            total_loss += loss.item()
             n_batches += 1
     return total_loss / max(n_batches, 1)
 
@@ -171,12 +183,18 @@ def main():
     train_ds = FbankDataset(train_cuts, token_table)
     valid_ds = FbankDataset(valid_cuts, token_table)
     train_dl = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True,
-        collate_fn=collate, num_workers=args.num_workers,
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=collate,
+        num_workers=args.num_workers,
     )
     valid_dl = DataLoader(
-        valid_ds, batch_size=args.batch_size, shuffle=False,
-        collate_fn=collate, num_workers=args.num_workers,
+        valid_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=collate,
+        num_workers=args.num_workers,
     )
 
     model = KwsModel(vocab_size=vocab_size).to(device)
@@ -197,10 +215,9 @@ def main():
             feats = feats.to(device)
             targets = targets.to(device)
             optimizer.zero_grad()
-            out = model(feats, feat_lens, targets if targets.numel() > 0 else None,
-                        target_lens)
-            ctc_l = out['ctc_loss']
-            join_l = out['joiner_loss']
+            out = model(feats, feat_lens, targets if targets.numel() > 0 else None, target_lens)
+            ctc_l = out["ctc_loss"]
+            join_l = out["joiner_loss"]
             if ctc_l is None and join_l is None:
                 # 全负样本 batch: skip (joiner loss 仍会算 blank 但没监督信号, 让 loss=0 跳过)
                 optimizer.step()
@@ -231,23 +248,29 @@ def main():
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
             ckpt = args.exp_dir / "best.pt"
-            torch.save({
-                "epoch": epoch,
-                "model_state": model.state_dict(),
-                "vocab_size": vocab_size,
-                "token_table": token_table,
-                "valid_loss": valid_loss,
-            }, ckpt)
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state": model.state_dict(),
+                    "vocab_size": vocab_size,
+                    "token_table": token_table,
+                    "valid_loss": valid_loss,
+                },
+                ckpt,
+            )
             logger.info(f"  [save] best → {ckpt}")
         if epoch % args.save_every == 0:
             ckpt = args.exp_dir / f"epoch-{epoch}.pt"
-            torch.save({
-                "epoch": epoch,
-                "model_state": model.state_dict(),
-                "vocab_size": vocab_size,
-                "token_table": token_table,
-                "valid_loss": valid_loss,
-            }, ckpt)
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state": model.state_dict(),
+                    "vocab_size": vocab_size,
+                    "token_table": token_table,
+                    "valid_loss": valid_loss,
+                },
+                ckpt,
+            )
 
     logger.info(f"[done] best valid_loss = {best_valid_loss:.4f}")
     logger.info(f"  下一步：python export_kws_onnx.py --ckpt {args.exp_dir / 'best.pt'}")

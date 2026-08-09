@@ -6,11 +6,14 @@ KWS 自训语料采集脚本（Windows 侧，唤醒词 "BT"）。
 - 16kHz mono int16 WAV
 - 能量 VAD 自动裁剪静音
 - 写 lhotse 兼容 JSONL manifest（切到 WSL2 后可直接喂 icefall）
+- v5 目标：正样本 ≥200 段真人录音（当前 53，召回不足根因）；规格见
+  services/kws-training/KWS_V5_CAPTURE_SPEC.md
 - 用法：
-    python record_kws_corpus.py --label positive --count 50
+    python record_kws_corpus.py --label positive --count 200
     python record_kws_corpus.py --label negative --count 200
     python record_kws_corpus.py --label positive --count 3 --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,6 +44,7 @@ MIN_RECORD_SEC = 0.3
 
 # ============== 工具函数 ==============
 
+
 def rms(x: np.ndarray) -> float:
     return float(np.sqrt(np.mean(x.astype(np.float32) ** 2) + 1e-12))
 
@@ -65,7 +69,11 @@ def trim_silence(audio: np.ndarray, sr: int = TARGET_SR) -> np.ndarray:
 def record_one(duration_sec: float, sr: int, device: int | None) -> np.ndarray:
     frames = int(duration_sec * sr)
     rec = sd.rec(
-        frames, samplerate=sr, channels=TARGET_CHANNELS, dtype=DTYPE, device=device,
+        frames,
+        samplerate=sr,
+        channels=TARGET_CHANNELS,
+        dtype=DTYPE,
+        device=device,
     )
     sd.wait()
     return rec.flatten()
@@ -77,6 +85,7 @@ def write_wav(path: Path, audio: np.ndarray, sr: int = TARGET_SR) -> None:
 
 
 # ============== 主流程 ==============
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
