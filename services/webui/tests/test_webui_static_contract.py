@@ -208,6 +208,33 @@ def test_bt_mic_gain_change_handler_is_not_nested_in_listen_click():
     assert "btMicGainSelectEl.addEventListener('change'" not in click_to_send
 
 
+def test_bt_mic_gain_default_is_1_5x_and_applies_with_real_track():
+    """Regression for issue #132 subtask B: the GAIN boost was gated behind
+    `if (!audioTrack)`, so it only ran when there was NO mic track — the
+    default 1.5x slider value never reached KWS on a real microphone.
+
+    Assertions:
+      * the GAIN slider defaults to 1.5x (spec-mandated wake-chain default);
+      * the boost is gated on a REAL audioTrack (`if (audioTrack)`);
+      * the GainNode is created and stored in scope so live changes work and
+        no ReferenceError escapes the try block.
+    """
+    html = _index_html()
+
+    # Default slider selection is 1.5x (independent of leading whitespace).
+    assert 'value="1.5" selected' in html
+
+    body = _function_body(html, "startBtListening")
+
+    # The inverted condition must be gone, and the correct one present.
+    assert "if (!audioTrack) {" not in body
+    assert "if (audioTrack) {" in body
+
+    # GainNode is created and stored for the live-change handler (5042).
+    assert "btMicGainAudioContext.createGain()" in body
+    assert "btListenGainNode = gain" in body
+
+
 # =====================================================================
 # v3.35 paper-plane multimodal: text + current video frame to LLM
 # =====================================================================
