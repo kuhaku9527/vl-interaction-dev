@@ -17,6 +17,12 @@ dist/
 # Agent-internal state (memory/skills/tmp under .workbuddy) and runtime PID dirs
 # — local-only, never belong in VCS.
 .workbuddy/
+# Codex-side scratch dirs (see AGENTS.md §2):
+#   .workbuddy_tmp/ - probe/fix scripts written by Codex during debugging
+#   会话记录/       - one-off per-session JSON dump built from ~/.codex/sessions/
+#                      (130+ MB; re-runnable via .workbuddy_tmp/extract_sessions.py)
+.workbuddy_tmp/
+会话记录/
 services/.pids/
 
 # Local virtual environments

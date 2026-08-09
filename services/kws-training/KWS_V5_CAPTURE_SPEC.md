@@ -207,26 +207,31 @@ WSL2（拾音设备走 Windows 侧，录制在 WSL2 内跑同理）：
 
 > 2026-08-09 用户提出，主理人已给判断；数据策略已由 §0.6 拍板，本节目实验设计为佐证（落点 = spec §0 草稿，不升 `决策/`）。
 
-### 8.1 用户提案（已修正）：单一变量 × 网页采集路径
+### 8.1 用户提案（已修正）：单一变量 = 麦克风设备选择
 
-- **变量（仅一个，声学域）**：NVIDIA Broadcast 开 / 关。
-  - 开 = AI 降噪后音源（短辅音/尾静音被重塑，live 漏唤醒的真实域）；
-  - 关 = 原始音源（更多呼吸/吞咽/环境杂音）。
-- **采集路径**：仅走我们的网页/脚本采集（`record_kws_corpus.py`，auto-feed 进 `positive/`）。**去掉 Windows 录音机轴**（用户 2026-08-09 确认：该轴归一化后洗净、非模型变量，仅作可选对照，不纳入主方案）。
-- 模型实际见到的域 = **2 个（Broadcast 开 / 关）**，不是 4 个。
+- **变量（仅一个，声学域）**：**NVIDIA Broadcast 虚拟麦 vs GameDAC Chat 物理麦**。
+  - `麦克风 (NVIDIA Broadcast)` = GameDAC Chat 原始音 → 经 NVIDIA Broadcast 降噪/回声消除后的**虚拟输出设备**；短辅音/尾静音被 AI 重塑，是 live 漏唤醒的真实域；
+  - `麦克风 (GameDAC Chat)` = **原始物理麦**，不经过 Broadcast，保留更多呼吸/吞咽/环境杂音。
+- **“Broadcast 开/关”在 Windows 声音设置里就体现为“选哪个录音设备”**：选 NVIDIA Broadcast = 开降噪；选 GameDAC Chat = 不开。**两个设备可同时存在**，不同程序可接不同麦。
+- **采集路径**：仅走 `record_kws_corpus.py` 脚本（auto-feed 进 `positive/`），用 `--device <index>` 指定要录的麦。**去掉 Windows 录音机轴**（用户 2026-08-09 确认：该轴归一化后洗净、非模型变量，仅作可选对照，不纳入主方案）。
+- 模型实际见到的域 = **2 个（Broadcast 降噪后 / GameDAC Chat 原始）**，不是 4 个。
 
 ### 8.2 主理人判断（修正认知）
 
-- **Broadcast 开/关 是真正的声学域变量**，必须保留：改变的是模型实际听到的波形分布（降噪重塑 vs 原始噪），属于 v3.20 §0.2 明令要覆盖的 live 域。✅
-- **采集工具（网页 vs Win 录音机）不是模型训练变量，是采集链路/校验轴**：`prep_kws_data.py` 训练时统一重采样到 16 kHz mono，工具信号归一化后基本洗净；真实差异只在「部署链路匹配」。⇒ 用户已采纳：**去掉 Win 录音机轴，主方案仅 Broadcast 开/关 + 我们的采集路径**。
-- **主动录 BT（源B）与 真实 live 自动采集（源A, §0.4/§5.2）是两条独立收集路**：本方案变量只作用于源B 主动录音；源A 由 jarvis_mode 在 KWS_LISTENING 时被动落盘 `kws_live_*.wav`，不挑 Broadcast 设置、自动累积真实域样本（正是修 49% 的关键），与主动录音正交。
-- **优先级建议**：49% 漏唤醒发生在 Broadcast-ON 的 live 域，故 **Broadcast 开 的组合最值钱**；网页路径占大头（自动进 corpus）。
+- **NVIDIA Broadcast vs GameDAC Chat 是真正的声学域变量**，必须保留：改变的是模型实际听到的波形分布（降噪重塑 vs 原始保真），属于 v3.20 §0.2 明令要覆盖的 live 域。✅
+- **采集工具（脚本 vs Win 录音机）不是模型训练变量，是采集链路/校验轴**：`prep_kws_data.py` 训练时统一重采样到 16 kHz mono，工具信号归一化后基本洗净；真实差异只在「部署链路匹配」。⇒ 用户已采纳：**去掉 Win 录音机轴，主方案仅两麦 + 脚本采集路径**。
+- **主动录 BT（源B）与 真实 live 自动采集（源A, §0.4/§5.2）是两条独立收集路**：本方案变量只作用于源B 主动录音；源A 由 jarvis_mode 在 KWS_LISTENING 时被动落盘 `kws_live_*.wav`，不挑麦克风设置、自动累积真实域样本（正是修 49% 的关键），与主动录音正交。
+- **两域平等、无主次之分（2026-08-09 用户强调「只要识别率高，无偏好偏差」）**：
+  - 用户物理事实：**未降噪的 GameDAC Chat 声纹振动更大、更明显**，信号保真度高；降噪（Broadcast）虽压掉环境噪，但会重塑短辅音/尾静音（§0.2 已知是漏唤醒来源之一），对 NN 识别未必更优。**故不能预设哪个域更重要**。
+  - **不再设「主/副域数量分配」**：两域各 ≥100 段**等量**录，让模型对两个域都充分学习。
+  - **部署设备选择 = 数据驱动，非预设**：Jarvis 接 NVIDIA Broadcast 还是 GameDAC Chat 可单独选（两设备并存）；最终接哪个由**验收实测 recall/FAR 决定**——哪个麦上 v5 模型识别率高就接哪个（§9.5 验收可分别测两设备）。
+  - 此双域覆盖原则同样适用于 ASR（同一语音信号，降噪对 ASR 也是「重塑 vs 保真」的权衡），但本 spec 仅管 KWS 采集。
 
 ### 8.3 待澄清 / 注意
 
-- **数量口径**：是「4 组合共 ≥200 段」还是「每组合 ≥200 段（共 ≥800）」？spec §1 约定主动录音 ≥200 段总量，建议按总量摊（每组合 ~50 段起，越多越好）。
-- **Win 录音机格式**：默认录制多为 44.1k/48k 立体声，须落入 `D:/AI/data/kws/bt-en/positive/`（或经 corpus 脚本重建 manifest），训练侧 lhotse 会重采样到 16k；勿直接丢 `mic_captures/`（那是 live 源 B 目录）。
-- 与 §2 多样性矩阵（距离/音量/语速）正交，可叠加。
+- **数量口径（已定）**：主动录音（源B）按 **总量 ≥200 段** 摊（§1 约定），**两域等量各 ≥100 段**（无主次之分）；与 §2 多样性矩阵（距离/音量/语速）正交，可叠加。
+- **采集入口事实澄清**：**没有前端网页"录制 BT 语料"的入口**——`index.html` 的 `getUserMedia` 仅用于 jarvis_mode 实时监听（喂 KWS/ASR 引擎），语料**不落盘**。主动录音（源B）唯一入口是 **`record_kws_corpus.py`**（Windows 脚本，见 §9）；live 自动采集（源A）由 jarvis_mode KWS_LISTENING 监听被动落盘（§5.2）。
+- **Win 录音机格式**：默认录制多为 44.1k/48k 立体声，须落入 `D:/AI/data/kws/bt-en/positive/`（或经 corpus 脚本重建 manifest），训练侧 lhotse 会重采样到 16k；勿直接丢 `mic_captures/`（那是 live 源 A 目录）。
 
 ### 交叉引用
 
@@ -235,3 +240,198 @@ WSL2（拾音设备走 Windows 侧，录制在 WSL2 内跑同理）：
 - 金样本标注逻辑：`services/scripts/analyze_kws_captures.py`（`analyze_one` 打 `file/kws_hit/asr_text`）。
 - 双源摄入实现：`services/scripts/prep_kws_data.py`（`build_live_positives` / `--live-capture-dir` / `--live-filter`）。
 - 一键编排：`services/kws-training/run_kws_v5.sh`。
+
+---
+
+## 9. 数据闭环 Runbook（常驻 — 之后会反复跑）
+
+> 本节目「采集 → 训练 → 导出 → 验收」全链路，固化为本 spec 常驻章节（2026-08-09 补）。
+> 立项以来会反复跑：每次补录语料 / live 累积后，都要重跑本链路刷模型。
+> 环境已实测就绪（见 `docs/kws-training-manual-local.md` §0.1），**无需重装依赖**。
+
+### 9.1 环境（实测就绪，不要重建）
+
+训练在 **WSL2 用户 `ku` 的 `~/kws-train` venv** 跑（不在 Windows `D:/AI/envs/*`，也不在 WSL `ai-base`）。实测栈：
+
+```
+torch 2.12.1+cu130 | torchaudio 2.11.0+cu130 | lhotse 1.33.0 | k2 OK | sherpa_onnx 1.13.4 | onnx 1.22.0 | onnxruntime 1.27.0
+GPU: NVIDIA RTX 5060 Ti (sm_120) WSL 透传 OK；30 epoch 约 5-10 min
+```
+
+> ⚠️ 激活用 `source ~/kws-train/bin/activate`（WSL 内），不是 Windows 的 `D:\AI\envs\*`。
+> 拾音（主动录音）走 Windows 侧 `record_kws_corpus.py`（见 §9.2）；训练/导出全在 WSL2 内。
+
+### 9.2 采集（主动录音，源B — 用户侧）
+
+Windows PowerShell（环境 `D:\AI\envs\joyai-sherpa`，需 `sounddevice soundfile numpy`）：
+
+先列设备（你当前环境实测）：
+
+```powershell
+& "D:\AI\envs\joyai-sherpa\python.exe" -c "import sounddevice as sd; [print(f\"{d['index']}: {d['name']}\") for d in sd.query_devices() if d['max_input_channels']>0]"
+```
+
+当前关键设备（以你截图为准）：
+
+```
+1: 麦克风 (NVIDIA Broadcast)   # AI 降噪/回声消除后的虚拟麦
+3: 麦克风 (GameDAC Chat)        # 原始物理麦（声纹振动更完整）
+```
+
+录两批（每批保持同一设备，**两域等量各 ≥100 段**，无主次）：
+
+```powershell
+# 第一批：NVIDIA Broadcast 域（≥100 段）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
+    --label positive --count 100 --device 1 --skip-existing
+
+# 第二批：GameDAC Chat 原始域（≥100 段）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
+    --label positive --count 100 --device 3 --skip-existing
+```
+
+- 每按一次 Enter 说一句 "BT"，脚本自动裁剪静音、写 wav。
+- **⚠️ 必须带 `--skip-existing`**：脚本默认（不带此 flag）重跑时会从 `positive_0001.wav` **从头覆盖**已录文件（计数归零）；带 `--skip-existing` 才按"已有 N 条 → 只补录缺的"累加（今天录 60，明天再 `--count 40` 补到 100）。
+- **两域等量，不预设主次**：用户明确「只要识别率高、无偏好偏差」；GameDAC Chat 声纹更完整，Broadcast 是常见部署场景，两者都要覆盖。
+- **Jarvis 接哪个麦事后由实测决定**：验收阶段（§9.5）分别用两个设备测 recall/FAR，识别率高的作为最终部署设备。
+- 负样本已有 200 段，通常不必补；要补同理 `--label negative`。
+
+> ⚠️ **切换的是设备，不是软件开关**：NVIDIA Broadcast 应用保持打开、噪音消除保持开启；只要 Windows 录音设备选 NVIDIA Broadcast，录到的就是降噪后音源。GameDAC Chat 则完全不经过 Broadcast。
+
+### 9.3 live 自动采集（源A — 被动，零操作）
+
+- 正常用 Jarvis（KWS_LISTENING 监听开，`kws_capture_enabled=True` 默认开）即可。
+- `D:/AI/data/kws/mic_captures/kws_live_*.wav` 自动累积真实 live 域样本（含 Broadcast 重塑域）。
+- 不用你特意录；监听越久、说 "BT" 越多，live 正样本越足。训练时由 `prep_kws_data.py` 自动摄入（§6）。
+
+### 9.4 训练 + 导出（WSL2 内一键）
+
+```bash
+# WSL2 用户 ku 家目录
+source ~/kws-train/bin/activate
+
+# 一键：prep（双源 + MUSAN 增广）→ train（30 epoch）→ export ONNX
+bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws_v5.sh
+```
+
+- `run_kws_v5.sh` 已透传 `--live-capture-dir` / `--live-filter`（对应 `KWS_LIVE_CAPTURE_DIR` / `KWS_LIVE_FILTER`）。
+- 当前策略：标签纯度先用 **`all`**（§0.6 ②）；要提纯时设 `KWS_LIVE_FILTER=asr-bt`（需 ASR 在训练环境可用）。
+- 产物：`D:/AI/models/sherpa-onnx/models/kws/bt-en/{encoder,decoder,joiner}.onnx` + `tokens.txt` + `keywords.txt`。
+
+> 手动分步（调试用，等价于一键）：
+> ```bash
+> python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/scripts/prep_kws_data.py \
+>     --data-root /mnt/d/AI/data/kws/bt-en --test-ratio 0.2
+> python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/train_kws.py \
+>     --manifests-dir /mnt/d/AI/data/kws/bt-en/manifests --exp-dir /mnt/d/AI/data/kws/bt-en/exp --num-epochs 30
+> python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/export_kws_onnx.py \
+>     --ckpt /mnt/d/AI/data/kws/bt-en/exp/best.pt --out-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en
+> ```
+
+### 9.5 验收 + 推理自测
+
+```bash
+# 1) sherpa-onnx 加载 + 检测自测（用仓库既有脚本，别自己造轮子）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\test_sherpa_load.py `
+    --encoder D:/AI/models/sherpa-onnx/models/kws/bt-en/encoder.onnx `
+    --decoder D:/AI/models/sherpa-onnx/models/kws/bt-en/decoder.onnx `
+    --joiner  D:/AI/models/sherpa-onnx/models/kws/bt-en/joiner.onnx `
+    --tokens  D:/AI/models/sherpa-onnx/models/kws/bt-en/tokens.txt `
+    --keywords D:/AI/models/sherpa-onnx/models/kws/bt-en/keywords.txt `
+    --test-wav D:/AI/data/kws/bt-en/test_bt.wav
+# 期望：稳定 HIT 'bt'
+
+# 2) JARVIS 端到端 recall/FAR（需 webui 配合，目标 recall≥90% / FAR≤2%）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\test_jarvis_kws_e2e.py
+```
+
+### 9.6 已知未跑 / 待补（诚实标注，非阻塞）
+
+- **JARVIS webui 端到端**（`test_jarvis_kws_e2e.py` 需 webui 跑起来）— 至今未在本机跑过。
+- **MUSAN 实测**：prep 默认 fail-open，本机当前未装 MUSAN，纯录制数据训练。
+- **int8 量化**：当前 ONNX float32（encoder ~56 MB），未量化（对比 `zh-en-3M` int8 仅 4.6 MB）。
+- **mic_captures 喂训练效果**：代码已支持（§6），但 v5 双源迄今未实测端到端 recall 提升数字。
+- 详细链路/踩坑/实测见 `docs/kws-training-manual-local.md` 与 `docs/kws-training-manual-local-reality-check.md`（Codex 实跑记录，SSOT 补）。
+
+---
+
+## 10. 回归测试与验收闭环（常驻 — 防"准确率不如意才临时设计"）
+
+> 用户 2026-08-09 明确：不要等准确率不如意才开始设计调整策略；要事前把**纠错 / 调整变量 / 整套路归测试**固化成闭环。
+> 本节目"事后补救"改"事前约定"。企业级 ML 流程（数据版本化 + 冻结测试集 + CI 门禁 + 实验登记 + 模型注册表）对单人项目过重，**只借最必要的四件**：冻结留出集、按域验收、运行记录、调整 playbook。
+
+### 10.0 现状盘点（诚实）
+
+**已有的（可复用，别再造）：**
+- `services/kws-training/test_kws.py`（WSL2）：加载 sherpa 模型 → 评估 `manifests/positive_test.jsonl.gz` / `negative_test.jsonl.gz` → 输出 recall + FAR + per-file 详情，且**已内置基础调整提示**（recall<80% → 加正样本/调阈值；FAR>10% → 加负样本/调阈值）。
+- `services/scripts/kws_param_sweep.py`：扫 (score, threshold) 找 recall/FAR 最优权衡。
+- `manifests/positive_test.jsonl.gz` / `negative_test.jsonl.gz`：历史 v4 时代留出集（**positive_test 仅 10 条 / negative_test 40 条，且无 device 标签**）。
+
+**缺的（闭环未闭合）：**
+1. **测试集陈旧且小**：10 正 / 40 负，来自旧分布，不代表 v5 双域数据；未随 v5 重训刷新。
+2. **无按域拆分**：manifest 无 `device` 字段，无法分别测 NVIDIA Broadcast / GameDAC Chat 的 recall/FAR —— 而你恰恰要靠这个决定 Jarvis 接哪个麦。
+3. **无运行记录**：每次评估只打印，不落表，跑两次没法对比。
+4. **无验收门禁**：`test_kws.py` 只打印警告，不 `sys.exit(非0)`，无法当 CI/手动 gate。
+5. **无模型版本标注**：导出目录同名覆盖，重训后分不清哪版。
+
+### 10.1 冻结留出集（按域，永不作为训练）
+
+- 第一批录完后，**从两域各抽 ≥15 段 BT 复制**到 `D:/AI/data/kws/bt-en/test/positive/{nvidia_broadcast,gameDAC_chat}/`（**复制、不移动**——保留 `positive/` 原样本供训练，test/ 是独立冻结副本，训练绝不吃；破坏性文件操作按用户纪律由用户自己做）；负样本复制 ≥40 段入 `test/negative/`。
+- 每条 manifest entry 加 `device` 字段（`nvidia_broadcast` / `gameDAC_chat`），`build_test_manifest.py` **按子目录名推断 device**，供按域分组。
+- 重建测试 manifest（WSL2）：
+  ```bash
+  source ~/kws-train/bin/activate
+  python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/build_test_manifest.py \
+      --test-root /mnt/d/AI/data/kws/bt-en/test --out /mnt/d/AI/data/kws/bt-en/manifests
+  ```
+  > 注：`build_test_manifest.py` 已实现（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；附带 `test_build_test_manifest.py`（7 用例，纯本地守卫——CI 的 pytest 矩阵与 ruff 门禁均不含 `kws-training`）。走正常实现流程 + reviewer 门禁合入。
+- 留出集**只增不删、不训练**，保证跨次评估可比。
+
+### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）
+
+- 基于 `test_kws.py` 扩展（不另起炉灶）：按 `device` 字段分组输出
+  `recall_broadcast / recall_gameDAC / FAR_overall / recall_overall`，
+  并在末尾断言 **recall_overall ≥ 90% 且 FAR_overall ≤ 2%** → 不达标 `sys.exit(1)`（即验收门禁）。
+- 扩展点（给实现者）：`test_one_sherpa` 不变；`main` 里把 pos/neg 按 `e["device"]` 分组后分别算命中率；加 `--bar-recall 0.9 --bar-far 0.02` 参数；达标打印 `PASS` 否则 `FAIL` + 退出码。
+- 跑法（WSL2）：
+  ```bash
+  source ~/kws-train/bin/activate
+  python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/test_kws.py \
+      --model-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en && echo "验收通过"
+  ```
+
+### 10.3 运行记录表（轻量实验追踪）
+
+每次「加数据 + 重训 + 验收」后，append 一行到 `services/kws-training/REGRESSION_LOG.md`：
+
+```
+| 日期 | 模型 tag | 数据配方(域:段) | 参数(epoch/lr) | recall_broadcast | recall_gameDAC | FAR | 总recall | 结论 |
+|------|----------|----------------|---------------|------------------|----------------|-----|----------|------|
+| 2026-08-09 | bt-en-v5-0809 | B:100 G:100 + live | 30/ep | 92% | 88% | 1.5% | 90% | PASS |
+```
+
+- 不引入 MLflow/DVC；markdown 表即"单人实验登记"，够用。
+- **纪律**：未记此表、未跑 §10.2，不得宣称"模型更好"。
+
+### 10.4 调整 playbook（决策树，按域）
+
+验收不达标时**按表查因**，不临时拍脑袋：
+
+| 现象 | 优先动作 |
+|------|---------|
+| `recall_broadcast` < 90% | 加 NVIDIA Broadcast 域正样本（重录该域）；检查该域静音裁剪是否过激 |
+| `recall_gameDAC` < 90% | 加 GameDAC Chat 域正样本；检查原始麦电平是否过低 |
+| `FAR_overall` > 2% | 加负样本（噪声/对话/其他词）；或降 `keywords_threshold`；查 `negative` 是否误含 "bt" |
+| 两域 recall 都低 | 加 epoch / 查 lr；查标签纯度（live 用 `all` 是否引入太多静音→切 `asr-bt`）；查 train/valid manifest 时长越界 |
+| 单域 recall 波动大 | 该域录音多样性不足（距离/音量/语速），补多样性而非单纯加量 |
+
+### 10.5 模型版本标注
+
+导出目录按配方命名，避免覆盖分不清：
+`D:/AI/models/sherpa-onnx/models/kws/bt-en-v5-YYYYMMDD-{recipe}/`
+（如 `bt-en-v5-0809-B100G100live`）；`bt-en`（无后缀）仅作"当前生效"软链/副本。
+
+### 10.6 闭环纪律（一句话）
+
+**每次加数据 + 重训 → 必跑 §10.2 验收 + 记 §10.3 一行 → 对比上一行 → 才断言"更好"。**
+准确率不如意时，翻 §10.4 按域查因，而非从头设计。
