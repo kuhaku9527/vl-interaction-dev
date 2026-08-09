@@ -140,7 +140,8 @@ class VadBypass:
             return True
         try:
             return bool(self._detector.is_speech_detected())
-        except Exception:  # noqa: BLE001 - fail-open: treat as speech
+        except Exception as exc:  # noqa: BLE001 - fail-open: treat as speech
+            logger.debug("[vad] is_speech failed (%s); treat as speech", exc)
             return True
 
     def pop_segment(self) -> None:

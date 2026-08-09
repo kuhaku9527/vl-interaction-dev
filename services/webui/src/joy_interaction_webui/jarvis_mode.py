@@ -625,7 +625,7 @@ class JarvisStateMachine:
         # VAD bypass annotation (form A). Convert int16 PCM to float32 [-1,1]
         # and feed the Silero VAD. Fail-open: if VAD is unavailable this is a
         # no-op and is_speech() returns True (KWS keeps receiving all audio).
-        if pcm and len(pcm) % 2 == 0:
+        if self._vad.available and pcm and len(pcm) % 2 == 0:
             try:
                 import numpy as np
 
