@@ -139,6 +139,14 @@ async def solve(request: SolveRequest) -> SolveResponse:
         maximum=24 * 60 * 60,
     )
     frames = _limit_frames(request.frames)
+    logger.info(
+        "hermes solve start session=%s task=%s question_len=%d frames=%d timeout=%.1fs",
+        request.session_id,
+        request.task_id,
+        len(request.question),
+        len(frames),
+        timeout_seconds,
+    )
 
     local_wiki = await _enrich_with_memory(request.question)
     prompt = _build_prompt(request, max_subagents, local_wiki=local_wiki)
@@ -159,6 +167,12 @@ async def solve(request: SolveRequest) -> SolveResponse:
         headers["Authorization"] = f"Bearer {HERMES_API_KEY}"
 
     started = time.perf_counter()
+    logger.debug(
+        "hermes solve dispatch session=%s task=%s -> %s",
+        request.session_id,
+        request.task_id,
+        "/chat/completions",
+    )
     async with _run_semaphore:
         try:
             async with httpx.AsyncClient(
@@ -171,6 +185,13 @@ async def solve(request: SolveRequest) -> SolveResponse:
                 )
         except httpx.TimeoutException as err:
             duration_ms = (time.perf_counter() - started) * 1000.0
+            logger.warning(
+                "hermes solve timeout session=%s task=%s duration_ms=%.1f err=%s",
+                request.session_id,
+                request.task_id,
+                duration_ms,
+                err,
+            )
             return SolveResponse(
                 status="timeout",
                 text="",
@@ -182,6 +203,13 @@ async def solve(request: SolveRequest) -> SolveResponse:
             )
         except httpx.HTTPError as err:
             duration_ms = (time.perf_counter() - started) * 1000.0
+            logger.error(
+                "hermes solve transport error session=%s task=%s duration_ms=%.1f err=%s",
+                request.session_id,
+                request.task_id,
+                duration_ms,
+                err,
+            )
             return SolveResponse(
                 status="failed",
                 text="",
@@ -193,7 +221,15 @@ async def solve(request: SolveRequest) -> SolveResponse:
             )
 
     duration_ms = (time.perf_counter() - started) * 1000.0
-    return _build_solve_response(response, request, duration_ms)
+    result = _build_solve_response(response, request, duration_ms)
+    logger.info(
+        "hermes solve done session=%s task=%s status=%s duration_ms=%.1f",
+        request.session_id,
+        request.task_id,
+        result.status,
+        duration_ms,
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
