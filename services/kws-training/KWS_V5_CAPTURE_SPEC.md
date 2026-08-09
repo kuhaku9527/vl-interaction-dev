@@ -376,15 +376,15 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
 
 ### 10.1 冻结留出集（按域，永不作为训练）
 
-- 第一批录完后，**从两域各抽 ≥15 段 BT** 移入 `D:/AI/data/kws/bt-en/test/positive/{broadcast,gameDAC}/`（不进 `positive/`，训练绝不吃）；负样本留 ≥40 段入 `test/negative/`。
-- 每条 manifest entry 加 `device` 字段（`nvidia_broadcast` / `gameDAC_chat`），供按域分组。
+- 第一批录完后，**从两域各抽 ≥15 段 BT 复制**到 `D:/AI/data/kws/bt-en/test/positive/{nvidia_broadcast,gameDAC_chat}/`（**复制、不移动**——保留 `positive/` 原样本供训练，test/ 是独立冻结副本，训练绝不吃；破坏性文件操作按用户纪律由用户自己做）；负样本复制 ≥40 段入 `test/negative/`。
+- 每条 manifest entry 加 `device` 字段（`nvidia_broadcast` / `gameDAC_chat`），`build_test_manifest.py` **按子目录名推断 device**，供按域分组。
 - 重建测试 manifest（WSL2）：
   ```bash
   source ~/kws-train/bin/activate
   python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/build_test_manifest.py \
       --test-root /mnt/d/AI/data/kws/bt-en/test --out /mnt/d/AI/data/kws/bt-en/manifests
   ```
-  > 注：`build_test_manifest.py` 尚未写（轻量 ~30 行，从 `test/` 扫 wav + 读 device 目录名生成带标签 gz manifest）；写时走正常实现流程 + reviewer 门禁。
+  > 注：`build_test_manifest.py` 已实现（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；走正常实现流程 + reviewer 门禁合入。
 - 留出集**只增不删、不训练**，保证跨次评估可比。
 
 ### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）
