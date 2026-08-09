@@ -99,6 +99,28 @@ def _assert_logged_hermes_solve(caplog) -> None:
     )
 
 
+def _assert_start_and_done(caplog) -> None:
+    """Guard the dual-marker contract: both 'hermes solve start' and
+    'hermes solve done' INFO records must be present.
+
+    This closes the loop so a future change that silently drops either the
+    entry or exit marker (e.g. deleting the ``logger.info`` call) fails loudly
+    instead of degrading the audit trail.
+    """
+    records = [
+        r for r in caplog.records if r.levelno >= logging.INFO and r.name == LOGGER_NAME
+    ]
+    messages = [r.getMessage() for r in records]
+    assert any("hermes solve start" in m for m in messages), (
+        "solve() must emit an INFO+ 'hermes solve start' marker "
+        "(entry audit record missing)"
+    )
+    assert any("hermes solve done" in m for m in messages), (
+        "solve() must emit an INFO+ 'hermes solve done' marker "
+        "(exit audit record missing)"
+    )
+
+
 async def test_solve_logs_hermes_solve_and_returns_completed(monkeypatch, caplog):
     """solve() keeps returning status=completed and emits 'hermes solve' INFO logs."""
     monkeypatch.setattr(hapi.httpx, "AsyncClient", _FakeClient)
@@ -115,6 +137,7 @@ async def test_solve_logs_hermes_solve_and_returns_completed(monkeypatch, caplog
 
     assert result.status == "completed"
     _assert_logged_hermes_solve(caplog)
+    _assert_start_and_done(caplog)
 
 
 async def test_solve_logs_with_frames_and_long_question(monkeypatch, caplog):
@@ -137,6 +160,7 @@ async def test_solve_logs_with_frames_and_long_question(monkeypatch, caplog):
 
     assert result.status == "completed"
     _assert_logged_hermes_solve(caplog)
+    _assert_start_and_done(caplog)
     # Guard against the forbidden behavior: frame base64 / full question must
     # never appear in the emitted logs.
     joined = caplog.text
