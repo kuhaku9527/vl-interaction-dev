@@ -4277,9 +4277,14 @@ limitations under the License.
                 }, video: false });
                 const audioTrack = btListenStream.getAudioTracks()[0];
                 startBtMicLevelMonitor(btListenStream);
-                if (!audioTrack) {
+                // Gain boost must run when a REAL mic track exists, otherwise the
+                // user-selected multiplier (default 1.5x from the GAIN slider) never
+                // reaches KWS. The previous condition was inverted (`if (!audioTrack)`),
+                // so it only applied when there was NO track.
+                if (audioTrack) {
                 // Apply user-selected mic gain via Web Audio API so KWS sees a stronger signal.
                 // Uses a separate AudioContext so the AnalyserNode tap in startBtMicLevelMonitor still works.
+                btListenGainNode = null;
                 try {
                     const gainValue = parseFloat(document.getElementById('btMicGainSelect').value || '1.0');
                     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -4290,6 +4295,9 @@ limitations under the License.
                     const destination = btMicGainAudioContext.createMediaStreamDestination();
                     btMicGainAudioContext._btGainRef = gain;
                     source.connect(gain).connect(destination);
+                    // Store for live gain change (5042); must be set inside this try
+                    // where `gain` is in scope to avoid a ReferenceError.
+                    btListenGainNode = gain;
                     const boostedTrack = destination.stream.getAudioTracks()[0];
                     if (boostedTrack) {
                         // KWS sees the boosted signal; mic level monitor keeps watching the raw stream so the display matches what user hears.
@@ -4299,9 +4307,6 @@ limitations under the License.
                 } catch (gainErr) {
                     console.warn('Mic gain init failed, using raw track:', gainErr);
                 }
-                // Allow live gain change without reconnecting: store gain node and update on select change.
-                btListenGainNode = null;
-                btListenGainNode = gain;
                 }
                 btListenPeerConnection = new RTCPeerConnection({
                     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
