@@ -12,6 +12,8 @@ for _p in (str(REPO), str(WEBUI_SRC)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from joy_interaction_webui.vad_bypass import VadBypass  # noqa: E402
+
 
 class FakeKWS:
     def __init__(self, fires_on_call: int = 1):
@@ -62,6 +64,8 @@ async def _make_sm(timeout_s: float = 0.2, kws_fires_on: int = 1, asr_partials=(
     cfg.asr_confirm_patterns = ["bt", "BT", "B T", "b t"]
 
     sm = JarvisStateMachine.__new__(JarvisStateMachine)
+    sm._vad = VadBypass(enabled=False, model_dir="")
+    sm._last_vad_speech = True
     sm.config = cfg
     sm.state = JarvisState.KWS_LISTENING
     sm._audio_queue = asyncio.Queue(maxsize=1024)

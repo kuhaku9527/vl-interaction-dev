@@ -108,6 +108,7 @@ async def test_kws_confirm_window_no_longer_eaten_by_asr_init():
     inside the window succeeds.
     """
     from joy_interaction_webui.jarvis_mode import JarvisConfig, JarvisState, JarvisStateMachine
+    from joy_interaction_webui.vad_bypass import VadBypass
 
     cfg = JarvisConfig.from_env()
     cfg.asr_confirm_timeout_s = 0.2
@@ -133,6 +134,8 @@ async def test_kws_confirm_window_no_longer_eaten_by_asr_init():
             return ""
 
     sm = JarvisStateMachine.__new__(JarvisStateMachine)
+    sm._vad = VadBypass(enabled=False, model_dir="")
+    sm._last_vad_speech = True
     sm.config = cfg
     sm.state = JarvisState.KWS_LISTENING
     sm._kws = _KwsShim()
