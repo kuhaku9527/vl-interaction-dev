@@ -168,8 +168,8 @@ def main():
     logger.info(f"Device: {device}")
 
     dm = KwsAsrDataModule(args)
-    train_cuts = dm.train_cuts()
-    valid_cuts = dm.valid_cuts()
+    train_cuts = dm.train_cuts  # @cached_property (PR #26, 2026-07-24)
+    valid_cuts = dm.valid_cuts  # @cached_property (PR #26, 2026-07-24)
     logger.info(f"train_cuts={len(train_cuts)}, valid_cuts={len(valid_cuts)}")
 
     train_ds = FbankDataset(train_cuts, token_table)
