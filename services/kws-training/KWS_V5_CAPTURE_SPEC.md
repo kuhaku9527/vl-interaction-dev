@@ -207,26 +207,28 @@ WSL2（拾音设备走 Windows 侧，录制在 WSL2 内跑同理）：
 
 > 2026-08-09 用户提出，主理人已给判断；数据策略已由 §0.6 拍板，本节目实验设计为佐证（落点 = spec §0 草稿，不升 `决策/`）。
 
-### 8.1 用户提案（已修正）：单一变量 × 网页采集路径
+### 8.1 用户提案（已修正）：单一变量 = 麦克风设备选择
 
-- **变量（仅一个，声学域）**：NVIDIA Broadcast 开 / 关。
-  - 开 = AI 降噪后音源（短辅音/尾静音被重塑，live 漏唤醒的真实域）；
-  - 关 = 原始音源（更多呼吸/吞咽/环境杂音）。
-- **采集路径**：仅走我们的网页/脚本采集（`record_kws_corpus.py`，auto-feed 进 `positive/`）。**去掉 Windows 录音机轴**（用户 2026-08-09 确认：该轴归一化后洗净、非模型变量，仅作可选对照，不纳入主方案）。
-- 模型实际见到的域 = **2 个（Broadcast 开 / 关）**，不是 4 个。
+- **变量（仅一个，声学域）**：**NVIDIA Broadcast 虚拟麦 vs GameDAC Chat 物理麦**。
+  - `麦克风 (NVIDIA Broadcast)` = GameDAC Chat 原始音 → 经 NVIDIA Broadcast 降噪/回声消除后的**虚拟输出设备**；短辅音/尾静音被 AI 重塑，是 live 漏唤醒的真实域；
+  - `麦克风 (GameDAC Chat)` = **原始物理麦**，不经过 Broadcast，保留更多呼吸/吞咽/环境杂音。
+- **“Broadcast 开/关”在 Windows 声音设置里就体现为“选哪个录音设备”**：选 NVIDIA Broadcast = 开降噪；选 GameDAC Chat = 不开。**两个设备可同时存在**，不同程序可接不同麦。
+- **采集路径**：仅走 `record_kws_corpus.py` 脚本（auto-feed 进 `positive/`），用 `--device <index>` 指定要录的麦。**去掉 Windows 录音机轴**（用户 2026-08-09 确认：该轴归一化后洗净、非模型变量，仅作可选对照，不纳入主方案）。
+- 模型实际见到的域 = **2 个（Broadcast 降噪后 / GameDAC Chat 原始）**，不是 4 个。
 
 ### 8.2 主理人判断（修正认知）
 
-- **Broadcast 开/关 是真正的声学域变量**，必须保留：改变的是模型实际听到的波形分布（降噪重塑 vs 原始噪），属于 v3.20 §0.2 明令要覆盖的 live 域。✅
-- **采集工具（网页 vs Win 录音机）不是模型训练变量，是采集链路/校验轴**：`prep_kws_data.py` 训练时统一重采样到 16 kHz mono，工具信号归一化后基本洗净；真实差异只在「部署链路匹配」。⇒ 用户已采纳：**去掉 Win 录音机轴，主方案仅 Broadcast 开/关 + 我们的采集路径**。
-- **主动录 BT（源B）与 真实 live 自动采集（源A, §0.4/§5.2）是两条独立收集路**：本方案变量只作用于源B 主动录音；源A 由 jarvis_mode 在 KWS_LISTENING 时被动落盘 `kws_live_*.wav`，不挑 Broadcast 设置、自动累积真实域样本（正是修 49% 的关键），与主动录音正交。
-- **优先级建议**：49% 漏唤醒发生在 Broadcast-ON 的 live 域，故 **Broadcast 开 的组合最值钱**；网页路径占大头（自动进 corpus）。
+- **NVIDIA Broadcast vs GameDAC Chat 是真正的声学域变量**，必须保留：改变的是模型实际听到的波形分布（降噪重塑 vs 原始噪），属于 v3.20 §0.2 明令要覆盖的 live 域。✅
+- **采集工具（脚本 vs Win 录音机）不是模型训练变量，是采集链路/校验轴**：`prep_kws_data.py` 训练时统一重采样到 16 kHz mono，工具信号归一化后基本洗净；真实差异只在「部署链路匹配」。⇒ 用户已采纳：**去掉 Win 录音机轴，主方案仅两麦 + 脚本采集路径**。
+- **主动录 BT（源B）与 真实 live 自动采集（源A, §0.4/§5.2）是两条独立收集路**：本方案变量只作用于源B 主动录音；源A 由 jarvis_mode 在 KWS_LISTENING 时被动落盘 `kws_live_*.wav`，不挑麦克风设置、自动累积真实域样本（正是修 49% 的关键），与主动录音正交。
+- **优先级建议**：49% 漏唤醒发生在 **NVIDIA Broadcast 域**（你日常和朋友对话用的就是这支麦），故 **NVIDIA Broadcast 组合最值钱**；若 Jarvis 实际部署也接 NVIDIA Broadcast，则它应占大头。
 
 ### 8.3 待澄清 / 注意
 
-- **数量口径（已定）**：主动录音（源B）按 **总量 ≥200 段** 摊（§1 约定），不要求每组合 200。Broadcast 开/关 两域各约 100 段起，越多越好；与 §2 多样性矩阵（距离/音量/语速）正交，可叠加。
-- **采集入口事实澄清**：**没有前端网页"录制 BT 语料"的入口**——`index.html` 的 `getUserMedia` 仅用于 jarvis_mode 实时监听（喂 KWS/ASR 引擎），语料**不落盘**。主动录音（源B）唯一入口是 **`record_kws_corpus.py`**（Windows 脚本，见 §9）；live 自动采集（源A）由 jarvis_mode KWS_LISTENING 监听被动落盘（§5.2）。§8.1 原"网页采集路径"措辞指的就是这条脚本路径，非前端 UI，特此订正。
+- **数量口径（已定）**：主动录音（源B）按 **总量 ≥200 段** 摊（§1 约定），不要求每组合 200。NVIDIA Broadcast / GameDAC Chat 两域各约 100 段起，越多越好；与 §2 多样性矩阵（距离/音量/语速）正交，可叠加。
+- **采集入口事实澄清**：**没有前端网页"录制 BT 语料"的入口**——`index.html` 的 `getUserMedia` 仅用于 jarvis_mode 实时监听（喂 KWS/ASR 引擎），语料**不落盘**。主动录音（源B）唯一入口是 **`record_kws_corpus.py`**（Windows 脚本，见 §9）；live 自动采集（源A）由 jarvis_mode KWS_LISTENING 监听被动落盘（§5.2）。
 - **Win 录音机格式**：默认录制多为 44.1k/48k 立体声，须落入 `D:/AI/data/kws/bt-en/positive/`（或经 corpus 脚本重建 manifest），训练侧 lhotse 会重采样到 16k；勿直接丢 `mic_captures/`（那是 live 源 A 目录）。
+- **待确认**：Jarvis / webui 当前实际使用哪个输入设备？这决定两域的"主/副"数量分配。见 §9.2 命令。
 
 ### 交叉引用
 
@@ -260,16 +262,37 @@ GPU: NVIDIA RTX 5060 Ti (sm_120) WSL 透传 OK；30 epoch 约 5-10 min
 
 Windows PowerShell（环境 `D:\AI\envs\joyai-sherpa`，需 `sounddevice soundfile numpy`）：
 
+先列设备（你当前环境实测）：
+
 ```powershell
-# 正样本：说 "BT"，按 Enter 开始 → 自动裁剪静音 → 写 wav；脚本跳过已存在，可分批累加
-& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
-    --label positive --count 200
-# （负样本已有 200 段，通常不必补；要补同理 --label negative）
+& "D:\AI\envs\joyai-sherpa\python.exe" -c "import sounddevice as sd; [print(f\"{d['index']}: {d['name']}\") for d in sd.query_devices() if d['max_input_channels']>0]"
 ```
 
-- **变量**：NVIDIA Broadcast 开 / 关 各录一批（§8.1），共 ≥200 段总量摊。
-- 落点：`D:/AI/data/kws/bt-en/positive/`（脚本跑完自动重建 `positive.jsonl`）。
-- 运行前**先决定 Broadcast 开关状态**再录——每批保持同一状态，便于之后按域分析。
+当前关键设备（以你截图为准）：
+
+```
+1: 麦克风 (NVIDIA Broadcast)   # AI 降噪/回声消除后的虚拟麦 ← 日常对话域，建议主域
+3: 麦克风 (GameDAC Chat)        # 原始物理麦 ← 建议副域
+```
+
+录两批（每批保持同一设备，共 ≥200 段总量摊）：
+
+```powershell
+# 第一批：NVIDIA Broadcast 域（主域，建议 ≥120 段）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
+    --label positive --count 120 --device 1
+
+# 第二批：GameDAC Chat 原始域（副域，建议 ≥80 段）
+& "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
+    --label positive --count 80 --device 3
+```
+
+- 每按一次 Enter 说一句 "BT"，脚本自动裁剪静音、写 wav。
+- 脚本跳过已存在的 wav，可分批累加（今天录 50，明天再 `--count 70` 补到 120）。
+- 若 Jarvis 实际部署接的是 GameDAC Chat（原始麦），则两批数量对调（GameDAC ≥120，NVIDIA ≥80）。
+- 负样本已有 200 段，通常不必补；要补同理 `--label negative`。
+
+> ⚠️ **切换的是设备，不是软件开关**：NVIDIA Broadcast 应用保持打开、噪音消除保持开启；只要 Windows 录音设备选 NVIDIA Broadcast，录到的就是降噪后音源。GameDAC Chat 则完全不经过 Broadcast。
 
 ### 9.3 live 自动采集（源A — 被动，零操作）
 
