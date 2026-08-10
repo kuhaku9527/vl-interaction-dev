@@ -281,13 +281,13 @@ Windows PowerShell（环境 `D:\AI\envs\joyai-sherpa`，需 `sounddevice soundfi
 录两批（每批保持同一设备，**两域等量各 ≥100 段**，无主次）：
 
 ```powershell
-# 第一批：NVIDIA Broadcast 域（≥100 段）
+# 第一批：NVIDIA Broadcast 域（≥100 段，--data-root 隔离到独立子目录）
 & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
-    --label positive --count 100 --device 1 --skip-existing
+    --label positive --count 100 --device 1 --skip-existing --data-root D:/AI/data/kws/bt-en/broadcast
 
 # 第二批：GameDAC Chat 原始域（≥100 段）
 & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\record_kws_corpus.py `
-    --label positive --count 100 --device 3 --skip-existing
+    --label positive --count 100 --device 3 --skip-existing --data-root D:/AI/data/kws/bt-en/gameDAC
 ```
 
 - 每按一次 Enter 说一句 "BT"，脚本自动裁剪静音、写 wav。
@@ -295,6 +295,7 @@ Windows PowerShell（环境 `D:\AI\envs\joyai-sherpa`，需 `sounddevice soundfi
 - **两域等量，不预设主次**：用户明确「只要识别率高、无偏好偏差」；GameDAC Chat 声纹更完整，Broadcast 是常见部署场景，两者都要覆盖。
 - **Jarvis 接哪个麦事后由实测决定**：验收阶段（§9.5）分别用两个设备测 recall/FAR，识别率高的作为最终部署设备。
 - 负样本已有 200 段，通常不必补；要补同理 `--label negative`。
+- **录完跑合并**：两批录完后用 `assemble_kws_corpus.py` 一键合并训练池 + 切冻结留出集（见 §10.1），不要手动平铺。
 
 > ⚠️ **切换的是设备，不是软件开关**：NVIDIA Broadcast 应用保持打开、噪音消除保持开启；只要 Windows 录音设备选 NVIDIA Broadcast，录到的就是降噪后音源。GameDAC Chat 则完全不经过 Broadcast。
 
@@ -363,7 +364,7 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
 ### 10.0 现状盘点（诚实）
 
 **已有的（可复用，别再造）：**
-- `services/kws-training/test_kws.py`（WSL2）：加载 sherpa 模型 → 评估 `manifests/positive_test.jsonl.gz` / `negative_test.jsonl.gz` → 输出 recall + FAR + per-file 详情，且**已内置基础调整提示**（recall<80% → 加正样本/调阈值；FAR>10% → 加负样本/调阈值）。
+- `services/kws-training/test_kws.py`（WSL2）：加载 sherpa 模型 → 评估 `<manifests-dir>/positive_test.jsonl.gz` / `negative_test.jsonl.gz`（默认 `manifests/`；冻结留出集用 `--manifests-dir .../test_manifests` 指向 §10.1 生成的集）→ 输出 recall + FAR + per-file 详情，且**已内置基础调整提示**（recall<80% → 加正样本/调阈值；FAR>10% → 加负样本/调阈值）。
 - `services/scripts/kws_param_sweep.py`：扫 (score, threshold) 找 recall/FAR 最优权衡。
 - `manifests/positive_test.jsonl.gz` / `negative_test.jsonl.gz`：历史 v4 时代留出集（**positive_test 仅 10 条 / negative_test 40 条，且无 device 标签**）。
 
@@ -376,15 +377,23 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
 
 ### 10.1 冻结留出集（按域，永不作为训练）
 
-- 第一批录完后，**从两域各抽 ≥15 段 BT 复制**到 `D:/AI/data/kws/bt-en/test/positive/{nvidia_broadcast,gameDAC_chat}/`（**复制、不移动**——保留 `positive/` 原样本供训练，test/ 是独立冻结副本，训练绝不吃；破坏性文件操作按用户纪律由用户自己做）；负样本复制 ≥40 段入 `test/negative/`。
-- 每条 manifest entry 加 `device` 字段（`nvidia_broadcast` / `gameDAC_chat`），`build_test_manifest.py` **按子目录名推断 device**，供按域分组。
-- 重建测试 manifest（WSL2）：
+- **推荐（一键）**：录完两批后，用 `assemble_kws_corpus.py` 一次完成「合并训练池 + 切割冻结留出集 + 生成 manifest」（零手动复制）：
+  ```bash
+  source ~/kws-train/bin/activate
+  python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/scripts/assemble_kws_corpus.py \
+      --src-roots /mnt/d/AI/data/kws/bt-en/broadcast /mnt/d/AI/data/kws/bt-en/gameDAC \
+      --out /mnt/d/AI/data/kws/bt-en
+  ```
+  - 它把两域正样本合并进 `<out>/positive/`（训练池，audio 路径已重写供 `prep_kws_data.py` 消费），从每域取前 `--holdout`(默认 15) 段**复制**进 `<out>/test/positive/{nvidia_broadcast,gameDAC_chat}/`，负样本取 `--neg-holdout`(默认 15) 进 `<out>/test/negative/`，最后调用 `build_test_manifest.py` 生成 `<out>/test_manifests/positive_test.jsonl.gz` + `negative_test.jsonl.gz`。
+  - **关键：build 输出到独立 `test_manifests/`，不与 `manifests/` 同名互踩**——`prep_kws_data.py` 的 train/test 拆分也写 `manifests/positive_test.jsonl.gz`；若二者都写 `manifests/` 会互相覆盖，回归门禁（`test_kws.py`）读到的就不是真冻结集。
+  - 参数：`--holdout` / `--neg-holdout` / `--no-build`（跳过 build）/ `--dry-run`（只打印计划）/ `--force`（覆盖已存在 test/ wav）/ `--device-map key=value`（覆盖域→device 映射）。
+- **手动替代**（破坏性文件操作按用户纪律由你自己做）：从两域各复制 ≥15 段 BT 到 `test/positive/{nvidia_broadcast,gameDAC_chat}/`（**复制、不移动**——保留 `positive/` 原样本供训练，test/ 是独立冻结副本，训练绝不吃），负样本复制 ≥40 段入 `test/negative/`，再：
   ```bash
   source ~/kws-train/bin/activate
   python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/build_test_manifest.py \
-      --test-root /mnt/d/AI/data/kws/bt-en/test --out /mnt/d/AI/data/kws/bt-en/manifests
+      --test-root /mnt/d/AI/data/kws/bt-en/test --out /mnt/d/AI/data/kws/bt-en/test_manifests
   ```
-  > 注：`build_test_manifest.py` 已实现（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；附带 `test_build_test_manifest.py`（7 用例，纯本地守卫——CI 的 pytest 矩阵与 ruff 门禁均不含 `kws-training`）。走正常实现流程 + reviewer 门禁合入。
+  > 注：`build_test_manifest.py` 已实现并合入 main（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；附带 `test_build_test_manifest.py`（CI 的 pytest 矩阵与 ruff 门禁均不含 `kws-training`）。`assemble_kws_corpus.py` 同样已实现合入（`services/scripts/assemble_kws_corpus.py` + `test_assemble_kws_corpus.py`，4 用例）。
 - 留出集**只增不删、不训练**，保证跨次评估可比。
 
 ### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）
@@ -397,7 +406,8 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
   ```bash
   source ~/kws-train/bin/activate
   python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/test_kws.py \
-      --model-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en && echo "验收通过"
+      --model-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en \
+      --manifests-dir /mnt/d/AI/data/kws/bt-en/test_manifests && echo "验收通过"
   ```
 
 ### 10.3 运行记录表（轻量实验追踪）
