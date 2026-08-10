@@ -41,7 +41,19 @@ def get_args():
     p.add_argument("--manifests-dir", type=Path,
                    default=Path("/mnt/d/AI/data/kws/bt-en/manifests"))
     p.add_argument("--num-threads", type=int, default=1)
+    # §10.2 验收门禁阈值
+    p.add_argument("--bar-recall", type=float, default=0.9,
+                   help="整体 recall 门禁（默认 0.9）")
+    p.add_argument("--bar-far", type=float, default=0.02,
+                   help="整体 FAR 门禁（默认 0.02）")
     return p.parse_args()
+
+
+# device 字段 -> 打印短标签（与 spec §10.2 一致）
+DEVICE_SHORT = {
+    "nvidia_broadcast": "broadcast",
+    "gameDAC_chat": "gameDAC",
+}
 
 
 def load_manifest_jsonl_gz(path: Path) -> list[dict]:
@@ -85,6 +97,73 @@ def test_one_sherpa(kws, wav_path: Path) -> bool:
     return False
 
 
+def compute_metrics(pos_entries: list[dict], neg_hits: list[bool],
+                    bar_recall: float, bar_far: float) -> dict:
+    """按声学域(device)分组算 recall, 并对整体 recall/FAR 做 §10.2 门禁判定。
+
+    纯逻辑, 不依赖 sherpa / numpy / 音频, 可隔离单测。
+
+    Args:
+        pos_entries: 正样本条目列表, 每条需含 ``device``(str) 与 ``hit``(bool)。
+        neg_hits:    负样本命中布尔列表, 顺序对应 neg manifest（不按域）。
+        bar_recall:  整体 recall 通过阈值。
+        bar_far:     整体 FAR 通过阈值。
+
+    Returns:
+        dict, 含 recall_by_device / recall_overall / far_overall / passed / reasons
+        以及若干辅助计数。
+    """
+    # 按 device 分组聚合正样本命中
+    device_hits: dict[str, int] = {}
+    device_total: dict[str, int] = {}
+    for e in pos_entries:
+        dev = e["device"]
+        device_total[dev] = device_total.get(dev, 0) + 1
+        device_hits[dev] = device_hits.get(dev, 0) + (1 if e["hit"] else 0)
+
+    recall_by_device: dict[str, float] = {}
+    no_sample_devices: list[str] = []
+    for dev in sorted(device_total.keys()):
+        total = device_total[dev]
+        if total == 0:
+            recall_by_device[dev] = 0.0
+            no_sample_devices.append(dev)
+        else:
+            recall_by_device[dev] = device_hits[dev] / total
+
+    pos_total = len(pos_entries)
+    pos_hits = sum(1 for e in pos_entries if e["hit"])
+    recall_overall = (pos_hits / pos_total) if pos_total > 0 else 0.0
+
+    neg_total = len(neg_hits)
+    neg_hits_count = sum(1 for h in neg_hits if h)
+    far_overall = (neg_hits_count / neg_total) if neg_total > 0 else 0.0
+
+    reasons: list[str] = []
+    if recall_overall < bar_recall:
+        reasons.append(
+            f"recall_overall={recall_overall:.4f} < bar_recall={bar_recall:.4f}"
+        )
+    if far_overall > bar_far:
+        reasons.append(
+            f"far_overall={far_overall:.4f} > bar_far={bar_far:.4f}"
+        )
+    passed = (recall_overall >= bar_recall) and (far_overall <= bar_far)
+
+    return {
+        "recall_by_device": recall_by_device,
+        "recall_overall": recall_overall,
+        "far_overall": far_overall,
+        "passed": passed,
+        "reasons": reasons,
+        "pos_total": pos_total,
+        "pos_hits": pos_hits,
+        "neg_total": neg_total,
+        "neg_hits": neg_hits_count,
+        "no_sample_devices": no_sample_devices,
+    }
+
+
 def main():
     args = get_args()
     if not args.model_dir.exists():
@@ -123,59 +202,75 @@ def main():
         sample_rate=16000,
     )
 
-    # 加载测试集
-    pos = load_manifest_jsonl_gz(args.manifests_dir / "positive_test.jsonl.gz")
-    neg = load_manifest_jsonl_gz(args.manifests_dir / "negative_test.jsonl.gz")
+    # 加载测试集（manifest 缺失 / 正样本为空必须显式报错，禁止静默 fallback）
+    pos_path = args.manifests_dir / "positive_test.jsonl.gz"
+    neg_path = args.manifests_dir / "negative_test.jsonl.gz"
+    if not pos_path.exists():
+        logger.error(f"正样本 manifest 缺失: {pos_path}")
+        sys.exit(1)
+    if not neg_path.exists():
+        logger.error(f"负样本 manifest 缺失: {neg_path}")
+        sys.exit(1)
+
+    pos = load_manifest_jsonl_gz(pos_path)
+    neg = load_manifest_jsonl_gz(neg_path)
+
+    if len(pos) == 0:
+        logger.error("正样本为 0 条，无法评估 recall，终止")
+        sys.exit(1)
     logger.info(f"Test set: positive={len(pos)}, negative={len(neg)}")
 
-    # 评估
-    pos_hits = 0
-    pos_details = []
-    for e in pos:
-        hit = test_one_sherpa(kws, Path(e["audio"]))
-        pos_hits += hit
-        pos_details.append((e["id"], hit, e["duration"]))
+    # 评估：逐条跑 sherpa，并带 device/id/duration 元数据
+    pos_entries = [
+        {
+            "device": e["device"],
+            "hit": test_one_sherpa(kws, Path(e["audio"])),
+            "id": e["id"],
+            "duration": e["duration"],
+        }
+        for e in pos
+    ]
+    neg_hits = [test_one_sherpa(kws, Path(e["audio"])) for e in neg]
 
-    neg_hits = 0
-    neg_details = []
-    for e in neg:
-        hit = test_one_sherpa(kws, Path(e["audio"]))
-        neg_hits += hit
-        neg_details.append((e["id"], hit, e["duration"]))
+    # §10.2 门禁判定（按域 recall + 整体 recall/FAR）
+    m = compute_metrics(pos_entries, neg_hits, args.bar_recall, args.bar_far)
 
-    # 报告
+    # per-file 详情（门禁之前打印，便于排查）
     print()
     print("=" * 60)
-    print("  KWS 评估结果")
-    print("=" * 60)
-    print(f"  正样本: {pos_hits}/{len(pos)} = {pos_hits/max(len(pos),1)*100:.1f}% (应接近 100%)")
-    print(f"  负样本: {neg_hits}/{len(neg)} = {neg_hits/max(len(neg),1)*100:.1f}% (应接近 0%)")
-    print()
-
-    if pos_hits < len(pos) * 0.8:
-        print("  ⚠️  唤醒词检出率 <80%，考虑：")
-        print("    - 增训正样本（再录 30 句）")
-        print("    - 调 keywords_score 阈值")
-        print("    - 检查负样本是否含 'bt 在吗' 误标")
-    if neg_hits > len(neg) * 0.1:
-        print("  ⚠️  误报率 >10%，考虑：")
-        print("    - 增训负样本（再录 100 段噪声/对话）")
-        print("    - 调 keywords_threshold 阈值")
-        print("    - 检查训练 token 顺序是否对齐 keywords.txt")
-
-    # 详情
-    print()
     print("  正样本详情（id / 命中 / 时长）:")
-    for id_, hit, dur in pos_details:
-        mark = "✓" if hit else "✗"
-        print(f"    {mark} {id_}  {dur:.2f}s")
+    for e in pos_entries:
+        mark = "✓" if e["hit"] else "✗"
+        print(f"    {mark} {e['id']}  {e['duration']:.2f}s")
     print()
     print("  负样本详情（前 20 个）:")
-    for id_, hit, dur in neg_details[:20]:
+    for i, hit in enumerate(neg_hits[:20]):
+        nid = neg[i].get("id", f"#{i}")
+        dur = neg[i].get("duration", 0.0)
         mark = "✓误报" if hit else "✗正确"
-        print(f"    {mark}  {id_}  {dur:.2f}s")
-    if len(neg_details) > 20:
-        print(f"    ... 剩 {len(neg_details) - 20} 个省略")
+        print(f"    {mark}  {nid}  {dur:.2f}s")
+    if len(neg_hits) > 20:
+        print(f"    ... 剩 {len(neg_hits) - 20} 个省略")
+
+    # 报告 + 门禁
+    print()
+    print("=" * 60)
+    print("  KWS §10.2 验收门禁")
+    print("=" * 60)
+    print(f"  recall_broadcast = {m['recall_by_device'].get('nvidia_broadcast', 0.0)*100:.1f}%")
+    print(f"  recall_gameDAC   = {m['recall_by_device'].get('gameDAC_chat', 0.0)*100:.1f}%")
+    print(f"  recall_overall   = {m['recall_overall']*100:.1f}%")
+    print(f"  FAR_overall      = {m['far_overall']*100:.1f}%")
+    print()
+    if m["passed"]:
+        print("  PASS  ✓  §10.2 门禁达标")
+        print("=" * 60)
+    else:
+        print("  FAIL  ✗  §10.2 门禁未达标")
+        for r in m["reasons"]:
+            print(f"    - {r}")
+        print("=" * 60)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
