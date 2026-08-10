@@ -409,19 +409,26 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
   > 注：`build_test_manifest.py` 已实现并合入 main（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；附带 `test_build_test_manifest.py`（CI 的 pytest 矩阵与 ruff 门禁均不含 `kws-training`）。`assemble_kws_corpus.py` 同样已实现合入（`services/scripts/assemble_kws_corpus.py` + `test_assemble_kws_corpus.py`，4 用例）。
 - 留出集**只增不删、不训练**，保证跨次评估可比。
 
-### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）
+### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）— 已实现
 
-- 基于 `test_kws.py` 扩展（不另起炉灶）：按 `device` 字段分组输出
-  `recall_broadcast / recall_gameDAC / FAR_overall / recall_overall`，
-  并在末尾断言 **recall_overall ≥ 90% 且 FAR_overall ≤ 2%** → 不达标 `sys.exit(1)`（即验收门禁）。
-- 扩展点（给实现者）：`test_one_sherpa` 不变；`main` 里把 pos/neg 按 `e["device"]` 分组后分别算命中率；加 `--bar-recall 0.9 --bar-far 0.02` 参数；达标打印 `PASS` 否则 `FAIL` + 退出码。
-- 跑法（WSL2）：
+- **状态**：已实现并合入（`services/kws-training/test_kws.py` + `test_test_kws.py`；commit `e156f35` 主体 + `d0b8b4e` 补 fail-closed 守卫；审查门禁 APPROVE 无 blocking）。
+- **行为**：`test_kws.py` 加载模型 → 逐条测命中 → 调 `compute_metrics` 按 `device` 分组输出
+  `recall_broadcast / recall_gameDAC / recall_overall / FAR_overall`，末尾断言
+  **recall_overall ≥ bar_recall(默认 0.9) 且 FAR_overall ≤ bar_far(默认 0.02)** → 不达标打印 `FAIL`+原因并 `sys.exit(1)`（验收门禁），达标打印 `PASS`。
+- **fail-closed**：正样本或负样本为 0 条 → `logger.error` + `sys.exit(1)`，**不会以空集假通过**（N1 已修）。
+- **参数**：`--model-dir`(必填) / `--manifests-dir`(传 `test_manifests`) / `--bar-recall 0.9` / `--bar-far 0.02` / `--num-threads`。
+- **单测**：`test_test_kws.py`（stdlib unittest，纯逻辑不依赖 sherpa/音频）4 用例全绿，覆盖按域分组 + 门禁边界（recall/FAR 等号边界）+ 空集兜底。
+- 跑法（验收阶段，WSL2 训练导出后）：
   ```bash
   source ~/kws-train/bin/activate
   python /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/test_kws.py \
       --model-dir /mnt/d/AI/models/sherpa-onnx/models/kws/bt-en \
       --manifests-dir /mnt/d/AI/data/kws/bt-en/test_manifests && echo "验收通过"
   ```
+  > Windows / PowerShell（仅跑单测门禁逻辑，模型推理需在 WSL2）：
+  > ```powershell
+  > & "D:\AI\envs\joyai-sherpa\python.exe" -m unittest services\kws-training\test_test_kws.py -v
+  > ```
 
 ### 10.3 运行记录表（轻量实验追踪）
 
