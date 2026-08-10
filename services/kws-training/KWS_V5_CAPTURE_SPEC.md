@@ -470,7 +470,7 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
 |------|---------|
 | `recall_broadcast` < 90% | 加 NVIDIA Broadcast 域正样本（重录该域）；检查该域静音裁剪是否过激 |
 | `recall_gameDAC` < 90% | 加 GameDAC Chat 域正样本；检查原始麦电平是否过低 |
-| `FAR_overall` > 2% | 加负样本（噪声/对话/其他词）；或降 `keywords_threshold`；查 `negative` 是否误含 "bt" |
+| `FAR_overall` > 2% | **首要：加负样本**（装 MUSAN 让 prep 自动补 ~400 / 或重录 ~200 负 / 或合成增强）。`keywords_threshold` 升阈值只能边际压 FAR（0810 实测：0.25→0.9 仅 100%→87.5%，救不回）→ 阈值调参是次要手段，不是根因解。查 `negative` 是否误含 "bt" |
 | 两域 recall 都低 | 加 epoch / 查 lr；查标签纯度（live 用 `all` 是否引入太多静音→切 `asr-bt`）；查 train/valid manifest 时长越界 |
 | 单域 recall 波动大 | 该域录音多样性不足（距离/音量/语速），补多样性而非单纯加量 |
 
