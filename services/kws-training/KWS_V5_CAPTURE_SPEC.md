@@ -385,6 +385,19 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
       --out /mnt/d/AI/data/kws/bt-en
   ```
   - 它把两域正样本合并进 `<out>/positive/`（训练池，audio 路径已重写供 `prep_kws_data.py` 消费），从每域取前 `--holdout`(默认 15) 段**复制**进 `<out>/test/positive/{nvidia_broadcast,gameDAC_chat}/`，负样本取 `--neg-holdout`(默认 15) 进 `<out>/test/negative/`，最后调用 `build_test_manifest.py` 生成 `<out>/test_manifests/positive_test.jsonl.gz` + `negative_test.jsonl.gz`。
+  - **Windows / PowerShell 版**（合并脚本是纯标准库，无需开 WSL2，用 `joyai-sherpa` 环境即可）：
+    ```powershell
+    # 先 dry-run 看计划、不写文件（确认无误再去掉 --dry-run 真跑）
+    & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\assemble_kws_corpus.py `
+        --src-roots D:/AI/data/kws/bt-en/broadcast D:/AI/data/kws/bt-en/gameDAC `
+        --out D:/AI/data/kws/bt-en --dry-run
+
+    # 真跑（合并训练池 + 切冻结留出集 + 生成 test_manifests/）
+    & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\assemble_kws_corpus.py `
+        --src-roots D:/AI/data/kws/bt-en/broadcast D:/AI/data/kws/bt-en/gameDAC `
+        --out D:/AI/data/kws/bt-en
+    ```
+    > 真跑后检查：`<out>/positive/`(训练池)、`<out>/test/positive/nvidia_broadcast/` + `gameDAC_chat/`(各 15 段)、`<out>/test/negative/`、`<out>/test_manifests/positive_test.jsonl.gz` + `negative_test.jsonl.gz` 都应生成。
   - **关键：build 输出到独立 `test_manifests/`，不与 `manifests/` 同名互踩**——`prep_kws_data.py` 的 train/test 拆分也写 `manifests/positive_test.jsonl.gz`；若二者都写 `manifests/` 会互相覆盖，回归门禁（`test_kws.py`）读到的就不是真冻结集。
   - 参数：`--holdout` / `--neg-holdout` / `--no-build`（跳过 build）/ `--dry-run`（只打印计划）/ `--force`（覆盖已存在 test/ wav）/ `--device-map key=value`（覆盖域→device 映射）。
 - **手动替代**（破坏性文件操作按用户纪律由你自己做）：从两域各复制 ≥15 段 BT 到 `test/positive/{nvidia_broadcast,gameDAC_chat}/`（**复制、不移动**——保留 `positive/` 原样本供训练，test/ 是独立冻结副本，训练绝不吃），负样本复制 ≥40 段入 `test/negative/`，再：
