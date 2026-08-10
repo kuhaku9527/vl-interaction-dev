@@ -22,6 +22,7 @@ import argparse
 import gzip
 import json
 import logging
+import math
 import sys
 import wave
 from pathlib import Path
@@ -111,7 +112,7 @@ def compute_metrics(pos_entries: list[dict], neg_hits: list[bool],
 
     Returns:
         dict, 含 recall_by_device / recall_overall / far_overall / passed / reasons
-        以及若干辅助计数。
+        以及若干辅助计数 / far_granularity / warnings。
     """
     # 按 device 分组聚合正样本命中
     device_hits: dict[str, int] = {}
@@ -139,6 +140,18 @@ def compute_metrics(pos_entries: list[dict], neg_hits: list[bool],
     neg_hits_count = sum(1 for h in neg_hits if h)
     far_overall = (neg_hits_count / neg_total) if neg_total > 0 else 0.0
 
+    # FAR 分辨率透明守卫：粒度 = 1/负样本数。若粒度粗于 bar_far，
+    # 门禁实际等价于"零误接受"——显式提示，禁止静默粗粒度放行。
+    far_granularity = (1.0 / neg_total) if neg_total > 0 else 0.0
+
+    warnings: list[str] = []
+    if neg_total > 0 and far_granularity > bar_far:
+        min_neg = math.ceil(1.0 / bar_far) if bar_far > 0 else 0
+        warnings.append(
+            f"FAR 分辨率=1/{neg_total}={far_granularity*100:.1f}% 粗于 bar_far={bar_far*100:.1f}%"
+            f"，门禁等价于'零误接受'（建议录≥{min_neg} 条负样本以提升分辨率）"
+        )
+
     reasons: list[str] = []
     if recall_overall < bar_recall:
         reasons.append(
@@ -161,6 +174,8 @@ def compute_metrics(pos_entries: list[dict], neg_hits: list[bool],
         "neg_total": neg_total,
         "neg_hits": neg_hits_count,
         "no_sample_devices": no_sample_devices,
+        "far_granularity": far_granularity,
+        "warnings": warnings,
     }
 
 
@@ -264,6 +279,11 @@ def main():
     print(f"  recall_gameDAC   = {m['recall_by_device'].get('gameDAC_chat', 0.0)*100:.1f}%")
     print(f"  recall_overall   = {m['recall_overall']*100:.1f}%")
     print(f"  FAR_overall      = {m['far_overall']*100:.1f}%")
+    if m.get("warnings"):
+        print()
+        print("  ⚠️ 门禁分辨率提示:")
+        for w in m["warnings"]:
+            print(f"    - {w}")
     print()
     if m["passed"]:
         print("  PASS  ✓  §10.2 门禁达标")

@@ -409,6 +409,25 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
   > 注：`build_test_manifest.py` 已实现并合入 main（`services/kws-training/build_test_manifest.py`，轻量脚本：从 `test/` 扫 wav + 按子目录名生成带 device 标签的 gz manifest）；附带 `test_build_test_manifest.py`（CI 的 pytest 矩阵与 ruff 门禁均不含 `kws-training`）。`assemble_kws_corpus.py` 同样已实现合入（`services/scripts/assemble_kws_corpus.py` + `test_assemble_kws_corpus.py`，4 用例）。
 - 留出集**只增不删、不训练**，保证跨次评估可比。
 
+### 10.1.1 FAR 门禁精度调整（负样本分辨率）
+
+§10.2 的 FAR 门槛是 ≤2%，但 FAR 的**最小可测粒度 = 1/验收集负样本数 N**：
+
+- 默认 `--neg-holdout 15` → 粒度 6.7%，**比 2% 门槛还粗**，门禁量不出 FAR 是否达标却会"静默通过"——这是真实精度缺陷。
+- **调整方案（录多少 + 怎么切）**：
+  1. **录负样本**：建议 ≥50 条（粒度 ≤2%，刚好能分辨 2% 门槛）；最少 40 条（粒度 2.5%，门禁等价于"零误接受"）。负样本不按域分组，用任一麦录 `--label negative` 即可（如 `--count 40 --device 1`）。
+  2. **切分出集**：合并时显式 `--neg-holdout <N>`（N = 录的条数），让全部录的负样本进冻结验收集：
+     ```powershell
+     # 先删派生根 manifest（防 170→340 重复，见下方坑），再跑
+     rm -f D:/AI/data/kws/bt-en/positive.jsonl D:/AI/data/kws/bt-en/negative.jsonl
+     & "D:\AI\envs\joyai-sherpa\python.exe" services\scripts\assemble_kws_corpus.py `
+         --src-roots D:/AI/data/kws/bt-en/broadcast D:/AI/data/kws/bt-en/gameDAC `
+         --out D:/AI/data/kws/bt-en --neg-holdout 40 --force
+     ```
+     > ⚠️ **重跑坑**：`assemble_kws_corpus.py` 会"载入既有 `positive.jsonl/negative.jsonl`"再叠加 src 根数据。若不先删根 manifest，重跑会把同一批正样本叠加进训练池 → manifest 计数翻倍（170→340，wav 重复）。删了根 manifest 从 src 根干净重建即可，wav 原样重拷、零损失。
+  3. **验收脚本内置分辨率透明守卫**（`test_kws.py` 的 `compute_metrics`）：当 `1/N > bar_far` 时打印 `⚠️ 门禁分辨率提示`，显式说明门禁等价于"零误接受"，**不阻塞、不改变 pass/fail**（零误接受的合格跑仍 PASS）。从此不再静默粗粒度放行。
+- **本轮（2026-08-10）实际配方**：录 40 条负样本，`--neg-holdout 40` → 训练负 40 + 冻结验收集负 40，粒度 2.5%（门禁等价于"零误接受"）。正样本每域 100（训练 85+留出 15），冻结验收集共 正 30 + 负 40。
+
 ### 10.2 统一验收脚本（按域 recall/FAR + 总 + 门禁）— 已实现
 
 - **状态**：已实现并合入（`services/kws-training/test_kws.py` + `test_test_kws.py`；commit `e156f35` 主体 + `d0b8b4e` 补 fail-closed 守卫；审查门禁 APPROVE 无 blocking）。

@@ -78,6 +78,28 @@ class TestComputeMetrics(unittest.TestCase):
         self.assertAlmostEqual(m["recall_overall"], 1.0)
         self.assertTrue(m["passed"])
 
+    def test_E_far_resolution_warning(self):
+        # 负样本仅 15 条 -> 粒度 1/15≈6.7% 粗于 bar_far=0.02 -> 应告警；
+        # 但零误接受时整体 FAR=0 仍应通过阈值（guard 只告警不阻塞）。
+        pos_entries = [{"device": "nvidia_broadcast", "hit": True} for _ in range(20)]
+        neg_hits = [False] * 15
+        m = compute_metrics(pos_entries, neg_hits, 0.9, 0.02)
+        self.assertAlmostEqual(m["far_overall"], 0.0)
+        self.assertAlmostEqual(m["far_granularity"], 1 / 15)
+        self.assertTrue(m["passed"])
+        self.assertTrue(len(m["warnings"]) >= 1)
+        self.assertTrue(any("分辨率" in w for w in m["warnings"]))
+
+    def test_F_far_resolution_fine_no_warning(self):
+        # 负样本 100 条 -> 粒度 1%=1% < 2% -> 不应有分辨率告警。
+        pos_entries = [{"device": "nvidia_broadcast", "hit": True} for _ in range(20)]
+        neg_hits = [False] * 100
+        m = compute_metrics(pos_entries, neg_hits, 0.9, 0.02)
+        self.assertAlmostEqual(m["far_overall"], 0.0)
+        self.assertAlmostEqual(m["far_granularity"], 0.01)
+        self.assertEqual(m["warnings"], [])
+        self.assertTrue(m["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()
