@@ -232,7 +232,7 @@ function Emit-Event {
         [hashtable]$Extra = @{}
     )
     try {
-        $eventsDir = Join-Path $RepoRoot "logs" "events"
+        $eventsDir = Join-Path (Join-Path $RepoRoot "logs") "events"
         if (-not (Test-Path $eventsDir)) { New-Item -ItemType Directory -Path $eventsDir -Force | Out-Null }
         $now = (Get-Date).ToUniversalTime()
         $ts = $now.ToString("yyyy-MM-ddTHH:mm:ss.") + "{0:000}Z" -f $now.Millisecond
@@ -763,7 +763,7 @@ $DriftGatePy = if (Test-Path $VenvPy) {
 } else {
     $null
 }
-$DriftContract = Join-Path $RepoRoot "config" "drift-contract.json"
+$DriftContract = Join-Path (Join-Path $RepoRoot "config") "drift-contract.json"
 Write-Host ""
 Write-Sec "Drift-gate pre-flight (static / closed)"
 if (-not $DriftGatePy) {
@@ -771,7 +771,7 @@ if (-not $DriftGatePy) {
 } elseif (-not (Test-Path $DriftContract)) {
     Write-Warn "drift-contract.json 缺失 ($DriftContract)，跳过 pre-flight（门禁无法运行，fail-open）"
 } else {
-    & $DriftGatePy (Join-Path $RepoRoot "scripts" "drift_gate.py") --contract $DriftContract --phase static --mode closed --no-history
+    & $DriftGatePy (Join-Path (Join-Path $RepoRoot "scripts") "drift_gate.py") --contract $DriftContract --phase static --mode closed --no-history
     if ($LASTEXITCODE -ne 0) {
         Write-Err "drift-gate (static/closed) 检测到配置漂移，中止启动（rc=$LASTEXITCODE）"
         Emit-Event launcher drift_gate_fail -Extra @{ rc = $LASTEXITCODE }

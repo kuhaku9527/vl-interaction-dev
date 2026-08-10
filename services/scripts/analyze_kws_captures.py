@@ -77,12 +77,12 @@ def analyze_one(wav_path: Path, cfg: JarvisConfig) -> dict:
             import numpy as np
             import sherpa_onnx
 
-            _vcfg = sherpa_onnx.SileroVadModelConfig()
-            _vcfg.model = os.path.join(vad_model_dir, "silero_vad.onnx")
-            _vcfg.threshold = 0.5
-            _vcfg.min_silence_duration = 0.5
-            _vcfg.min_speech_duration = 0.25
-            _vcfg.window_size = 512
+            _vcfg = sherpa_onnx.VadModelConfig()
+            _vcfg.silero_vad.model = os.path.join(vad_model_dir, "silero_vad.onnx")
+            _vcfg.silero_vad.threshold = 0.5
+            _vcfg.silero_vad.min_silence_duration = 0.5
+            _vcfg.silero_vad.min_speech_duration = 0.25
+            _vcfg.silero_vad.window_size = 512
             vad = sherpa_onnx.VoiceActivityDetector(_vcfg, buffer_size_in_seconds=60)
         except Exception as exc:
             logger.warning("VAD unavailable for analysis (%s); skipping VAD column", exc)

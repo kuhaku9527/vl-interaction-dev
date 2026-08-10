@@ -24,8 +24,12 @@ Fail-open (mirrors ``smart_turn_adapter.py``):
     never raises, never fakes a result, never blocks the audio pipeline.
 
 Verified API (sherpa_onnx 1.13.4, webui venv):
-  * ``config = sherpa_onnx.SileroVadModelConfig()``; ``config.model`` is a
-    plain STRING path (the bare ``SileroVadModel`` symbol is NOT exported).
+  * ``config = sherpa_onnx.VadModelConfig()``; set ``config.silero_vad.model``
+    to a plain STRING path of silero_vad.onnx. The bare ``SileroVadModel``
+    symbol is NOT exported, and ``VoiceActivityDetector`` only accepts
+    ``VadModelConfig`` (NOT ``SileroVadModelConfig`` directly — passing the
+    latter raises TypeError and is swallowed by the fail-open except below,
+    so the VAD silently stays disabled; this was a latent bug, now fixed).
   * ``detector = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=60)``
   * ``detector.accept_waveform(samples)`` — samples: Sequence[float] in [-1, 1]
     (Silero is fixed at 16 kHz; NO per-call sample_rate argument).
@@ -96,13 +100,13 @@ class VadBypass:
             return
 
         try:
-            config = sherpa_onnx.SileroVadModelConfig()
-            config.model = model_path
-            config.threshold = threshold
-            config.min_silence_duration = min_silence_duration
-            config.min_speech_duration = min_speech_duration
-            config.window_size = window_size
-            config.max_speech_duration = 20.0
+            config = sherpa_onnx.VadModelConfig()
+            config.silero_vad.model = model_path
+            config.silero_vad.threshold = threshold
+            config.silero_vad.min_silence_duration = min_silence_duration
+            config.silero_vad.min_speech_duration = min_speech_duration
+            config.silero_vad.window_size = window_size
+            config.silero_vad.max_speech_duration = 20.0
             self._detector = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=60)
             self._available = True
             logger.info(
