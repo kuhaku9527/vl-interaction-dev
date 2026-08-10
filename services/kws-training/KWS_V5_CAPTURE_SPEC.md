@@ -449,6 +449,20 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
   > & "D:\AI\envs\joyai-sherpa\python.exe" -m unittest services\kws-training\test_test_kws.py -v
   > ```
 
+> ⚠️ **评估口径须知（2026-08-10 实测修正，关键）**：`test_kws.py` 的 recall/FAR 是
+> **「直跑干净流」** 口径（负样本独立 stream 命中比），与**线上真实链路**（100ms chunk 持久流
+> 包装层 + WAIT_ASR_CONFIRM）**口径不同**。`jarvis_mode.py:132` 实测：
+> 直跑 = FAR 15.5% / recall 75.5%；**线上包装层 = FAR 2.0%（已达标）/ recall 49.0%**。
+> 推论：**线上 FAR 本来就 ≈2%，真瓶颈是线上 recall（49%，远低于 90%）**。
+> 因此：
+> 1. 本 §10.2 offline 门禁 **只作「模型没训崩」的开发健康检查**，不能作为 deploy gate
+>    （用它卡 FAR≤2% 是假目标，抬 `keywords_threshold` 压 FAR 必塌 recall，0810 已证实）。
+> 2. **真正部署决策以「真机端到端（完整 JarvisKWS 包装层）recall/FAR」为准**（见本 spec line 345
+>    的 JARVIS 端到端验收，脚本 `services/scripts/test_jarvis_kws_e2e.py`）。
+> 3. offline recall 高 ≠ 线上 recall 高：直跑→线上 recall 约掉 ~26pp（旧模型 75.5→49），
+>    v5 训练是否把线上 recall 拉到 90% **必须真机验证**，不能靠 offline 直跑推断。
+> 诊断沉淀见 `doc/research/kws-v5-2026-08-10-diagnosis.md`。
+
 ### 10.3 运行记录表（轻量实验追踪）
 
 每次「加数据 + 重训 + 验收」后，append 一行到 `services/kws-training/REGRESSION_LOG.md`：
@@ -470,7 +484,7 @@ bash /mnt/d/AI/workspace/JoyAI-VL-Interaction-main/services/kws-training/run_kws
 |------|---------|
 | `recall_broadcast` < 90% | 加 NVIDIA Broadcast 域正样本（重录该域）；检查该域静音裁剪是否过激 |
 | `recall_gameDAC` < 90% | 加 GameDAC Chat 域正样本；检查原始麦电平是否过低 |
-| `FAR_overall` > 2% | **首要：加负样本**（装 MUSAN 让 prep 自动补 ~400 / 或重录 ~200 负 / 或合成增强）。`keywords_threshold` 升阈值只能边际压 FAR（0810 实测：0.25→0.9 仅 100%→87.5%，救不回）→ 阈值调参是次要手段，不是根因解。查 `negative` 是否误含 "bt" |
+| `FAR_overall` > 2% | **首要：加负样本**（装 MUSAN 让 prep 自动补 ~400 / 或重录 ~200 负 / 或合成增强）。`keywords_threshold` 升阈值只能边际压 FAR（0810 实测：0.25→0.9 仅 100%→87.5%，救不回）→ 阈值调参是次要手段，不是根因解。查 `negative` 是否误含 "bt"。**注意**：此 FAR 是 offline 直跑口径（见 §10.2 口径须知）；线上包装层 FAR 本就 ≈2%，deploy 决策以真机端到端为准。 |
 | 两域 recall 都低 | 加 epoch / 查 lr；查标签纯度（live 用 `all` 是否引入太多静音→切 `asr-bt`）；查 train/valid manifest 时长越界 |
 | 单域 recall 波动大 | 该域录音多样性不足（距离/音量/语速），补多样性而非单纯加量 |
 

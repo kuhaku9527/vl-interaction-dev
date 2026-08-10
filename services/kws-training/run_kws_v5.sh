@@ -24,7 +24,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"   # services/kws-training -> repo
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"   # services/kws-training/.. = services; ../.. = repo root
 
 PY="${KWS_PY:-python}"
 DATA_ROOT="${KWS_DATA_ROOT:-/mnt/d/AI/data/kws/bt-en}"

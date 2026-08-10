@@ -336,6 +336,8 @@ def build_augmented_positives(
                     "text": "BT",
                     "tokens": "B T",
                     "keyword": "bt",
+                    # 增广继承源正样本 device：保证分域 recall 可用，防御 test_kws KeyError
+                    "device": e.get("device", "nvidia_broadcast"),
                 }
             )
     logger.info(
@@ -365,6 +367,9 @@ def _make_live_entry(wav: Path) -> dict:
         "text": "BT",
         "tokens": "B T",
         "keyword": "bt",
+        # live 采集来自 NVIDIA Broadcast 麦克风（spec：Broadcast-WebRTC 域），
+        # 标 nvidia_broadcast 以参与 §10.2 分域 recall；缺此字段会导致验收 KeyError。
+        "device": "nvidia_broadcast",
     }
 
 
@@ -557,6 +562,7 @@ def main() -> int:
     )
 
     # ---- MUSAN（fail-open） ----
+    pos_aug: list[dict] = []  # 先声明，避免 MUSAN 未启用/失败时 split 后引用未定义
     musan_dir = resolve_musan_dir(args, data_root)
     if musan_dir is not None:
         try:
@@ -577,10 +583,11 @@ def main() -> int:
                 args.aug_seg_sec,
                 args.seed,
             )
-            pos = pos + pos_aug
+            # 注意：pos_aug 不在此并入总 pos 池，避免带噪增广正样本污染测试集
+            # （见下方 split 之后仅并入 pos_train）
             neg = neg + neg_musan
             print(
-                f"  [musan] 正样本 {len(pos)}（含增广 {len(pos_aug)}）"
+                f"  [musan] 正样本 {len(pos)}（原始，增广 {len(pos_aug)} 仅进训练集）"
                 f" / 负样本 {len(neg)}（含 MUSAN {len(neg_musan)}）"
             )
         except FileNotFoundError as e:
@@ -593,6 +600,9 @@ def main() -> int:
 
     pos_train, pos_test = split_train_test(pos, args.test_ratio, args.seed)
     neg_train, neg_test = split_train_test(neg, args.test_ratio, args.seed)
+    # 增广正样本仅并入训练集：带噪正样本进测试集会拉低 recall 且破坏与基线轮（无增广）的可比性
+    if pos_aug:
+        pos_train = pos_train + pos_aug
     print(f"  [split] pos train={len(pos_train)} test={len(pos_test)}")
     print(f"  [split] neg train={len(neg_train)} test={len(neg_test)}")
 
