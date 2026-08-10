@@ -218,6 +218,9 @@ def main():
     if len(pos) == 0:
         logger.error("正样本为 0 条，无法评估 recall，终止")
         sys.exit(1)
+    if len(neg) == 0:
+        logger.error("负样本为 0 条，无法评估 FAR，终止")
+        sys.exit(1)
     logger.info(f"Test set: positive={len(pos)}, negative={len(neg)}")
 
     # 评估：逐条跑 sherpa，并带 device/id/duration 元数据
