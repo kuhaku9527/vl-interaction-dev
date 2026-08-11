@@ -139,6 +139,13 @@ def _asr_cfg() -> dict:
     return {"url": url, "api_key": api_key, "model": model}
 
 
+# Internal ASR bridge (WebUI <-> ASR engine). The user-facing asr.api_base is
+# an http(s) provider URL; the WebUI always connects to this fixed ws endpoint
+# and the bridge forwards upstream. Never a user input.
+ASR_BRIDGE_PORT = int(os.getenv("ASR_ADAPTER_PORT", "8994"))
+INTERNAL_ASR_BRIDGE_WS = "ws://127.0.0.1:%d/ws/asr" % ASR_BRIDGE_PORT
+
+
 def get_asr_url() -> str:
     """Return the currently configured ASR websocket URL (runtime or env)."""
     return _asr_cfg().get("url", "")
@@ -302,6 +309,12 @@ async def connect_asr(session_id):
     url = cfg.get("url", "")
     if not url:
         raise RuntimeError("ASR url is not configured")
+
+    # The user-facing asr.api_base is an http(s) provider URL. The WebUI always
+    # connects to its internal bridge over ws; the bridge forwards to the
+    # upstream. Only an operator-set ASR_URL (ws://) bypasses this constant.
+    if url.startswith("http://") or url.startswith("https://"):
+        url = INTERNAL_ASR_BRIDGE_WS
 
     attempt = 0
     while True:

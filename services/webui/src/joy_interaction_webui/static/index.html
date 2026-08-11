@@ -287,6 +287,25 @@ limitations under the License.
                         </div>
                     </div>
 
+                    <!-- [ASR promotion] ASR辅助唤醒 toggle (joyai-asr-promotion-ui) -->
+                    <div class="settings-section">
+                        <div class="settings-section-title">Wake / ASR</div>
+
+                        <div class="settings-item">
+                            <div style="flex: 1; min-width: 0;">
+                                <div class="settings-item-label">ASR辅助唤醒</div>
+                                <div class="settings-item-description">当关键词检测（KWS）漏掉 “bt” 时，由本地 paraformer ASR 兜底识别并触发唤醒。</div>
+                                <div class="settings-item-description" style="margin-top: 4px;">
+                                    由本地 paraformer 提供：<span id="asrModelName">—</span>
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="asrPromotionToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="settings-section">
                         <div class="settings-section-title" data-i18n>Background Model</div>
 
@@ -497,11 +516,11 @@ limitations under the License.
                     </div>
                     <div class="service-row" data-service="tts">
                         <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
-                        <div class="form-group"><label data-i18n>API URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
+                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
                     </div>
                     <div class="service-row" data-service="asr">
                         <div class="service-row-header"><i data-lucide="mic"></i><span>ASR</span><span class="service-badge" id="badge-asr">--</span></div>
-                        <div class="form-group"><label data-i18n>API URL</label><input type="text" id="svc-asr-api-base" placeholder="http://127.0.0.1:8993/v1/transcribe"></div>
+                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-asr-api-base" placeholder="https://api.siliconflow.cn/v1/audio/transcriptions"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-asr-model" placeholder="ggml-large-v3-turbo"></div>
                         <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-asr-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                     </div>
@@ -823,6 +842,8 @@ limitations under the License.
         const backgroundEnabledToggle = document.getElementById('backgroundEnabledToggle');
         const backgroundFrameMultiplier = document.getElementById('backgroundFrameMultiplier');
         const backgroundMaxFrames = document.getElementById('backgroundMaxFrames');
+        const asrPromotionToggle = document.getElementById('asrPromotionToggle');
+        const asrModelName = document.getElementById('asrModelName');
 
         let peerConnection = null;
         let localStream = null;
@@ -3605,7 +3626,9 @@ limitations under the License.
             fade: localStorage.getItem('fade') !== 'false',
             overlayPosition: localStorage.getItem('overlayPosition') || 'none',
             layoutOrder: localStorage.getItem('layoutOrder') || 'vlm-first',
-            ttsEnabled: localStorage.getItem('ttsEnabled') !== 'false'
+            ttsEnabled: localStorage.getItem('ttsEnabled') !== 'false',
+            // Server-driven: authoritative value arrives via server_config / asr_promotion_updated.
+            asrPromotionEnabled: false
         };
 
         // Load saved settings
@@ -5435,6 +5458,19 @@ limitations under the License.
             });
         });
 
+        // ASR promotion toggle (joyai-asr-promotion-ui): notify the server; it echoes
+        // back an `asr_promotion_updated` message which re-syncs the UI.
+        if (asrPromotionToggle) {
+            asrPromotionToggle.addEventListener('change', (e) => {
+                settings.asrPromotionEnabled = e.target.checked;
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send(JSON.stringify({ type: 'update_asr_promotion', enabled: e.target.checked }));
+                }
+                e.target.classList?.add('applied');
+                setTimeout(() => e.target.classList?.remove('applied'), 600);
+            });
+        }
+
         // Memory state change detection for console logging
         let _lastMemoryStateHash = '';
 
@@ -5644,6 +5680,16 @@ limitations under the License.
                 if (data.background_model) {
                     applyBackgroundConfig(data.background_model);
                 }
+                // ASR promotion (joyai-asr-promotion-ui): reflect runtime toggle + serving model name
+                if (typeof data.asr_promotion_enabled === 'boolean') {
+                    if (asrPromotionToggle) asrPromotionToggle.checked = data.asr_promotion_enabled;
+                    settings.asrPromotionEnabled = data.asr_promotion_enabled;
+                }
+                if (asrModelName) {
+                    asrModelName.textContent = (data.asr_model_name && typeof data.asr_model_name === 'string')
+                        ? data.asr_model_name
+                        : '—';
+                }
                 const reqCb = document.getElementById('debugShowRequestPayload');
                 const resCb = document.getElementById('debugShowResponsePayload');
                 const memCb = document.getElementById('debugShowMemoryState');
@@ -5674,6 +5720,17 @@ limitations under the License.
             } else if (data.type === 'background_config_updated') {
                 applyBackgroundConfig(data.background_model);
                 console.log('Background model config updated:', data.background_model);
+            } else if (data.type === 'asr_promotion_updated') {
+                if (typeof data.enabled === 'boolean') {
+                    if (asrPromotionToggle) asrPromotionToggle.checked = data.enabled;
+                    settings.asrPromotionEnabled = data.enabled;
+                }
+                if (asrModelName) {
+                    asrModelName.textContent = (data.asr_model_name && typeof data.asr_model_name === 'string')
+                        ? data.asr_model_name
+                        : '—';
+                }
+                console.log('ASR promotion updated:', data.enabled, data.asr_model_name || '');
             }
 
         }

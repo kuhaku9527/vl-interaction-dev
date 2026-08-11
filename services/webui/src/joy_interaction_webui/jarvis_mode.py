@@ -19,6 +19,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 import time
 import wave
 from array import array
@@ -37,6 +38,10 @@ logger = logging.getLogger("joyai.jarvis")
 # ============================================================================
 # Configuration
 # ============================================================================
+
+# Collapse runs of non-word characters (spaces, punctuation, CJK punctuation,
+# emoji, etc.) to a single space when normalising ASR confirm text.
+_ASR_CONFIRM_NON_WORD = re.compile(r"[^\w]+", flags=re.UNICODE)
 
 EXIT_WORDS = {"行", "明白", "了解", "ok", "好的", "知道了", "谢谢", "感谢"}
 """Words that signal "I’m done talking" — treated as end-of-conversation signal."""
@@ -121,6 +126,12 @@ def _load_default_llm_system_prompt() -> str:
     return "You are BT-7274, a Pilot's tactical AI assistant. Stay in character at all times."
 
 
+# Local paraformer promotion reuses the in-process shadow ASR (see
+# _feed_kws_shadow_asr) — no cloud call needed. "bt" survives local paraformer
+# ("b t 在吗") but is mangled by cloud SenseVoice ("滴滴你在吗"), so promotion
+# MUST run locally.
+
+
 @dataclass
 class JarvisConfig:
     """Runtime knobs for the Jarvis state machine."""
@@ -175,8 +186,20 @@ class JarvisConfig:
     # Hybrid wake confirmation: KWS fires cheaply, ASR confirms within timeout
     asr_confirm_timeout_s: float = 1.2
     """Max seconds to wait in WAIT_ASR_CONFIRM for ASR text containing a confirm pattern."""
-    asr_confirm_patterns: tuple = ("bt", "BT", "B T", "b t")
-    """Lower-case / case-sensitive tokens that, if seen in ASR text, promote the wake."""
+    asr_confirm_patterns: tuple = ()
+    """Explicit substring patterns (backward compat). Default wide match is used when empty."""
+
+    # ASR promotion (cloud recall booster) — OFF by default (safe).
+    # --- ASR promotion (local paraformer recall booster) ------------------
+    # When KWS misses a real "bt", the in-process shadow ASR (paraformer) has
+    # already heard it as "b t ...". If promotion is enabled, that KWS-MISS +
+    # shadow-ASR wake-pattern match promotes directly to wake. Purely additive
+    # (never suppresses KWS) and fail-safe. NOTE: must stay LOCAL — cloud
+    # SenseVoice mangles "bt" -> "滴滴", so cloud ASR cannot promote.
+    asr_promotion_enabled: bool = False
+    """Enable local paraformer promotion for recall. Default OFF."""
+    asr_promotion_cooldown_s: float = 2.0
+    """Min seconds between promotion wakes (debounce repeated shadow-ASR hits)."""
 
     # KWS diagnostics. These do not wake Jarvis; they make KWS misses observable.
     kws_shadow_asr_enabled: bool = True
@@ -355,6 +378,12 @@ class JarvisConfig:
             vad_threshold=_get_float("JARVIS_VAD_THRESHOLD", cls.vad_threshold),
             vad_window_size=_get_int("JARVIS_VAD_WINDOW_SIZE", cls.vad_window_size),
             vad_softgate=_get_bool("JARVIS_VAD_SOFTGATE", cls.vad_softgate),
+            asr_promotion_enabled=_get_bool(
+                "JARVIS_ASR_PROMOTION_ENABLED", cls.asr_promotion_enabled
+            ),
+            asr_promotion_cooldown_s=_get_float(
+                "JARVIS_ASR_PROMOTION_COOLDOWN_S", cls.asr_promotion_cooldown_s
+            ),
         )
 
     def __post_init__(self) -> None:
@@ -371,6 +400,25 @@ class JarvisConfig:
             # repo_root = parents[4]
             repo_root = here.parents[4]
             self.events_dir = str(repo_root / "prompts" / "bt" / "events")
+
+
+def asr_model_display_name(config: JarvisConfig) -> str:
+    """Human-readable label for the local paraformer ASR in server_config.
+
+    Derives from ``config.asr_model_dir`` so operator overrides (e.g. via
+    ``JARVIS_ASR_MODEL_DIR``) are reflected in the UI. Always tagged
+    ``(local)`` because promotion MUST run on the in-process sherpa-onnx
+    ASR — cloud SenseVoice mangles ``"bt"`` -> ``"滴滴"`` and cannot promote
+    (see :meth:`JarvisStateMachine._try_promote_from_local_asr`).
+    """
+    model_dir = (getattr(config, "asr_model_dir", "") or "").strip()
+    if model_dir:
+        basename = Path(model_dir).name
+    else:
+        basename = "streaming-paraformer-bilingual-zh-en"
+    if "paraformer" in basename.lower():
+        return f"sherpa-onnx {basename} (local)"
+    return f"sherpa-onnx local paraformer ({basename})"
 
 
 # ============================================================================
@@ -508,6 +556,9 @@ class JarvisStateMachine:
         self._kws_shadow_last_log_at = 0.0
         self._kws_shadow_last_speech_at = 0.0
         self._last_kws_fresh_probe_at = 0.0
+        # ASR promotion (local paraformer recall booster) runtime state.
+        self._last_kws_hit_at = 0.0
+        self._last_promo_wake_at = 0.0
 
     # ------------------------------------------------------------------
     # Engine helpers
@@ -721,6 +772,7 @@ class JarvisStateMachine:
         )
         self._last_wake_peak = peak
         self._last_wake_rms = rms
+        self._last_kws_hit_at = time.time()
         await self._transition_to(JarvisState.WAIT_ASR_CONFIRM)
         self._init_asr()
         self._asr.start()
@@ -879,12 +931,16 @@ class JarvisStateMachine:
         await self._direct_wake_from_kws(source="fresh-window-kws")
         return True
 
-    async def _direct_wake_from_kws(self, *, source: str) -> None:
-        """Promote a trusted KWS hit without ASR confirm.
+    async def _direct_wake_from_kws(self, *, source: str, respect_fresh_gate: bool = True) -> None:
+        """Promote a trusted KWS hit (or local ASR promotion) without ASR confirm.
 
-        Used only for fresh-window KWS recovery during recall testing. The
-        normal streaming KWS path still goes through WAIT_ASR_CONFIRM.
+        Used for fresh-window KWS recovery AND local paraformer promotion. The
+        normal streaming KWS path still goes through WAIT_ASR_CONFIRM. Promotion
+        passes ``respect_fresh_gate=False`` so the
+        ``kws_fresh_window_direct_wake`` flag never blocks a local catch.
         """
+        if respect_fresh_gate and not getattr(self.config, "kws_fresh_window_direct_wake", True):
+            return False
         self._kws_shadow_asr_active = False
         self._kws_shadow_last_text = ""
         await self._transition_to(JarvisState.WAKE_DETECTED)
@@ -900,11 +956,11 @@ class JarvisStateMachine:
         await self._transition_to(JarvisState.DIALOG_ACTIVE)
 
     def _feed_kws_shadow_asr(self, pcm: bytes, *, peak: float, rms: float) -> None:
-        """Run ASR in listening state so KWS misses have text evidence.
+        """Run the in-process paraformer in listening state for KWS-miss evidence.
 
-        This path logs only.  It intentionally does not wake Jarvis because the
-        current production contract is still KWS-first; ASR promotion can be
-        enabled later once live false-positive data is understood.
+        When ``asr_promotion_enabled`` is on, a KWS MISS where this shadow ASR
+        still hears the wake pattern promotes directly to wake (see
+        ``_try_promote_from_local_asr``). Otherwise this path logs only.
         """
         self._ensure_kws_diagnostic_state()
         if not getattr(self.config, "kws_shadow_asr_enabled", True):
@@ -919,7 +975,9 @@ class JarvisStateMachine:
                 self._asr.start()
                 self._kws_shadow_asr_active = True
                 self._kws_shadow_last_text = ""
-                logger.info("KWS shadow ASR started (diagnostic only, no wake promotion)")
+                logger.info(
+                    "KWS shadow ASR started (diagnostic; local promotion active if enabled)"
+                )
             text = self._asr.feed_chunk(pcm) or ""
         except Exception as exc:
             logger.warning("KWS shadow ASR failed: %s", exc)
@@ -940,9 +998,10 @@ class JarvisStateMachine:
                 )
                 if self._asr_confirm_match(text):
                     logger.info(
-                        "KWS MISS: shadow ASR saw wake pattern %r, but KWS did not fire",
+                        "KWS MISS: shadow ASR (local paraformer) saw wake pattern %r, KWS did not fire",
                         text,
                     )
+                    self._try_promote_from_local_asr(text)
                 self._kws_shadow_last_log_at = now
             self._kws_shadow_last_text = text
 
@@ -952,6 +1011,38 @@ class JarvisStateMachine:
             self._asr.stop()
             self._kws_shadow_asr_active = False
             self._kws_shadow_last_text = ""
+
+    # ------------------------------------------------------------------
+    # ASR promotion (local paraformer recall booster)
+    # ------------------------------------------------------------------
+    def _try_promote_from_local_asr(self, text: str) -> None:
+        """Promote to wake when the local shadow ASR catches a KWS-missed 'bt'.
+
+        Called from ``_feed_kws_shadow_asr`` only on a KWS MISS where the
+        in-process paraformer heard the wake pattern. Purely additive (never
+        suppresses a KWS hit) and debounced by ``asr_promotion_cooldown_s``.
+        Fail-safe: any error is logged; it never raises into the KWS feed path.
+        """
+        cfg = self.config
+        if not getattr(cfg, "asr_promotion_enabled", False):
+            return
+        if self.state != JarvisState.KWS_LISTENING:
+            return
+        now = time.time()
+        cooldown = getattr(cfg, "asr_promotion_cooldown_s", 2.0)
+        if (now - self._last_promo_wake_at) < cooldown:
+            return
+        if (now - self._last_kws_hit_at) < cooldown:
+            logger.info("ASR promotion matched but within KWS cooldown; skip: %r", text)
+            return
+        self._last_promo_wake_at = now
+        logger.info("ASR PROMOTION wake (local paraformer): %r", text)
+        # Keep a strong reference to the task so it is not garbage-collected
+        # before it runs (satisfies ruff RUF006). The wake is fire-and-forget;
+        # any error is logged inside _direct_wake_from_kws.
+        self._promo_task = asyncio.create_task(
+            self._direct_wake_from_kws(source="asr-promotion-local", respect_fresh_gate=False)
+        )
 
     async def _wait_asr_confirm_timeout(self):
         """Reject the wake if ASR does not match within the configured timeout.
@@ -1007,21 +1098,34 @@ class JarvisStateMachine:
             self.on_wake()
 
     def _asr_confirm_match(self, text: str) -> bool:
-        """Return True if ASR text contains any of the confirm patterns.
+        """Return True if ASR text contains the wake phrase in any common form.
 
-        Lowercase substring match catches "bt" inside "hey bt" or
-        "okay BT-7274".  The pattern list comes from config or defaults.
+        Two matchers are OR'd together:
+
+        1. Explicit substring patterns from ``asr_confirm_patterns`` (backward
+           compatibility / operator override).
+        2. A wide normalised match that accepts ``bt``, ``b t``, ``b.t``,
+           ``b、t``, ``b  t`` etc.  Non-word characters are collapsed to a
+           single space, the text is lower-cased, and we accept either the
+           joined token ``bt`` or adjacent tokens ``b`` followed by ``t``.
+           This catches paraformer outputs that segment the two-syllable
+           wake word with whitespace or punctuation.
         """
         if not text:
             return False
         lowered = text.lower()
-        patterns = getattr(getattr(self, "config", None), "asr_confirm_patterns", None) or (
-            "bt",
-            "BT",
-            "B T",
-            "b t",
-        )
-        return any(p.lower() in lowered for p in patterns)
+
+        # (1) explicit operator-provided patterns (override mode)
+        patterns = getattr(getattr(self, "config", None), "asr_confirm_patterns", None)
+        if patterns:
+            return any(p.lower() in lowered for p in patterns)
+
+        # (2) wide normalised match for segmented "b t" / "bt" forms
+        normalised = " ".join(_ASR_CONFIRM_NON_WORD.split(lowered))
+        if "bt" in normalised:
+            return True
+        tokens = normalised.split()
+        return any(tokens[i] == "b" and tokens[i + 1] == "t" for i in range(len(tokens) - 1))
 
     async def _handle_wait_asr_confirm(self, pcm: bytes):
         """WAIT_ASR_CONFIRM: feed ASR, check each partial/final for confirm pattern."""

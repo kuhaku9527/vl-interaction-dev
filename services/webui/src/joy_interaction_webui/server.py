@@ -44,6 +44,7 @@ if not _access_logger.handlers:
         pass  # access log is best-effort; do not break the webui if logs/ is unwritable
 import datetime  # noqa: E402
 import os  # noqa: E402
+import subprocess  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
 import uuid  # noqa: E402
@@ -70,7 +71,7 @@ from . import asr as asr_module  # noqa: E402
 from .asr import setup_asr_routes  # noqa: E402
 from .audio_processor import MicAudioTrack  # noqa: E402
 from .background_model import BackgroundModelService  # noqa: E402
-from .jarvis_mode import JarvisState  # noqa: E402
+from .jarvis_mode import JarvisState, asr_model_display_name  # noqa: E402
 from .jarvis_routes import bind_audio, setup_jarvis_routes  # noqa: E402
 from .jarvis_session import JarvisSessionManager  # noqa: E402
 from .local_file_server import setup_local_file_routes  # noqa: E402
@@ -232,6 +233,9 @@ async def websocket_handler(request):
     )
     session = get_or_create_session(session_id)
     svc = session["vlm_service"]
+    # Jarvis session manager (holds the shared JarvisConfig; used for the
+    # ASR-promotion runtime toggle and to advertise the ASR model name).
+    manager = request.app.get("jarvis_manager")
     bg_svc = session.get("background_service")
     background_service = bg_svc
     try:
@@ -255,6 +259,14 @@ async def websocket_handler(request):
                 "frames_per_batch": _VPT.frames_per_batch,
                 "background_model": (
                     background_service.get_config() if background_service else None
+                ),
+                "asr_promotion_enabled": (
+                    bool(manager.config.asr_promotion_enabled) if manager else False
+                ),
+                "asr_model_name": (
+                    asr_model_display_name(manager.config)
+                    if manager
+                    else "sherpa-onnx local paraformer (unknown)"
                 ),
                 "session_id": session_id,
             }
@@ -357,6 +369,36 @@ async def websocket_handler(request):
                                         "error": str(exc),
                                     }
                                 )
+                    elif t == "update_asr_promotion":
+                        # Runtime toggle for the local paraformer ASR
+                        # promotion (recall booster). The frontend sends
+                        # {type:"update_asr_promotion", enabled: bool}. The
+                        # change propagates to every live Jarvis session via
+                        # the shared JarvisConfig (same asyncio event loop).
+                        raw = data.get("enabled")
+                        if isinstance(raw, str):
+                            enabled = raw.strip().lower() in {"1", "true", "yes", "on"}
+                        else:
+                            enabled = bool(raw)
+                        if manager is None:
+                            logger.warning("update_asr_promotion: jarvis_manager unavailable")
+                            await ws.send_json(
+                                {
+                                    "type": "asr_promotion_updated",
+                                    "enabled": False,
+                                    "asr_model_name": "sherpa-onnx local paraformer (unknown)",
+                                    "error": "jarvis_manager unavailable",
+                                }
+                            )
+                        else:
+                            manager.set_asr_promotion_enabled(enabled)
+                            await ws.send_json(
+                                {
+                                    "type": "asr_promotion_updated",
+                                    "enabled": bool(enabled),
+                                    "asr_model_name": asr_model_display_name(manager.config),
+                                }
+                            )
                 except Exception as e:
                     logger.error("Error handling client message: %s", e)
             elif msg.type == web.WSMsgType.ERROR:
@@ -990,8 +1032,13 @@ def _validate_api_base(api_base: str) -> str | None:
     """Validate the ``api_base`` format.
 
     Returns ``None`` when the value is acceptable (empty string, meaning
-    "use default / local", or a syntactically valid http(s) URL). Returns a
-    human-readable reason string when the value must be rejected (HTTP 400).
+    "use default / local", or a syntactically valid http(s) / ws(s) URL).
+    Returns a human-readable reason string when the value must be rejected
+    (HTTP 400).
+
+    ws(s):// is allowed because the external ASR may be a websocket bridge
+    (e.g. ``asr_adapter.py`` exposing ``/ws/asr``); the webui connects to it
+    via ``aiohttp.ws_connect`` (see asr.connect_asr).
     """
     if not isinstance(api_base, str):
         return "api_base must be a string"
@@ -1104,16 +1151,30 @@ async def _validate_and_apply_slot(
                 False,
             )
 
-    # 2) Reachability gate (before applying): probe the new endpoint / model
-    #    dir. Never silently accept an unreachable service (no local fallback,
-    #    D-080). For non-ASR slots an empty api_base means "use default /
-    #    local" — it is valid and must NOT be probed. ASR is probed whenever
-    #    api_base OR model changes (it may point at a local model directory).
+    # 2) Reachability gate (before applying): probe the new endpoint. Never
+    #    silently accept an unreachable service (no local fallback, D-080).
+    #    For non-ASR slots an empty api_base means "use default / local" — it
+    #    is valid and must NOT be probed.
+    #    ASR: the user-facing api_base is an http(s) provider URL. When set we
+    #    must bring the internal bridge up BEFORE the probe (and stop it when
+    #    the slot reverts to local). Empty api_base = local in-process (no probe).
     proposed_api_base = incoming.get("api_base", cur.get("api_base", ""))
+    if slot == "asr" and changing:
+        proposed_model = incoming.get("model", cur.get("model", ""))
+        proposed_key = incoming.get("api_key", cur.get("api_key", ""))
+        # Bridge start/stop is a blocking subprocess op (up to 15s readiness
+        # poll). Run it off the aiohttp event loop so saving a cloud ASR config
+        # never freezes the whole WebUI. Per code-review BLOCKING fix.
+        if proposed_api_base:
+            await loop.run_in_executor(
+                None, _asr_bridge_ensure, proposed_api_base, proposed_model, proposed_key
+            )
+        else:
+            await loop.run_in_executor(None, _asr_bridge_stop)
     reachability_in_scope = (
         (("api_base" in changing) and bool(proposed_api_base))
         if slot != "asr"
-        else (("api_base" in changing) or ("model" in changing))
+        else bool(proposed_api_base) and proposed_api_base.startswith(("http://", "https://"))
     )
     if reachability_in_scope:
         proposed = {
@@ -1171,6 +1232,119 @@ _last_asr_propagated: dict = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Internal ASR bridge (WebUI <-> ASR engine)
+# ---------------------------------------------------------------------------
+# The user-facing ``asr.api_base`` is an http(s) *provider* URL (standard
+# OpenAI-compatible contract). The WebUI never connects to it directly; it
+# always talks to a fixed internal websocket bridge, which forwards audio to
+# the configured upstream. The bridge endpoint is a code constant and is
+# NEVER exposed to the user (2026-08-11 contract fix).
+ASR_BRIDGE_PORT = int(os.getenv("ASR_ADAPTER_PORT", "8994"))
+ASR_BRIDGE_WS = "ws://127.0.0.1:%d/ws/asr" % ASR_BRIDGE_PORT
+ASR_BRIDGE_HTTP = "http://127.0.0.1:%d" % ASR_BRIDGE_PORT
+
+_ASR_BRIDGE_PROC: "subprocess.Popen | None" = None
+_ASR_BRIDGE_CFG: dict = {}
+
+
+def _asr_bridge_venv() -> str:
+    """Return a python interpreter able to run asr_adapter.py (fastapi/uvicorn)."""
+    base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".venv")
+    for sub in ("Scripts/python.exe", "bin/python"):
+        cand = os.path.join(base, sub)
+        if os.path.exists(cand):
+            return cand
+    return sys.executable
+
+
+def _asr_bridge_ensure(api_base: str, model: str, api_key: str) -> None:
+    """Start (or keep) the ASR bridge pointed at ``api_base``.
+
+    Idempotent on identical config. Raises on launch/readiness failure so the
+    caller's reachability gate surfaces it explicitly (no silent fallback).
+    """
+    global _ASR_BRIDGE_PROC, _ASR_BRIDGE_CFG
+    want = {"api_base": api_base, "model": model or "", "api_key": api_key or ""}
+    if _ASR_BRIDGE_PROC is not None and _ASR_BRIDGE_PROC.poll() is None and want == _ASR_BRIDGE_CFG:
+        return
+    _asr_bridge_stop()
+    venv_py = _asr_bridge_venv()
+    cwd = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "asr")
+    env = dict(os.environ)
+    env["ASR_UPSTREAM_URL"] = api_base
+    env["ASR_MODEL"] = model or ""
+    env["ASR_API_KEY"] = api_key or ""
+    env["ASR_ADAPTER_PORT"] = str(ASR_BRIDGE_PORT)
+    try:
+        proc = subprocess.Popen(
+            [
+                venv_py,
+                "asr_adapter.py",
+                "serve",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(ASR_BRIDGE_PORT),
+            ],
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as exc:
+        logger.error("ASR bridge launch failed: %s", exc)
+        raise
+    _ASR_BRIDGE_PROC = proc
+    _ASR_BRIDGE_CFG = want
+    _asr_bridge_wait_ready(15.0)
+    logger.info("ASR bridge up: upstream=%s model=%s", api_base, model or "(default)")
+
+
+def _asr_bridge_stop() -> None:
+    global _ASR_BRIDGE_PROC, _ASR_BRIDGE_CFG
+    proc = _ASR_BRIDGE_PROC
+    if proc is not None:
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        except Exception as exc:
+            logger.warning("ASR bridge stop: %s", exc)
+    _ASR_BRIDGE_PROC = None
+    _ASR_BRIDGE_CFG = {}
+
+
+def _asr_bridge_wait_ready(timeout: float) -> None:
+    import httpx
+
+    deadline = time.monotonic() + timeout
+    last_err = "n/a"
+    while time.monotonic() < deadline:
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                resp = client.get(ASR_BRIDGE_HTTP + "/health")
+            if resp.status_code == 200:
+                return
+            last_err = "http %d" % resp.status_code
+        except Exception as exc:
+            last_err = str(exc)[:120]
+        time.sleep(0.5)
+    raise RuntimeError("ASR bridge not ready after %.0fs: %s" % (timeout, last_err))
+
+
+def _asr_bridge_sync() -> None:
+    """Reconcile the bridge with the current saved asr config (startup/propagate)."""
+    asr_cfg = _services_config.get("asr", {}) or {}
+    api_base = asr_cfg.get("api_base", "")
+    if api_base:
+        _asr_bridge_ensure(api_base, asr_cfg.get("model", ""), asr_cfg.get("api_key", ""))
+    else:
+        _asr_bridge_stop()
+
+
 def _probe_summary(summary_cfg):
     """Lightweight reachability probe for the summary model endpoint.
     Mirrors _probe_llm but with a stricter timeout and tolerates non-model
@@ -1192,31 +1366,35 @@ def _probe_summary(summary_cfg):
 
 
 def _probe_asr(asr_cfg):
-    """ASR is a model dir or an HTTP endpoint. Probe whichever it is.
-    - If api_base starts with http(s)://, do a GET on api_base/health.
-    - Otherwise treat model as a local filesystem path.
+    """Probe reachability of the ASR slot.
+
+    The user-facing ``api_base`` is an http(s) *provider* URL. The WebUI does
+    not connect to it directly; it connects to a fixed internal bridge
+    (``ASR_BRIDGE_HTTP``), which the server keeps pointed at the upstream. So:
+
+    - empty api_base  -> local in-process paraformer is the intended primary
+                         path; this is a valid state (ok, no probe).
+    - http(s)://       -> probe the internal bridge ``/health`` (the WebUI's
+                         actual connection target), not the upstream.
+    - ws(s)://          -> operator override (ASR_URL env); not probed, treated ok.
     """
     api_base = (asr_cfg or {}).get("api_base", "")
-    model = (asr_cfg or {}).get("model", "")
+    if not api_base:
+        return {"ok": True, "note": "local in-process paraformer"}
     if api_base.startswith("http://") or api_base.startswith("https://"):
         import httpx
 
         try:
             with httpx.Client(timeout=2.0) as client:
-                resp = client.get(api_base.rstrip("/") + "/health")
+                resp = client.get(ASR_BRIDGE_HTTP + "/health")
             if resp.status_code == 200:
-                return {"ok": True, "endpoint": api_base, "code": 200}
-            return {"ok": False, "reason": "http %d" % resp.status_code}
+                return {"ok": True, "endpoint": ASR_BRIDGE_HTTP + "/health", "code": 200}
+            return {"ok": False, "reason": "http %d (asr bridge)" % resp.status_code}
         except Exception as exc:
             return {"ok": False, "reason": str(exc)[:120]}
-    if model:
-        from pathlib import Path
-
-        p = Path(model)
-        if p.exists():
-            return {"ok": True, "model_dir": str(p)}
-        return {"ok": False, "reason": "model dir not found: %s" % model}
-    return {"ok": False, "reason": "no api_base or model"}
+    if api_base.startswith("ws://") or api_base.startswith("wss://"):
+        return {"ok": True, "endpoint": api_base, "note": "external ws override (not probed)"}
+    return {"ok": False, "reason": "api_base must be http(s) or ws override"}
 
 
 def _log_config_change(slot, changed_fields, redacted_values, events_dir=None):
@@ -1319,7 +1497,7 @@ async def _services_config_handler(request):
                     },
                     status=500,
                 )
-            _propagate_services_to_runtime()
+            await _propagate_services_to_runtime()
 
         if invalid:
             # 约法三章②: invalid config MUST surface an explicit 4xx, never a
@@ -1617,7 +1795,7 @@ async def _ingest_text_handler(request: web.Request) -> web.Response:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _propagate_services_to_runtime():
+async def _propagate_services_to_runtime():
     """Push the saved llm/summary config into live service instances.
 
     - LLM: update every session VLMService (api_base + model + api_key).
@@ -1625,8 +1803,13 @@ def _propagate_services_to_runtime():
       We log the change so the operator can restart webinfer if needed.
     - TTS / ASR: read on demand by JarvisConfig.from_env(); changes take
       effect for the NEXT session that calls from_env().
+
+    Async because the ASR bridge start/stop (_asr_bridge_sync) is a blocking
+    subprocess op (up to 15s readiness poll) that must run off the aiohttp
+    event loop. Always invoked from the event loop (PUT handler).
     """
     global _last_asr_propagated
+    loop = asyncio.get_running_loop()
     try:
         llm_cfg = _services_config.get("llm", {})
         api_base = llm_cfg.get("api_base")
@@ -1662,6 +1845,9 @@ def _propagate_services_to_runtime():
     # No silent local fallback: an invalid url/key still raises on connect.
     try:
         asr_cfg = _services_config.get("asr", {}) or {}
+        # Bridge start/stop is a blocking subprocess op (up to 15s readiness
+        # poll); run it off the aiohttp event loop. Per code-review BLOCKING fix.
+        await loop.run_in_executor(None, _asr_bridge_sync)
         asr_subset = {
             "api_base": asr_cfg.get("api_base", ""),
             "api_key": asr_cfg.get("api_key", ""),

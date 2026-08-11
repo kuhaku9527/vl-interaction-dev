@@ -39,7 +39,11 @@ from joy_interaction_webui import server  # noqa: E402
 def _reset_runtime(monkeypatch):
     """Snapshot/restore the live config and stub propagation for hermeticity."""
     snapshot = copy.deepcopy(server._services_config)
-    monkeypatch.setattr(server, "_propagate_services_to_runtime", lambda: None)
+
+    async def _noop_propagate(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(server, "_propagate_services_to_runtime", _noop_propagate)
     yield
     server._services_config.clear()
     server._services_config.update(snapshot)
@@ -167,21 +171,23 @@ async def test_put_rejects_unreachable_api_base(persist_path, monkeypatch):
         await runner.cleanup()
 
 
-async def test_put_rejects_missing_asr_model_dir(persist_path, monkeypatch):
-    # ASR model is a filesystem path; a missing dir must be rejected (422).
-    monkeypatch.setattr(
-        server, "_probe_asr", lambda _c: {"ok": False, "reason": "model dir not found: /nope"}
-    )
+async def test_put_rejects_asr_ws_api_base_as_400(persist_path, monkeypatch):
+    # Core ASR cloud-config contract: ws:// is an internal bridge constant
+    # (INTERNAL_ASR_BRIDGE_WS), never a user input. A PUT carrying ws:// in the
+    # asr api_base must be rejected by the format gate (400), not silently
+    # accepted. Regression guard for issue #122/contract 2026-08-11.
+    _patch_probes_ok(monkeypatch)
     runner, url = await _start_server()
     try:
         async with (
             aiohttp.ClientSession() as session,
-            session.put(url, json={"asr": {"model": "/nonexistent/asr/model/dir"}}) as resp,
+            session.put(url, json={"asr": {"api_base": "ws://127.0.0.1:8994/ws/asr"}}) as resp,
         ):
-            assert resp.status == 422
+            assert resp.status == 400
             body = await resp.json()
             assert body["slot"] == "asr"
-            assert body["field"] == "model"
+            assert body["field"] == "api_base"
+        # Rejected config is never persisted (约法三章②).
         assert not persist_path.exists()
     finally:
         await runner.cleanup()

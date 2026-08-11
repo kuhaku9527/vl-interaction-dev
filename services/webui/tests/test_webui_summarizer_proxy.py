@@ -83,7 +83,7 @@ async def test_propagate_summary_calls_webinfer(monkeypatch):
         "model": "MiniMax-VL-01",
         "api_key": "sk-test",
     }
-    server._propagate_services_to_runtime()
+    await server._propagate_services_to_runtime()
     # The create_task is fire-and-forget; give the scheduler a chance
     # to run the proxy before we assert.
     await asyncio.sleep(0)
@@ -94,7 +94,7 @@ async def test_propagate_summary_calls_webinfer(monkeypatch):
     }
 
 
-def test_propagate_skips_when_summary_empty(monkeypatch):
+async def test_propagate_skips_when_summary_empty(monkeypatch):
     from joy_interaction_webui import server
 
     called = {"count": 0}
@@ -105,7 +105,7 @@ def test_propagate_skips_when_summary_empty(monkeypatch):
 
     monkeypatch.setattr(server, "_webinfer_proxy_summarizer_routing", _fake_proxy)
     server._services_config["summary"] = {"api_base": "", "model": "", "api_key": ""}
-    server._propagate_services_to_runtime()
+    await server._propagate_services_to_runtime()
     assert called["count"] == 0
 
 
@@ -125,5 +125,5 @@ async def test_propagate_unreachable_webinfer_logs_warning(monkeypatch):
         "model": "MiniMax-VL-01",
     }
     # Must not raise.
-    server._propagate_services_to_runtime()
+    await server._propagate_services_to_runtime()
     await asyncio.sleep(0)

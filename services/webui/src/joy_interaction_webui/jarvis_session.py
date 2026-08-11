@@ -147,6 +147,33 @@ class JarvisSessionManager:
         self.config = config or JarvisConfig()
         self._sessions: dict[str, JarvisSession] = {}
 
+    def set_asr_promotion_enabled(self, enabled: bool) -> None:
+        """Toggle ASR promotion (local paraformer recall booster) at runtime.
+
+        ``self.config`` is shared **by reference** with every session's
+        ``JarvisStateMachine`` (``create_session`` passes ``config=self.config``),
+        so mutating the attribute is immediately visible to all running state
+        machines — no restart required. The per-session loop reinforces this
+        for any session that was created with a detached config object (e.g. a
+        test that builds a state machine with its own config instance).
+        """
+        enabled = bool(enabled)
+        self.config.asr_promotion_enabled = enabled
+        for session in self._sessions.values():
+            try:
+                session.state_machine.config.asr_promotion_enabled = enabled
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "Failed to propagate asr_promotion_enabled to session %s: %s",
+                    session.session_id,
+                    exc,
+                )
+        logger.info("ASR promotion (local paraformer) %s", "ENABLED" if enabled else "DISABLED")
+
+    def get_asr_promotion_enabled(self) -> bool:
+        """Return the current ASR promotion flag from the shared config."""
+        return bool(getattr(self.config, "asr_promotion_enabled", False))
+
     async def create_session(
         self,
         session_id: str,
