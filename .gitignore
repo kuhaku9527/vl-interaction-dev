@@ -132,6 +132,11 @@ services/voice-clone/voices/**/*.wav
 !archive/**
 !/archive
 
+# Surgical OSS cleanup (2026-08-11): archive debug logs are volatile one-off
+# traces, not useful for traceability. Keep them out of VCS even though archive/
+# is force-tracked above. One-off scripts/json under archive/ stay tracked.
+archive/**/*.log
+
 # Top-level historical PDF / zip review artefacts.
 /*.pdf
 /*.zip
