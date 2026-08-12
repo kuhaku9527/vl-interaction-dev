@@ -9,11 +9,13 @@ frame reference parsing, and the main-model call previously on ``StreamingInferA
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 import re
 import sys
 import time
+from collections.abc import AsyncIterator, Iterable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -81,6 +83,109 @@ def _normalize_interaction_mode(mode: str | None) -> str:
         return normalized
     LOGGER.warning("unknown interaction_mode %r; falling back to 'live'", mode)
     return "live"
+
+
+# --- P0-A TTS-streaming: NDJSON frame protocol for /v1/text/chat stream=true ----
+#
+# Decision-token markers the streaming path watches for. Only the markers
+# that :func:`parse_model_decision` itself recognises are used, so decision
+# semantics are byte-for-byte identical to the non-streaming path (the model
+# is taught to emit the closing ``</silence>`` / ``</response>`` /
+# ``</delegation>`` form, with ``<delegation>`` tolerated like the parser).
+_STREAM_DECISION_MARKER_RE = re.compile(
+    r"</\s*(?:silence|response|delegation)\s*>|<delegation\s*>", re.IGNORECASE
+)
+
+
+def _find_first_decision_marker(text: str) -> int | None:
+    """Return the earliest start index of a complete decision marker, else ``None``.
+
+    A marker may span multiple streamed deltas (``<``, ``/``, ``response``,
+    ``>``), so the caller accumulates deltas until this returns a value and
+    only then commits to a decision.
+    """
+    match = _STREAM_DECISION_MARKER_RE.search(text or "")
+    return match.start() if match else None
+
+
+def _extract_stream_delta(chunk: Any) -> str:
+    """Extract the incremental content string from an OpenAI-style stream chunk.
+
+    A chunk may legitimately carry no content (role-only first chunk, a
+    usage-only final chunk when ``include_usage`` is on); those yield ``""``
+    and are skipped by the frame builder (protocol: no empty token frames).
+    """
+    choices = getattr(chunk, "choices", None) or []
+    if not choices:
+        return ""
+    delta = getattr(choices[0], "delta", None)
+    if delta is None:
+        return ""
+    content = getattr(delta, "content", None)
+    return content or ""
+
+
+def _extract_stream_usage(chunk: Any) -> Any:
+    """Return the usage object carried by a stream chunk, or ``None``."""
+    return getattr(chunk, "usage", None)
+
+
+def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
+    """Build the P0-A NDJSON frame list from an iterable of content deltas.
+
+    Protocol (decision-first + continuous content):
+      * ``{"type": "decision", "decision": ..., "delegation_question": ...}``
+        is emitted as soon as the first complete decision marker is seen
+        (normally the very first frame: the model emits ``</silence>`` /
+        ``</response>`` before the body). The decision is derived with
+        :func:`parse_model_decision` over the accumulated prefix, so the
+        semantics match the non-streaming parser exactly.
+      * ``{"type": "content", "token": ...}`` frames follow for every delta
+        after a ``response`` decision; silence / delegation produce no
+        content frames (silence has nothing to say; the delegation question
+        is carried by the decision frame and must not be spoken as TTS).
+      * Empty / no-token deltas are skipped (never emitted as a frame).
+      * If the stream ends before any complete marker, the accumulated text
+        is failed-open through :func:`parse_model_decision` (which maps a
+        marker-less output to ``response``) so the caller never hangs.
+    """
+    frames: list[dict[str, Any]] = []
+    pending = ""
+    decision: str | None = None
+    clean_text = ""
+    delegation_question: str | None = None
+    for delta in deltas:
+        if not delta:
+            continue
+        if decision is None:
+            pending += delta
+            if _find_first_decision_marker(pending) is None:
+                continue
+            decision, clean_text, delegation_question = parse_model_decision(pending)
+            frames.append(
+                {
+                    "type": "decision",
+                    "decision": decision,
+                    "delegation_question": delegation_question,
+                }
+            )
+            if decision == "response" and clean_text:
+                frames.append({"type": "content", "token": clean_text})
+            pending = ""
+        elif decision == "response":
+            frames.append({"type": "content", "token": delta})
+    if decision is None:
+        decision, clean_text, delegation_question = parse_model_decision(pending)
+        frames.append(
+            {
+                "type": "decision",
+                "decision": decision,
+                "delegation_question": delegation_question,
+            }
+        )
+        if decision == "response" and clean_text:
+            frames.append({"type": "content", "token": clean_text})
+    return frames
 
 
 # --- ADR-0014 JSONL event emission (services/common/event_json.py) ----------
@@ -187,6 +292,20 @@ class InferLoopMixin:
         client, model_name = self._resolve_backend(requested_model)
         state = self.get_session(session_id)
         t_start = time.perf_counter()
+        # P0-A TTS streaming: ``stream: true`` takes the NDJSON streaming path
+        # (decision frame first, then content frames). The non-streaming path
+        # below is untouched for every other caller (call mode etc.).
+        if payload.get("stream"):
+            return await self._handle_text_chat_streaming(
+                request,
+                state,
+                payload,
+                client=client,
+                model_name=model_name,
+                interaction_mode=interaction_mode,
+                session_id=session_id,
+                t_start=t_start,
+            )
         async with state.lock:
             try:
                 result = await self._handle_text_payload(
@@ -304,6 +423,220 @@ class InferLoopMixin:
             prompt_chars=prompt_chars,
             trimmed_turns=removed,
         )
+
+    # ------------------------------------------------------------------
+    # P0-A TTS streaming: /v1/text/chat with stream=true (NDJSON frames)
+    # ------------------------------------------------------------------
+
+    async def _handle_text_chat_streaming(
+        self,
+        request: web.Request,
+        state: SessionState,
+        payload: dict[str, Any],
+        *,
+        client: AsyncOpenAI,
+        model_name: str,
+        interaction_mode: str,
+        session_id: str,
+        t_start: float,
+    ) -> web.StreamResponse:
+        """Serve ``POST /v1/text/chat`` with ``stream: true``.
+
+        Each response line is a JSON object (``application/x-ndjson``):
+          * ``{"type": "decision", "decision": "...", "delegation_question": ...}``
+            — emitted as soon as the first complete decision marker is seen
+            (normally the first frame: ``</silence>`` / ``</response>`` first).
+          * ``{"type": "content", "token": "..."}`` — one per content delta
+            while the decision is ``response`` (never for silence/delegation).
+          * ``{"type": "done", ...}`` — final frame with usage / full text.
+          * ``{"type": "error", ...}`` — on an internal failure so the caller
+            can fail open to the non-streaming path instead of hanging.
+
+        The session lock is held for the whole stream, mirroring the
+        non-streaming path (which also holds it across the full model call).
+        """
+        stream_resp = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": "application/x-ndjson; charset=utf-8",
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+        await stream_resp.prepare(request)
+        async with state.lock:
+            try:
+                async for frame in self._stream_text_payload_frames(
+                    state,
+                    payload,
+                    client=client,
+                    model_name=model_name,
+                    interaction_mode=interaction_mode,
+                ):
+                    await stream_resp.write(
+                        (json.dumps(frame, ensure_ascii=False) + "\n").encode("utf-8")
+                    )
+            except web.HTTPException:
+                raise
+            except Exception as exc:
+                LOGGER.exception("[tts-stream] streaming text chat failed")
+                emit_event(
+                    "webinfer",
+                    "infer_error",
+                    level="error",
+                    session_id=session_id,
+                    extra={"error_type": type(exc).__name__, "path": "text_chat_stream"},
+                )
+                error_frame = {
+                    "type": "error",
+                    "error": str(exc)[:200],
+                    "error_type": type(exc).__name__,
+                }
+                try:
+                    await stream_resp.write(
+                        (json.dumps(error_frame, ensure_ascii=False) + "\n").encode("utf-8")
+                    )
+                except Exception:
+                    pass
+        await stream_resp.write_eof()
+        emit_event(
+            "webinfer",
+            "webinfer_request",
+            level="info",
+            session_id=session_id,
+            latency_ms=round((time.perf_counter() - t_start) * 1000),
+            extra={"model": model_name, "path": "text_chat_stream"},
+        )
+        return stream_resp
+
+    async def _stream_text_payload_frames(
+        self,
+        state: SessionState,
+        payload: dict[str, Any],
+        *,
+        client: AsyncOpenAI | None = None,
+        model_name: str | None = None,
+        interaction_mode: str = "live",
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Async generator of NDJSON frames for the streaming text path.
+
+        Mirror of :meth:`_handle_text_payload` (memory recall, composed
+        system prompt, prompt guard, model call) with ``stream=True``.
+        The decision frame is derived with :func:`parse_model_decision` over
+        the accumulated prefix so decision semantics are unchanged; content
+        deltas stream as ``content`` frames; the final ``done`` frame carries
+        usage + full text and updates ``qa_history`` exactly like the
+        non-streaming path.
+        """
+        client = client or self.main_client
+        model_name = model_name or self.config.main_model
+
+        pre_messages = list(payload.get("messages") or [])
+        last_user_text = ""
+        for m in reversed(pre_messages):
+            if m.get("role") == "user" and isinstance(m.get("content"), str):
+                last_user_text = m["content"]
+                break
+        try:
+            await self._memory_recall(state, last_user_text)
+        except Exception as exc:
+            LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
+
+        api_messages = list(payload.get("messages") or [])
+        composed_system = (
+            self._build_memory_prompt(state, include_decision_tokens=interaction_mode != "call")
+            or ""
+        ).strip()
+
+        caller_messages = [dict(m) for m in api_messages if m.get("role") != "system"]
+        if composed_system:
+            http_messages = [{"role": "system", "content": composed_system}, *caller_messages]
+        else:
+            http_messages = caller_messages
+
+        max_total_chars = _compute_prompt_guard_max_chars(self.config.main_ctx_tokens)
+        if max_total_chars > 0:
+            http_messages, removed = _trim_messages_to_ctx(
+                [dict(m) for m in http_messages], max_total_chars
+            )
+        else:
+            removed = 0
+
+        generation_kwargs = self._main_generation_kwargs(payload)
+        generation_kwargs["stream"] = True
+        generation_kwargs["stream_options"] = {"include_usage": True}
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=http_messages,
+            **generation_kwargs,
+        )
+
+        raw_parts: list[str] = []
+        pending = ""
+        decision: str | None = None
+        clean_text = ""
+        full_text = ""
+        delegation_question: str | None = None
+        usage = None
+        async for chunk in response:
+            usage = _extract_stream_usage(chunk) or usage
+            delta = _extract_stream_delta(chunk)
+            if not delta:
+                continue
+            raw_parts.append(delta)
+            if decision is None:
+                pending += delta
+                if _find_first_decision_marker(pending) is None:
+                    continue
+                decision, clean_text, delegation_question = parse_model_decision(pending)
+                yield {
+                    "type": "decision",
+                    "decision": decision,
+                    "delegation_question": delegation_question,
+                }
+                if decision == "response" and clean_text:
+                    full_text += clean_text
+                    yield {"type": "content", "token": clean_text}
+                pending = ""
+            elif decision == "response":
+                full_text += delta
+                yield {"type": "content", "token": delta}
+
+        raw_text = "".join(raw_parts)
+        if decision is None:
+            # Stream ended without a complete decision marker: fail open
+            # through the unified parser (marker-less output => response).
+            decision, clean_text, delegation_question = parse_model_decision(pending)
+            yield {
+                "type": "decision",
+                "decision": decision,
+                "delegation_question": delegation_question,
+            }
+            if decision == "response" and clean_text:
+                full_text += clean_text
+                yield {"type": "content", "token": clean_text}
+
+        usage_dict = usage.model_dump() if getattr(usage, "model_dump", None) else None
+        # Keep qa_history consistent with the non-streaming text path
+        # (decision + clean text, "" for silence / delegation).
+        self._update_text_qa_history(state, api_messages, full_text, decision)
+        memory_chars = len(composed_system)
+        qa_history_len = len(state.memory_state.get("qa_history", []))
+        prompt_chars = _estimate_messages_chars(http_messages)
+        yield {
+            "type": "done",
+            "decision": decision,
+            "delegation_question": delegation_question,
+            "full_text": full_text,
+            "raw_text": raw_text,
+            "usage": usage_dict,
+            "model": self.config.adapter_model,
+            "raw_model": model_name,
+            "memory_chars": memory_chars,
+            "qa_history_len": qa_history_len,
+            "prompt_chars": prompt_chars,
+            "trimmed_turns": removed,
+        }
 
     async def handle_chat_completions(self, request: web.Request) -> web.Response:
         """Handle the multimodal chat-completions endpoint."""

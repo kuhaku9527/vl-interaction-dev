@@ -150,7 +150,7 @@ def _build_sm(*, with_delegate: bool = True, state: str = "DIALOG_ACTIVE"):
     """Build a state machine via ``__new__`` (no engine init), like the
     engineer's helper but QA-owned. Returns ``(sm, clock)``."""
     JarvisConfig, JarvisState, JarvisStateMachine = _jarvis_mode()
-    cfg = JarvisConfig()
+    cfg = JarvisConfig(llm_streaming_enabled=False)  # P0-A: QA suite pins single-shot
     sm = JarvisStateMachine.__new__(JarvisStateMachine)
     sm.config = cfg
     sm.state = JarvisState[state]
@@ -194,7 +194,9 @@ def _wake_to_dialog(monkeypatch, *, with_delegate: bool):
     else:
         monkeypatch.delenv("JARVIS_TURN_DELEGATE_ENABLED", raising=False)
     JarvisConfig, JarvisState, JarvisStateMachine = _jarvis_mode()
-    sm = JarvisStateMachine(config=JarvisConfig())
+    sm = JarvisStateMachine(
+        config=JarvisConfig(llm_streaming_enabled=False)  # P0-A: QA suite pins single-shot
+    )
     sm._kws = FakeKWS(fires_on_call=1)
     sm._asr = FakeASR(partials=["bt"])
     sm._play_wake_wav = lambda: asyncio.sleep(0)

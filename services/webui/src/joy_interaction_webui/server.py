@@ -155,6 +155,24 @@ def notify_session_llm_reply(session_id, text, source="jarvis"):
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
 
 
+def notify_session_tts_sentence(session_id, text, seq, audio_b64, session):
+    """Push one P0-A streaming TTS sentence (WAV base64) to the browser.
+
+    The front-end keeps a per-sentence playback queue ordered by ``seq``;
+    ``session`` identifies the LLM reply the sentence belongs to so a new
+    reply can discard a stale queue. ``audio_b64`` is a playable WAV.
+    """
+    payload = {
+        "type": "tts_sentence",
+        "seq": int(seq or 0),
+        "session": int(session or 0),
+        "text": text or "",
+        "audio_b64": audio_b64 or "",
+        "ts": time.time(),
+    }
+    send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
+
+
 def notify_session_pilot_utterance(session_id, text, source="asr"):
     payload = {
         "type": "pilot_utterance",

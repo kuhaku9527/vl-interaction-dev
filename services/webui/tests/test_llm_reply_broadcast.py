@@ -78,6 +78,35 @@ def test_notify_session_pilot_utterance_well_formed():
     assert isinstance(payload["ts"], float)
 
 
+def test_notify_session_tts_sentence_well_formed():
+    """P0-A: tts_sentence WS message carries seq + session + WAV base64 text."""
+    from joy_interaction_webui import server
+
+    captured = {}
+
+    class FakeWS:
+        async def send_str(self, s):
+            captured["raw"] = s
+
+    async def _run():
+        ws = FakeWS()
+        server.websockets.add(ws)
+        server.session_websockets.setdefault("default", set()).add(ws)
+        server.notify_session_tts_sentence(
+            "default", "Hello there, Pilot.", seq=2, audio_b64="UkVJRg==", session=7
+        )
+
+    asyncio.run(_run())
+    assert "raw" in captured, captured
+    payload = json.loads(captured["raw"])
+    assert payload["type"] == "tts_sentence"
+    assert payload["seq"] == 2
+    assert payload["session"] == 7
+    assert payload["text"] == "Hello there, Pilot."
+    assert payload["audio_b64"] == "UkVJRg=="
+    assert isinstance(payload["ts"], float)
+
+
 def test_probe_llm_parses_models(monkeypatch):
     import httpx
 

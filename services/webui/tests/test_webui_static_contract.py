@@ -105,6 +105,51 @@ def test_barge_in_discards_stale_reply_synthesized_during_user_speech():
     assert "stale reply TTS discarded" in body
 
 
+def test_tts_sentence_streaming_queue_exists_and_is_epoch_guarded():
+    """P0-A streaming: tts_sentence WS messages feed a per-sentence queue.
+
+    The queue must:
+      * exist (enqueue + process + single-sentence play helpers);
+      * play strictly in `seq` order (out-of-order items are skipped, never
+        hang);
+      * be cleared by stopLlmReplyAudio (barge-in / new reply) via the epoch
+        guard — every in-flight sentence is invalidated;
+      * never deadlock on a playback error (error advances to next sentence).
+    """
+    html = _index_html()
+
+    # tts_sentence is handled inside installLlmReplyHandler.
+    handler_body = _function_body(html, "installLlmReplyHandler")
+    assert "data.type === 'tts_sentence'" in handler_body
+    assert "enqueueLlmReplySentence(data)" in handler_body
+
+    # Queue helpers exist.
+    enqueue_body = _function_body(html, "enqueueLlmReplySentence")
+    assert "llmReplyQueue.push" in enqueue_body
+    assert "llmReplyQueue.sort" in enqueue_body
+    assert "processLlmReplyQueue()" in enqueue_body
+    # A new reply session supersedes a stale queue.
+    assert "session !== llmReplyQueueSession" in enqueue_body
+
+    process_body = _function_body(html, "processLlmReplyQueue")
+    assert "item.seq !== llmReplyQueueNextSeq" in process_body
+    assert "llmReplyEpoch !== queueEpoch" in process_body
+    assert "llmReplyQueue = []" in process_body
+    assert "llmReplyQueueNextSeq += 1" in process_body
+
+    play_body = _function_body(html, "playLlmReplySentence")
+    assert "audio/wav" in play_body
+    assert "'/api/tts/synthesize'" in play_body  # fallback path
+    assert "llmReplyEpoch !== playEpoch" in play_body
+    assert "addEventListener('ended'" in play_body or "addEventListener(\"ended\"" in play_body
+
+    # stopLlmReplyAudio clears the whole queue (epoch + queue reset).
+    stop_body = _function_body(html, "stopLlmReplyAudio")
+    assert "llmReplyEpoch += 1" in stop_body
+    assert "llmReplyQueue = []" in stop_body
+    assert "llmReplyQueueNextSeq = 0" in stop_body
+
+
 def test_jarvis_dialog_is_rendered_through_vlm_history():
     html = _index_html()
 

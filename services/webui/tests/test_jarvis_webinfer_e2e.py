@@ -218,6 +218,10 @@ def _build_jarvis_sm(base_url: str):
         llm_multimodal_path="/chat/completions",
         llm_model="stub",
         llm_system_prompt="be brief",
+        # P0-A: these tests pin the pre-streaming single-shot path (the stub
+        # webinfer here has no NDJSON streaming endpoint). The streaming
+        # path is covered by test_jarvis_tts_streaming.py instead.
+        llm_streaming_enabled=False,
     )
     return JarvisStateMachine(config=cfg)
 

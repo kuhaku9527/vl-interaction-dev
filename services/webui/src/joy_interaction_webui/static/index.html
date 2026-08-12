@@ -880,6 +880,10 @@ limitations under the License.
                             renderBtLatency();
                             appendJarvisToResult(data.text || '', data.source || 'jarvis');
                             playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' });
+                        } else if (data && data.type === 'tts_sentence') {
+                            // P0-A streaming: one sentence's WAV audio. Enqueue
+                            // and play strictly in seq order.
+                            enqueueLlmReplySentence(data);
                         } else if (data && data.type === 'pilot_utterance') {
                             // ASR final: drop the draft bubble and commit
                             // the canonical pilot message. The user has spoken,
@@ -5189,6 +5193,16 @@ limitations under the License.
         // can never resume after the user has already barged in.
         let llmReplyEpoch = 0;
         let llmReplyAudioUrl = null;
+        // P0-A per-sentence playback queue (tts_sentence WS messages). The
+        // browser plays sentences in `seq` order; `llmReplyQueueSession`
+        // identifies the LLM reply the sentences belong to so a new reply
+        // supersedes a stale queue; `llmReplyQueueNextSeq` is the next seq
+        // the queue expects. `stopLlmReplyAudio()` clears the whole queue
+        // (barge-in / new reply) via the epoch guard.
+        let llmReplyQueue = [];
+        let llmReplyQueueSession = null;
+        let llmReplyQueueNextSeq = 0;
+        let llmReplyQueueBusy = false;
         // Client-first stop primitive: pause the reply audio element, reset its
         // position, release the object URL and invalidate any in-flight
         // synthesis. Idempotent — calling it when nothing is playing is a no-op.
@@ -5196,6 +5210,9 @@ limitations under the License.
         // (those are short-lived events owned by the jarvis state machine).
         function stopLlmReplyAudio() {
             llmReplyEpoch += 1;
+            llmReplyQueue = [];
+            llmReplyQueueSession = null;
+            llmReplyQueueNextSeq = 0;
             if (!btTtsPlayer) return;
             btTtsPlayer.pause();
             btTtsPlayer.currentTime = 0;
@@ -5270,6 +5287,136 @@ limitations under the License.
                 };
             } catch (err) {
                 console.warn('playLlmReplyAudio error', err);
+            }
+        }
+
+        // ---- P0-A: per-sentence playback queue (tts_sentence WS) ----
+        // The backend streams the LLM reply as sentences; each tts_sentence
+        // message carries WAV base64 audio + seq + session. The browser plays
+        // them strictly in seq order; a barge-in / new reply (stopLlmReplyAudio)
+        // clears the whole queue via the epoch guard. Never blocks forever:
+        // out-of-order/stale sentences are skipped and playback errors advance
+        // to the next sentence (log, don't hang).
+        function enqueueLlmReplySentence(data) {
+            if (!data || !data.text || !data.audio_b64) return;
+            const session = Number(data.session || 0);
+            const seq = Number(data.seq || 0);
+            // A new reply session supersedes any stale queue (backstop; the
+            // primary stop path is stopLlmReplyAudio on user speech).
+            if (llmReplyQueueSession !== null && session !== llmReplyQueueSession) {
+                console.debug('[tts-queue] reply session ' + session + ' supersedes ' + llmReplyQueueSession);
+                llmReplyQueue = [];
+                llmReplyQueueNextSeq = 0;
+            }
+            llmReplyQueueSession = session;
+            llmReplyQueue.push({ seq: seq, session: session, text: data.text, audioB64: data.audio_b64 });
+            llmReplyQueue.sort((a, b) => a.seq - b.seq);
+            processLlmReplyQueue();
+        }
+        async function playLlmReplySentence(item) {
+            if (!btTtsPlayer) return;
+            const playEpoch = llmReplyEpoch;
+            let url = null;
+            if (item.audioB64) {
+                try {
+                    const bin = atob(item.audioB64);
+                    const bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: 'audio/wav' });
+                    url = URL.createObjectURL(blob);
+                } catch (err) {
+                    console.warn('[tts-queue] audio decode failed, falling back to synthesize', err);
+                }
+            }
+            if (!url) {
+                // Fallback: synthesize this short sentence via the existing endpoint.
+                try {
+                    const resp = await fetch('/api/tts/synthesize', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: item.text }),
+                    });
+                    if (!resp.ok) {
+                        console.warn('[tts-queue] synthesize fallback failed', resp.status);
+                        return;
+                    }
+                    const blob = await resp.blob();
+                    url = URL.createObjectURL(blob);
+                } catch (err) {
+                    console.warn('[tts-queue] synthesize fallback error', err);
+                    return;
+                }
+            }
+            if (playEpoch !== llmReplyEpoch) {
+                if (url) URL.revokeObjectURL(url);
+                return;
+            }
+            llmReplyAudioUrl = url;
+            btTtsPlayer.src = url;
+            try {
+                await btTtsPlayer.play();
+                if (playEpoch !== llmReplyEpoch) {
+                    btTtsPlayer.pause();
+                    btTtsPlayer.currentTime = 0;
+                    URL.revokeObjectURL(url);
+                    if (llmReplyAudioUrl === url) llmReplyAudioUrl = null;
+                    return;
+                }
+            } catch (e) {
+                console.warn('[tts-queue] audio play blocked', e);
+                URL.revokeObjectURL(url);
+                if (llmReplyAudioUrl === url) llmReplyAudioUrl = null;
+                return;
+            }
+            // Wait for playback to finish OR the epoch to change (barge-in).
+            await new Promise((resolve) => {
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearInterval(watch);
+                    btTtsPlayer.removeEventListener('ended', finish);
+                    btTtsPlayer.removeEventListener('error', finish);
+                    resolve();
+                };
+                const watch = setInterval(() => {
+                    if (llmReplyEpoch !== playEpoch) finish();
+                }, 100);
+                btTtsPlayer.addEventListener('ended', finish);
+                btTtsPlayer.addEventListener('error', finish);
+            });
+            URL.revokeObjectURL(url);
+            if (llmReplyAudioUrl === url) llmReplyAudioUrl = null;
+        }
+        async function processLlmReplyQueue() {
+            if (llmReplyQueueBusy) return;
+            llmReplyQueueBusy = true;
+            const queueEpoch = llmReplyEpoch;
+            try {
+                while (llmReplyQueue.length > 0) {
+                    if (llmReplyEpoch !== queueEpoch) {
+                        llmReplyQueue = [];
+                        llmReplyQueueNextSeq = 0;
+                        break;
+                    }
+                    const item = llmReplyQueue[0];
+                    if (item.seq !== llmReplyQueueNextSeq) {
+                        // Gap / out-of-order: skip (log, never hang).
+                        llmReplyQueue.shift();
+                        console.warn('[tts-queue] skipped out-of-order sentence seq=' + item.seq);
+                        continue;
+                    }
+                    await playLlmReplySentence(item);
+                    if (llmReplyEpoch !== queueEpoch) {
+                        llmReplyQueue = [];
+                        llmReplyQueueNextSeq = 0;
+                        break;
+                    }
+                    llmReplyQueue.shift();
+                    llmReplyQueueNextSeq += 1;
+                }
+            } finally {
+                llmReplyQueueBusy = false;
             }
         }
 

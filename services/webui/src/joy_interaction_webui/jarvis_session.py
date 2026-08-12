@@ -198,6 +198,7 @@ class JarvisSessionManager:
             on_asr_partial=self._make_asr_callback(session_id),
             on_user_utterance=self._make_user_utterance_callback(session_id),
             on_llm_response=self._make_llm_callback(session_id),
+            on_tts_sentence=self._make_tts_sentence_callback(session_id),
             audio_output=audio_output,
         )
 
@@ -292,6 +293,40 @@ class JarvisSessionManager:
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "LLM reply broadcast failed for %s: %s",
+                    session_id,
+                    exc,
+                )
+
+        return cb
+
+    def _make_tts_sentence_callback(self, session_id: str):
+        """Push one P0-A streaming TTS sentence (WAV base64) to the browser.
+
+        The jarvis state machine does not know its webui session_id, so this
+        closure binds it and forwards to ``notify_session_tts_sentence``.
+        """
+
+        def cb(text: str, seq: int, audio_b64: str, session: int):
+            try:
+                from .server import notify_session_tts_sentence
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "tts_sentence broadcast import failed for %s: %s",
+                    session_id,
+                    exc,
+                )
+                return
+            try:
+                notify_session_tts_sentence(
+                    session_id,
+                    text or "",
+                    seq,
+                    audio_b64 or "",
+                    session,
+                )
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "tts_sentence broadcast failed for %s: %s",
                     session_id,
                     exc,
                 )

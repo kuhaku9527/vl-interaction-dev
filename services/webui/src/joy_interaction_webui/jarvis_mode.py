@@ -16,6 +16,7 @@ Usage (in server.py or background task):
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import math
 import os
@@ -249,6 +250,15 @@ class JarvisConfig:
     llm_model: str = "joyai-vl-interaction-preview-iq4_nl-imat.gguf"
     llm_system_prompt: str = ""  # populated by __post_init__ from prompts/bt-7274.txt
 
+    # P0-A TTS streaming: jarvis voice dialog consumes webinfer's NDJSON
+    # stream (decision frame first, then content) and synthesizes TTS per
+    # flushed sentence so the first sound arrives in ~800ms instead of
+    # waiting for the full reply. Default ON for the jarvis voice path;
+    # set JARVIS_LLM_STREAMING=0 to restore the previous non-streaming call.
+    # The ``call`` interaction mode (paper-plane / text send) always stays
+    # non-streaming regardless of this flag.
+    llm_streaming_enabled: bool = True
+
     @classmethod
     def from_env(cls) -> JarvisConfig:
         """Build a JarvisConfig with env overrides on the KWS / LLM / TTS paths.
@@ -374,6 +384,7 @@ class JarvisConfig:
             llm_model=_get_str("JARVIS_LLM_MODEL", cls.llm_model),
             llm_text_path=_get_str("JARVIS_LLM_TEXT_PATH", cls.llm_text_path),
             llm_multimodal_path=_get_str("JARVIS_LLM_MULTIMODAL_PATH", cls.llm_multimodal_path),
+            llm_streaming_enabled=_get_bool("JARVIS_LLM_STREAMING", cls.llm_streaming_enabled),
             tts_api_url=_get_str("JARVIS_TTS_API_URL", cls.tts_api_url),
             tts_voice_id=_get_str("JARVIS_TTS_VOICE_ID", cls.tts_voice_id),
             events_dir=_get_str("JARVIS_EVENTS_DIR", cls.events_dir),
@@ -475,12 +486,19 @@ class JarvisStateMachine:
         on_asr_partial: Callable[[AsrPartial], None] | None = None,
         on_user_utterance: Callable[[str], None] | None = None,
         on_llm_response: Callable[[str, str], None] | None = None,
+        on_tts_sentence: Callable[[str, int, str, int], None] | None = None,
         audio_output: Callable[[bytes, int], asyncio.Future] | None = None,
     ):
         """
         audio_output: async callable(pcm_bytes, sample_rate) to play PCM
         via webui WebRTC audio output track. If None, falls back to
         local simpleaudio/sounddevice (if available) or sleep+log.
+
+        on_tts_sentence: P0-A streaming — async-safe callback
+        ``(sentence_text, seq, audio_b64, session)`` fired once a flushed
+        sentence's TTS audio (WAV base64) is ready for the browser. The
+        caller (jarvis_session) adds the webui session_id and broadcasts a
+        ``tts_sentence`` WS message.
         """
         self.config = config or JarvisConfig()
         self.state = JarvisState.KWS_LISTENING
@@ -491,6 +509,7 @@ class JarvisStateMachine:
         self.on_asr_partial = on_asr_partial
         self.on_user_utterance = on_user_utterance
         self.on_llm_response = on_llm_response
+        self.on_tts_sentence = on_tts_sentence
         self.audio_output = audio_output  # async (pcm, sr) -> None
 
         # Engines (lazy init)
@@ -502,6 +521,18 @@ class JarvisStateMachine:
         self._last_speech_time: float = 0.0
         self._current_asr_text: str = ""
         self._tts_task: asyncio.Task | None = None
+        # P0-A TTS streaming state. `_tts_sentence_tasks` tracks the
+        # per-sentence :8985 synthesis tasks spawned while the LLM stream is
+        # consumed; `_tts_sentence_epoch` is bumped whenever TTS must stop
+        # (barge-in / exit word), invalidating every in-flight sentence;
+        # `_tts_reply_seq` assigns a unique session id per LLM reply so the
+        # browser can tell a new reply's sentences from an old reply's;
+        # `_llm_stream_cancel` is a per-stream cancellation flag the
+        # consumer checks between frames.
+        self._tts_sentence_tasks: set[asyncio.Task] = set()
+        self._tts_sentence_epoch: int = 0
+        self._tts_reply_seq: int = 0
+        self._llm_stream_cancel: bool = False
         # v3.37: when webinfer returns decision="delegation", route the
         # delegated question to BackgroundModelService.handle_foreground_response
         # so the same sub-agent fires for voice requests as for video.
@@ -1294,11 +1325,7 @@ class JarvisStateMachine:
                 return
 
             # Interrupt TTS if user started speaking while TTS is playing
-            if (
-                self.state == JarvisState.DIALOG_ACTIVE
-                and self._tts_task
-                and not self._tts_task.done()
-            ):
+            if self.state == JarvisState.DIALOG_ACTIVE and self._tts_playing:
                 await self._pause_tts()
                 await self._transition_to(JarvisState.TTS_PAUSED)
                 logger.debug("TTS paused")
@@ -1365,9 +1392,7 @@ class JarvisStateMachine:
         # controller never sits in SPEAKING). Both reuse the existing TTS-pause
         # logic, so the interrupt rhythm is unchanged.
         barge_in = delegate.take_barge_in()
-        tts_playing = (
-            self.state == JarvisState.DIALOG_ACTIVE and self._tts_task and not self._tts_task.done()
-        )
+        tts_playing = self.state == JarvisState.DIALOG_ACTIVE and self._tts_playing
         if (barge_in or text) and tts_playing:
             await self._pause_tts()
             await self._transition_to(JarvisState.TTS_PAUSED)
@@ -1608,8 +1633,49 @@ class JarvisStateMachine:
     # TTS control
     # ------------------------------------------------------------------
 
+    def _ensure_tts_stream_state(self) -> None:
+        """Lazily initialize P0-A streaming TTS state.
+
+        Tests (and some callers) construct ``JarvisStateMachine`` via
+        ``__new__``, skipping ``__init__``; this mirrors the existing
+        ``_ensure_kws_diagnostic_state`` convention so the streaming fields
+        exist before they are read.
+        """
+        if not hasattr(self, "_tts_sentence_tasks"):
+            self._tts_sentence_tasks = set()
+        if not hasattr(self, "_tts_sentence_epoch"):
+            self._tts_sentence_epoch = 0
+        if not hasattr(self, "_tts_reply_seq"):
+            self._tts_reply_seq = 0
+        if not hasattr(self, "_llm_stream_cancel"):
+            self._llm_stream_cancel = False
+
+    @property
+    def _tts_playing(self) -> bool:
+        """True while any backend TTS audio may still be playing.
+
+        Covers both the legacy in-process ``_tts_task`` and the P0-A
+        streaming per-sentence synthesis tasks (the browser plays the
+        latter, but the backend must still stop paying for :8985 calls
+        on barge-in).
+        """
+        self._ensure_tts_stream_state()
+        return bool(
+            (self._tts_task is not None and not self._tts_task.done())
+            or self._tts_sentence_tasks
+        )
+
     async def _stop_tts(self):
         """Stop TTS immediately (user interrupted with exit word)."""
+        # P0-A: also stop the streaming sentence queue (bump epoch, cancel
+        # every in-flight :8985 sentence task, flag the LLM-stream consumer).
+        self._ensure_tts_stream_state()
+        self._tts_sentence_epoch += 1
+        self._llm_stream_cancel = True
+        for task in list(self._tts_sentence_tasks):
+            if not task.done():
+                task.cancel()
+        self._tts_sentence_tasks.clear()
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
             self._tts_task = None
@@ -1617,6 +1683,16 @@ class JarvisStateMachine:
 
     async def _pause_tts(self):
         """Pause TTS (user started speaking while TTS was playing)."""
+        # P0-A: barge-in must also stop the streaming sentence queue — the
+        # browser stops old audio via its epoch guard, and we stop paying
+        # for :8985 synthesis of sentences the user will never hear.
+        self._ensure_tts_stream_state()
+        self._tts_sentence_epoch += 1
+        self._llm_stream_cancel = True
+        for task in list(self._tts_sentence_tasks):
+            if not task.done():
+                task.cancel()
+        self._tts_sentence_tasks.clear()
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
             self._tts_task = None
@@ -1634,21 +1710,47 @@ class JarvisStateMachine:
         image_b64: str | None = None,
         interaction_mode: str = "jarvis",
     ):
-        """Send user's ASR text to the LLM (llama-server 7060) and stream TTS.
+        """Send user's ASR text to the LLM (via webinfer) and drive TTS.
 
-        Calls POST {llm_api_url}/chat/completions with system prompt + history,
-        then optionally triggers _stream_tts with the response text.
+        P0-A: the jarvis voice dialog path (``interaction_mode="jarvis"``,
+        text-only) consumes webinfer's NDJSON stream (decision frame first,
+        then content) and synthesizes TTS per flushed sentence so the first
+        sound arrives in ~800ms instead of after the full reply. Every other
+        caller (``call`` mode / paper-plane multimodal / streaming disabled)
+        keeps the existing single-shot ``_send_to_llm_non_streaming`` path
+        byte-for-byte.
+        """
+        if (
+            interaction_mode == "jarvis"
+            and not image_b64
+            and getattr(self.config, "llm_streaming_enabled", True)
+        ):
+            return await self._send_to_llm_streaming(
+                text,
+                stream_tts=stream_tts,
+                interaction_mode=interaction_mode,
+            )
+        return await self._send_to_llm_non_streaming(
+            text,
+            stream_tts=stream_tts,
+            image_b64=image_b64,
+            interaction_mode=interaction_mode,
+        )
 
-        v3.35: when ``image_b64`` is provided (paper-plane multimodal send)
-        the final user message is shaped as a content array of
-        ``[text, image_url]`` so llama.cpp's mmproj path can ground the
-        answer in the captured frame. Otherwise we send plain text.
+    async def _send_to_llm_non_streaming(
+        self,
+        text: str,
+        *,
+        stream_tts: bool = True,
+        image_b64: str | None = None,
+        interaction_mode: str = "jarvis",
+    ):
+        """Single-shot LLM call (legacy path, unchanged).
 
-        ``interaction_mode`` is forwarded to webinfer so it can isolate the
-        decision-token framework: ``"jarvis"`` (default) keeps decision tokens
-        (jarvis consumes the ``decision`` field) but disables forced silence;
-        ``"call"`` (voice-to-text direct chat, see server.llm_message) drops
-        the decision-token framework entirely. Issue #45.
+        Calls POST {llm_api_url}/{text|multimodal} and waits for the complete
+        JSON response, then optionally triggers TTS with the full text. This
+        is the pre-P0-A behavior kept for ``call`` mode, multimodal sends,
+        and as the fail-open fallback when streaming errors out.
         """
         # v3.24: prepend bounded conversation history so BT-7274 retains
         # short-term context across turns without persisting anything.
@@ -1710,14 +1812,325 @@ class JarvisStateMachine:
             decision = "silence"
             delegation_question = None
 
+        await self._finish_llm_turn(
+            text=text,
+            response=response,
+            decision=decision,
+            delegation_question=delegation_question,
+            stream_tts=stream_tts,
+        )
+
+    async def _send_to_llm_streaming(
+        self,
+        text: str,
+        *,
+        stream_tts: bool = False,
+        interaction_mode: str = "jarvis",
+    ):
+        """P0-A streaming LLM consumption: decision first, sentence TTS.
+
+        POSTs ``stream: true`` to webinfer's ``/v1/text/chat`` and consumes
+        the NDJSON frames:
+
+          * ``decision`` frame — determines silence / response / delegation
+            (same semantics as the non-streaming path; silence never speaks);
+          * ``content`` frames (decision == ``response``) — fed into a
+            :class:`SentenceBuffer`; each flushed sentence is synthesized
+            (:8985, short single-shot) in a background task and pushed to the
+            browser as a ``tts_sentence`` WS message (seq + session + WAV);
+          * ``done`` frame — full text for history / transcript broadcast.
+
+        Fail-open (never lose the reply): if the stream errors before any
+        frame, the whole turn is re-run through the non-streaming path; if it
+        errors after a decision, the buffered remainder is synthesized and
+        the reply is broadcast anyway (logged).
+        """
+        import json as _json
+
+        from .turn_controller import SentenceBuffer
+
+        # v3.24: prepend bounded conversation history (same as non-streaming).
+        messages = [{"role": "system", "content": self.config.llm_system_prompt}]
+        history_snapshot = list(self._conv_history)[-self._max_history_turns * 2 :]
+        for role, content in history_snapshot:
+            messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": text})
+
+        endpoint_url = f"{self.config.llm_api_url}{self.config.llm_text_path}"
+        self._ensure_tts_stream_state()
+        self._llm_stream_cancel = False
+        reply_session = self._tts_reply_seq
+        self._tts_reply_seq += 1
+        sentence_buffer = SentenceBuffer()
+        seq = 0
+        full_response = ""
+        decision = "silence"
+        delegation_question = None
+        frames_received = False
+        decision_received = False
+        done_received = False
+        cancelled = False
+
+        logger.info(
+            "[tts-stream] LLM stream start: '%s' (session=%d, history_turns=%d)",
+            text,
+            reply_session,
+            len(history_snapshot) // 2,
+        )
+        import httpx
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                async with client.stream(
+                    "POST",
+                    endpoint_url,
+                    json={
+                        "model": self.config.llm_model,
+                        "messages": messages,
+                        "max_tokens": 200,
+                        "temperature": 0.7,
+                        "interaction_mode": interaction_mode,
+                        "stream": True,
+                    },
+                ) as resp:
+                    if resp.status_code != 200:
+                        raise RuntimeError(
+                            f"webinfer stream HTTP {resp.status_code}: "
+                            f"{await resp.aread()!r}"[:200]
+                        )
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        frames_received = True
+                        try:
+                            frame = _json.loads(line)
+                        except Exception as exc:
+                            logger.warning("[tts-stream] skipping malformed frame: %s", exc)
+                            continue
+                        ftype = frame.get("type")
+                        if self._llm_stream_cancel:
+                            logger.info(
+                                "[tts-stream] cancelled mid-stream (session=%d); stopping",
+                                reply_session,
+                            )
+                            cancelled = True
+                            break
+                        if ftype == "decision":
+                            decision_received = True
+                            decision = frame.get("decision") or "silence"
+                            delegation_question = frame.get("delegation_question")
+                            logger.info(
+                                "[tts-stream] decision=%s (session=%d)",
+                                decision,
+                                reply_session,
+                            )
+                        elif ftype == "content":
+                            token = frame.get("token") or ""
+                            if not token:
+                                continue
+                            full_response += token
+                            if decision != "response":
+                                continue
+                            sentence = sentence_buffer.add_token(token)
+                            if sentence is not None:
+                                self._spawn_sentence_tts(sentence, seq, reply_session)
+                                seq += 1
+                        elif ftype == "done":
+                            done_received = True
+                            if frame.get("full_text"):
+                                full_response = frame["full_text"]
+                            if frame.get("decision"):
+                                decision = frame["decision"]
+                            if frame.get("delegation_question") is not None:
+                                delegation_question = frame["delegation_question"]
+                        elif ftype == "error":
+                            raise RuntimeError(frame.get("error") or "webinfer stream error")
+        except Exception as exc:
+            logger.error(
+                "[tts-stream] streaming LLM failed (session=%d, frames=%s, decision=%s): %s",
+                reply_session,
+                frames_received,
+                decision_received,
+                exc,
+            )
+            if not frames_received:
+                # Nothing was consumed — clean retry through the non-streaming
+                # path so the reply is never lost (and no audio is doubled).
+                logger.info("[tts-stream] fail-open -> non-streaming retry")
+                return await self._send_to_llm_non_streaming(
+                    text,
+                    stream_tts=stream_tts,
+                    interaction_mode=interaction_mode,
+                )
+            # Mid-stream failure: keep what we have (log, do not re-run).
+            if decision_received and decision == "response":
+                remaining = sentence_buffer.flush_remaining()
+                if remaining:
+                    self._spawn_sentence_tts(remaining, seq, reply_session)
+                    seq += 1
+                    logger.info(
+                        "[tts-stream] flushed %d buffered char(s) after mid-stream failure",
+                        len(remaining),
+                    )
+
+        if cancelled:
+            # Barge-in / exit word: stop everything. The epoch bump already
+            # cancelled every in-flight sentence task; the partial reply is
+            # intentionally not broadcast (the user is talking over it).
+            return
+
+        if not done_received:
+            # Stream ended without a done frame (e.g. mid-stream failure above):
+            # flush any remaining buffered sentence so no text is lost.
+            remaining = sentence_buffer.flush_remaining()
+            if remaining:
+                self._spawn_sentence_tts(remaining, seq, reply_session)
+                seq += 1
+            full_response = full_response or remaining or ""
+
+        # sentence_buffer may still hold text if neither path flushed it.
+        if not sentence_buffer.is_empty:
+            remaining = sentence_buffer.flush_remaining()
+            if remaining:
+                self._spawn_sentence_tts(remaining, seq, reply_session)
+                seq += 1
+
+        logger.info(
+            "[tts-stream] LLM stream done (session=%d, decision=%s, sentences=%d, chars=%d)",
+            reply_session,
+            decision,
+            seq,
+            len(full_response),
+        )
+        await self._finish_llm_turn(
+            text=text,
+            response=full_response,
+            decision=decision,
+            delegation_question=delegation_question,
+            stream_tts=stream_tts,
+            force_jarvis_voice=True,
+        )
+
+    def _spawn_sentence_tts(self, sentence: str, seq: int, reply_session: int) -> None:
+        """Synthesize one flushed sentence in the background and push it.
+
+        The task runs concurrently with LLM streaming (sentence N synthesizes
+        while the model generates sentence N+1). The browser plays by seq;
+        an epoch bump (barge-in / exit word) cancels every in-flight task and
+        the captured epoch makes any task that survives drop its result.
+        """
+        self._ensure_tts_stream_state()
+        epoch = self._tts_sentence_epoch
+        task = asyncio.create_task(
+            self._synthesize_tts_sentence(sentence, seq, reply_session, epoch)
+        )
+        self._tts_sentence_tasks.add(task)
+        task.add_done_callback(self._tts_sentence_tasks.discard)
+        logger.info(
+            "[tts-stream] sentence %d queued (session=%d, %d chars): '%s'",
+            seq,
+            reply_session,
+            len(sentence),
+            sentence[:60],
+        )
+
+    async def _synthesize_tts_sentence(
+        self, sentence: str, seq: int, reply_session: int, epoch: int
+    ) -> None:
+        """Fetch PCM16 for one sentence, wrap as WAV, push ``tts_sentence``.
+
+        Guards with the sentence epoch captured at spawn time so audio
+        synthesized after a barge-in / exit word is never pushed to the
+        browser.
+        """
+        if self._tts_sentence_epoch != epoch:
+            return
+        try:
+            pcm = await self._fetch_tts_pcm(sentence)
+        except Exception as exc:
+            logger.error("[tts-stream] sentence %d TTS failed: %s", seq, exc)
+            return
+        if self._tts_sentence_epoch != epoch:
+            logger.debug("[tts-stream] sentence %d stale (epoch bumped); dropping", seq)
+            return
+        try:
+            wav = self._wrap_pcm16_wav(pcm, sample_rate=24000)
+            audio_b64 = base64.b64encode(wav).decode("ascii")
+        except Exception as exc:
+            logger.error("[tts-stream] sentence %d WAV wrap failed: %s", seq, exc)
+            return
+        if self.on_tts_sentence:
+            try:
+                self.on_tts_sentence(sentence, seq, audio_b64, reply_session)
+            except Exception as exc:
+                logger.warning("[tts-stream] tts_sentence callback failed: %s", exc)
+
+    async def _fetch_tts_pcm(self, text: str) -> bytes:
+        """POST ``text`` to voice_clone_api :8985 and return PCM16 bytes."""
+        import httpx
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                self.config.tts_api_url,
+                json={
+                    "text": text,
+                    "voice_id": self.config.tts_voice_id,
+                    "streaming": False,
+                    "sample_rate": 24000,
+                },
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            audio_b64 = payload.get("pcm16_base64") or payload.get("audio")
+            if not audio_b64:
+                raise ValueError(f"TTS response missing audio: {payload}")
+            return base64.b64decode(audio_b64)
+
+    @staticmethod
+    def _wrap_pcm16_wav(pcm: bytes, sample_rate: int = 24000) -> bytes:
+        """Wrap 24kHz mono PCM16 into a RIFF/WAVE container for <audio>."""
+        n_channels = 1
+        bits_per_sample = 16
+        byte_rate = sample_rate * n_channels * bits_per_sample // 8
+        block_align = n_channels * bits_per_sample // 8
+        data_size = len(pcm)
+        header = b"RIFF" + (36 + data_size).to_bytes(4, "little") + b"WAVE"
+        header += b"fmt " + (16).to_bytes(4, "little")
+        header += (1).to_bytes(2, "little")  # PCM
+        header += n_channels.to_bytes(2, "little")
+        header += sample_rate.to_bytes(4, "little")
+        header += byte_rate.to_bytes(4, "little")
+        header += block_align.to_bytes(2, "little")
+        header += bits_per_sample.to_bytes(2, "little")
+        header += b"data" + data_size.to_bytes(4, "little")
+        return header + pcm
+
+    async def _finish_llm_turn(
+        self,
+        *,
+        text: str,
+        response: str,
+        decision: str,
+        delegation_question: str | None,
+        stream_tts: bool,
+        force_jarvis_voice: bool = False,
+    ) -> None:
+        """Shared post-LLM turn completion (delegate, delegation, history, broadcast).
+
+        Used by both the non-streaming path and the P0-A streaming consumer so
+        the two converge on identical turn semantics. ``force_jarvis_voice``
+        is set by the streaming path: its per-sentence audio is pushed via
+        ``tts_sentence`` WS messages, so the ``llm_reply`` transcript must be
+        tagged ``jarvis_voice`` to stop the browser from synthesizing the
+        full reply again (even if every sentence task already finished).
+        """
         logger.info("LLM response (decision=%s): '%s'", decision, response)
 
         # Turn Controller delegate (Phase B): feed the LLM response into the
         # controller so it tracks the agent turn (PROCESSING -> THINKING).
-        # Gated on the delegate existing; fail-open. This is NOT a streaming
-        # token feed — jarvis's LLM path is a single response, so the whole
-        # response is fed as one token (the controller only needs the
-        # PROCESSING -> THINKING edge, not sentence-level fidelity).
+        # Gated on the delegate existing; fail-open. The whole response is
+        # fed as one token (the controller only needs the PROCESSING ->
+        # THINKING edge, not sentence-level fidelity).
         delegate = getattr(self, "_turn_delegate", None)
         if delegate is not None:
             try:
@@ -1757,7 +2170,10 @@ class JarvisStateMachine:
 
         # Tag the broadcast with whether the back-end also streamed TTS to the
         # WebRTC audio_output track, so the front-end can avoid double-playing.
-        reply_source = "jarvis_voice" if stream_tts else "jarvis_text"
+        # P0-A: the streaming path pushes per-sentence audio via tts_sentence
+        # and tags the transcript as jarvis_voice so the browser does NOT
+        # synthesize the full reply again.
+        reply_source = "jarvis_voice" if (force_jarvis_voice or stream_tts) else "jarvis_text"
         if self.on_llm_response:
             self.on_llm_response(response, source=reply_source)
 
@@ -1767,9 +2183,9 @@ class JarvisStateMachine:
             self._notify_delegate_tts_started()
             self._tts_task.add_done_callback(self._on_delegate_tts_done)
         else:
-            # No in-process TTS (browser plays via llm_reply, or silence /
-            # delegation): complete the agent turn in the controller
-            # immediately so the next user turn commits cleanly.
+            # No in-process TTS (browser plays via llm_reply / tts_sentence,
+            # or silence / delegation): complete the agent turn in the
+            # controller immediately so the next user turn commits cleanly.
             self._notify_delegate_tts_started()
             self._notify_delegate_tts_finished()
 
@@ -1831,8 +2247,6 @@ class JarvisStateMachine:
                 resp.raise_for_status()
                 payload = resp.json()
                 # voice_clone_api returns pcm16_base64 or audio (base64)
-                import base64
-
                 audio_b64 = payload.get("pcm16_base64") or payload.get("audio")
                 if not audio_b64:
                     logger.error("TTS response missing audio: %s", payload)
@@ -1860,6 +2274,11 @@ class JarvisStateMachine:
             self._asr.stop()
         if self._tts_task and not self._tts_task.done():
             self._tts_task.cancel()
+        self._ensure_tts_stream_state()
+        for task in list(self._tts_sentence_tasks):
+            if not task.done():
+                task.cancel()
+        self._tts_sentence_tasks.clear()
         logger.info("Jarvis state machine cleaned up")
 
 

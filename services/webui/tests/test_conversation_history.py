@@ -40,6 +40,9 @@ def _build_sm():
         llm_api_url="http://stub",
         llm_model="stub",
         llm_system_prompt="be brief",
+        # P0-A: this suite pins the single-shot path (its mock client has no
+        # streaming seam); the streaming consumer is covered separately.
+        llm_streaming_enabled=False,
     )
     return JarvisStateMachine(config=cfg)
 

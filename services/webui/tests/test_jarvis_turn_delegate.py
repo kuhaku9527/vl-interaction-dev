@@ -159,7 +159,7 @@ def _make_sm(*, with_delegate: bool = True):
     enters DIALOG_ACTIVE. Returns ``(sm, clock)``.
     """
     JarvisConfig, JarvisState, JarvisStateMachine = _jarvis_mode()
-    cfg = JarvisConfig()
+    cfg = JarvisConfig(llm_streaming_enabled=False)  # P0-A: delegate suite pins single-shot
     sm = JarvisStateMachine.__new__(JarvisStateMachine)
     sm.config = cfg
     sm.state = JarvisState.DIALOG_ACTIVE
