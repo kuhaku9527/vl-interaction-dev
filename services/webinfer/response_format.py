@@ -29,6 +29,12 @@ def normalize_model_output(text: str) -> str:
     if not raw:
         return "</silence>"
 
+    # not-for-me ANYWHERE is a strong non-addressed signal (mirrors
+    # parse_model_decision's not-for-me priority); it always normalizes to the
+    # bare marker so a non-addressed turn never leaks a response body.
+    if "</not-for-me>" in raw or "<not-for-me>" in raw:
+        return "</not-for-me>"
+
     marker_positions = []
     for marker in ("</response>", "</silence>"):
         idx = raw.find(marker)
@@ -61,9 +67,10 @@ def parse_model_decision(raw_text: str) -> tuple[str, str, str | None]:
 
     Returns ``(decision, clean_text, delegation_question)``:
 
-      * ``decision`` ∈ {"silence", "response", "delegation"}, never ``None``;
+      * ``decision`` ∈ {"silence", "response", "delegation", "not-for-me"},
+        never ``None``;
       * ``clean_text``: body text with decision tokens stripped
-        ("" for silence/delegation);
+        ("" for silence/delegation/not-for-me);
       * ``delegation_question``: the delegated question when ``decision``
         is "delegation", else ``None``.
 
@@ -74,7 +81,17 @@ def parse_model_decision(raw_text: str) -> tuple[str, str, str | None]:
     robust regardless of the 8B model's exact token order, a delegation tag
     (``<delegation>`` or ``</delegation>``) present ANYWHERE in the output
     takes priority; only when no delegation tag is present do we fall back to
-    the earliest of ``</response>`` / ``</silence>``.
+    the not-for-me ANYWHERE check and then the earliest of ``</response>`` /
+    ``</silence>``.
+
+    ``</not-for-me>`` (addressee-detection Phase 2, live four-state prompt)
+    is an independent single-marker state: it maps to "not-for-me" with an
+    empty body and no delegation question. The opening ``<not-for-me>`` form
+    is tolerated like ``<delegation>``. A not-for-me tag ANYWHERE takes
+    priority over response/silence (the "宁可漏、不可乱插" principle: a
+    non-addressed signal must never be spoken), mirroring the delegation
+    ANYWHERE priority. Three-state outputs (silence / response / delegation)
+    parse exactly as before -- no regression.
     """
     text = (raw_text or "").strip()
     if not text:
@@ -92,7 +109,18 @@ def parse_model_decision(raw_text: str) -> tuple[str, str, str | None]:
         tail = text[delegation_idx + len(delegation_tag) :].strip()
         return "delegation", "", tail or None
 
-    # No delegation tag: fall back to the earliest of response / silence.
+    # not-for-me priority: a not-for-me tag ANYWHERE is a strong
+    # non-addressed signal (single-marker independent state, spec §4.1).
+    notforme_idx: int | None = None
+    for tag in ("</not-for-me>", "<not-for-me>"):
+        idx = text.find(tag)
+        if idx >= 0 and (notforme_idx is None or idx < notforme_idx):
+            notforme_idx = idx
+    if notforme_idx is not None:
+        return "not-for-me", "", None
+
+    # No delegation / not-for-me tag: fall back to the earliest of response /
+    # silence (unchanged three-state semantics).
     earliest: tuple[int, str] | None = None
     for marker in ("</response>", "</silence>"):
         idx = text.find(marker)
@@ -109,23 +137,25 @@ def parse_model_decision(raw_text: str) -> tuple[str, str, str | None]:
 
 
 # All decision-token variants (case-insensitive). The opening ``<...>`` and
-# closing ``</...>`` forms of silence / response / delegation are all control
-# signals that must never reach the end-user ``content`` field. ``<the
-# question>``-style placeholder text in the system prompt is NOT matched
-# because only these three literal tag names are whitelisted.
-_DECISION_TOKEN_RE = re.compile(r"\s*</?\s*(?:silence|response|delegation)\s*>\s*", re.IGNORECASE)
+# closing ``</...>`` forms of silence / response / delegation / not-for-me are
+# all control signals that must never reach the end-user ``content`` field.
+# ``<the question>``-style placeholder text in the system prompt is NOT
+# matched because only these four literal tag names are whitelisted.
+_DECISION_TOKEN_RE = re.compile(
+    r"\s*</?\s*(?:silence|response|delegation|not-for-me)\s*>\s*", re.IGNORECASE
+)
 
 
 def strip_decision_tokens(text: str) -> str:
     """Strip every decision-token variant from model output text.
 
     The runtime system prompt teaches the model to bracket its reply with
-    ``</silence>`` / ``</response>`` / ``</delegation>`` (and the opening
-    ``<...>`` forms). Those tokens are control signals consumed by the
-    ``streamingharness.decision`` field and must never reach the end-user
-    ``content`` (issue #44). This removes all six variants (case-insensitive,
-    with any surrounding whitespace) and collapses the result, so
-    ``"</response> hi"`` -> ``"hi"`` and ``"</silence>"`` -> ``""``.
+    ``</silence>`` / ``</response>`` / ``</delegation>`` / ``</not-for-me>``
+    (and the opening ``<...>`` forms). Those tokens are control signals
+    consumed by the ``streamingharness.decision`` field and must never reach
+    the end-user ``content`` (issue #44). This removes all eight variants
+    (case-insensitive, with any surrounding whitespace) and collapses the
+    result, so ``"</response> hi"`` -> ``"hi"`` and ``"</silence>"`` -> ``""``.
 
     The ``decision`` / ``delegation_question`` harness fields are derived
     separately by :func:`parse_model_decision` and are NOT affected by this

@@ -217,6 +217,72 @@ def test_corrected_delegation_drops_buffered_note():
     assert result.full_response == ""
 
 
+def test_not_for_me_never_flushes_sentences():
+    """not-for-me (addressee Phase 2) is a zero-TTS decision like silence."""
+    sentences: list = []
+    consumer = _consumer(on_sentence=lambda s, seq, rs: sentences.append(seq))
+    lines = [
+        _frame(type="decision", decision="not-for-me", delegation_question=None),
+        _frame(
+            type="done",
+            decision="not-for-me",
+            full_text="",
+            delegation_question=None,
+        ),
+    ]
+    result = _run(consumer, lines)
+    assert sentences == []
+    assert result.full_response == ""
+    assert result.decision == "not-for-me"
+    assert result.delegation_question is None
+
+
+def test_not_for_me_skips_stray_content_frames():
+    """Content frames after a not-for-me decision are never spoken."""
+    sentences: list = []
+    consumer = _consumer(on_sentence=lambda s, seq, rs: sentences.append(seq))
+    lines = [
+        _frame(type="decision", decision="not-for-me", delegation_question=None),
+        _frame(type="content", token="should never be spoken"),
+        _frame(
+            type="done",
+            decision="not-for-me",
+            full_text="",
+            delegation_question=None,
+        ),
+    ]
+    result = _run(consumer, lines)
+    assert sentences == []
+    assert result.full_response == ""
+    assert result.decision == "not-for-me"
+
+
+def test_corrected_not_for_me_drops_buffered_note():
+    """A late </not-for-me> correction drops the buffered response (no TTS)."""
+    sentences: list = []
+    consumer = _consumer(on_sentence=lambda s, seq, rs: sentences.append((seq, s)))
+    lines = [
+        _frame(type="decision", decision="response", delegation_question=None),
+        _frame(type="content", token="Let me check"),
+        _frame(
+            type="decision",
+            decision="not-for-me",
+            delegation_question=None,
+            corrected=True,
+        ),
+        _frame(
+            type="done",
+            decision="not-for-me",
+            full_text="",
+            delegation_question=None,
+        ),
+    ]
+    result = _run(consumer, lines)
+    assert sentences == []
+    assert result.decision == "not-for-me"
+    assert result.full_response == ""
+
+
 def test_malformed_frames_are_skipped():
     sentences: list = []
     consumer = _consumer(on_sentence=lambda s, seq, rs: sentences.append((seq, s)))

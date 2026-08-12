@@ -10,8 +10,9 @@ Responsibilities of :class:`StreamingTurnConsumer`:
   * POST ``stream: true`` to webinfer's ``/v1/text/chat`` and consume the
     NDJSON frames:
 
-      - ``decision`` frame — determines silence / response / delegation
-        (same semantics as the non-streaming path; silence never speaks);
+      - ``decision`` frame — determines silence / response / delegation /
+        not-for-me (same semantics as the non-streaming path; silence and
+        not-for-me never speak);
       - ``content`` frames (decision == ``response``) — fed into a
         :class:`SentenceBuffer`; each flushed sentence is handed to the
         injected ``on_sentence`` callback (the caller synthesizes TTS and
@@ -188,20 +189,26 @@ class StreamingTurnConsumer:
                         cancelled = True
                         break
                     if ftype == "decision":
-                        if decision_received and frame.get("decision") == "delegation":
+                        if decision_received and frame.get("decision") in (
+                            "delegation",
+                            "not-for-me",
+                        ):
                             # Corrected decision: the taught delegation
                             # format is ``</response> <note> </delegation>
                             # <question>``, so a provisional response is
-                            # re-judged once the delegation tag arrives.
-                            # Drop buffered note content — a delegation
-                            # must not be spoken as TTS.
+                            # re-judged once the delegation tag arrives; a
+                            # late ``</not-for-me>`` correction is handled
+                            # the same way. Drop buffered note content — a
+                            # delegation / not-for-me must not be spoken as
+                            # TTS.
                             sentence_buffer = SentenceBuffer(
                                 max_sentence_chars=self.max_sentence_chars,
                                 comma_split_enabled=self.comma_split_enabled,
                             )
                             full_response = ""
                             self._log.info(
-                                "[tts-stream] corrected to delegation (session=%d)",
+                                "[tts-stream] corrected to %s (session=%d)",
+                                frame.get("decision"),
                                 reply_session,
                             )
                         decision_received = True

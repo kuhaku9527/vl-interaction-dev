@@ -917,6 +917,18 @@ class LiveStateMachine:
             # is spoken (foreground line empty).
             decision = "silence"
 
+        # Addressee-detection Phase 2 (spec draft-addressee-detection.md
+        # §4.1/§4.2.4): decision="not-for-me" means the utterance was NOT
+        # addressed to the AI (self-talk / replying to someone else / talking
+        # to another person). Treat it as a non-target turn: no TTS, back to
+        # LISTENING — same controller path as silence, with a dedicated log
+        # so the semantic gate is distinguishable from plain silence.
+        if decision == "not-for-me":
+            logger.info(
+                "[addressee] semantic not-for-me: utterance=%r not addressed to AI; not broadcasting",
+                (text or "")[:80],
+            )
+
         self._conv_history.append(("user", text))
         self._conv_history.append(("assistant", response or ""))
 
@@ -949,7 +961,9 @@ class LiveStateMachine:
                 logger.warning("[live-mode] on_tts_started failed: %s", exc)
             self._tts_turn_task = asyncio.create_task(self._wait_tts_turn_done())
         else:
-            # silence / delegation / empty: THINKING -> SPEAKING -> LISTENING.
+            # silence / delegation / not-for-me / empty: THINKING -> SPEAKING
+            # -> LISTENING (nothing is spoken; not-for-me additionally logged
+            # as a semantic non-target above).
             try:
                 self._ctrl.on_tts_started()
                 self._ctrl.on_tts_finished()

@@ -21,7 +21,7 @@ from prompt_building import (
     build_dynamic_system_content,
     build_static_system_content,
 )
-from prompt_constants import NO_DECISION_SYSTEM_PROMPT
+from prompt_constants import LIVE_SYSTEM_PROMPT_EN, NO_DECISION_SYSTEM_PROMPT
 from system_prompts import (
     compose_system_prompt_with_memory,
     load_character_prompts,
@@ -30,6 +30,28 @@ from system_prompts import (
 from time_ranges import _format_batch_time_marker
 
 LOGGER = logging.getLogger("streaming_infer_adapter")
+
+
+def _resolve_base_system_prompt(
+    config_system_prompt: str,
+    *,
+    include_decision_tokens: bool,
+    interaction_mode: str,
+) -> str:
+    """Resolve the base decision-token prompt for an interaction mode.
+
+    * ``include_decision_tokens=False`` (call) -> ``NO_DECISION_SYSTEM_PROMPT``
+      (no framework at all, issues #44/#45).
+    * ``interaction_mode == "live"`` -> ``LIVE_SYSTEM_PROMPT_EN`` (four-state:
+      addressee ``</not-for-me>`` teaching, addressee-detection Phase 2).
+    * jarvis / anything else -> ``config_system_prompt`` (three-state,
+      byte-for-byte unchanged — jarvis must not see the four-state teaching).
+    """
+    if not include_decision_tokens:
+        return NO_DECISION_SYSTEM_PROMPT
+    if interaction_mode == "live":
+        return LIVE_SYSTEM_PROMPT_EN
+    return config_system_prompt or ""
 
 
 @functools.lru_cache(maxsize=32)
@@ -78,22 +100,33 @@ class PromptAssemblyMixin:
             return []
 
     def _system_prompt_cache_key(
-        self, language: str, *, include_decision_tokens: bool = True
+        self,
+        language: str,
+        *,
+        include_decision_tokens: bool = True,
+        interaction_mode: str = "live",
     ) -> tuple[Any, ...]:
         """Build a deterministic cache key for the composed system prompt.
 
         ``include_decision_tokens`` is part of the key so the no-decision
         call-mode prompt (``NO_DECISION_SYSTEM_PROMPT``) is cached separately
         from the default decision-token prompt and never cross-contaminates
-        the live/jarvis cache.
+        the live/jarvis cache. ``interaction_mode`` is part of the key so the
+        four-state live prompt (``LIVE_SYSTEM_PROMPT_EN``) is cached
+        separately from the three-state jarvis/default prompt.
         """
         return (
-            self.config.system_prompt if include_decision_tokens else NO_DECISION_SYSTEM_PROMPT,
+            _resolve_base_system_prompt(
+                self.config.system_prompt,
+                include_decision_tokens=include_decision_tokens,
+                interaction_mode=interaction_mode,
+            ),
             language,
             self.config.character_prompts_enabled,
             tuple(self.config.character_prompt_paths),
             self._character_prompt_mtime,
             include_decision_tokens,
+            interaction_mode,
         )
 
     def _refresh_character_prompt_mtime(self) -> float:
@@ -141,7 +174,13 @@ class PromptAssemblyMixin:
         """Return absolute paths of every file that would be loaded."""
         return [str(p) for p in resolve_prompt_paths(self.config.character_prompt_paths)]
 
-    def _build_system_prompt(self, language: str, *, include_decision_tokens: bool = True) -> str:
+    def _build_system_prompt(
+        self,
+        language: str,
+        *,
+        include_decision_tokens: bool = True,
+        interaction_mode: str = "live",
+    ) -> str:
         """Return the system prompt for ``language`` with character injection.
 
         Reads character files lazily and caches the composed string on
@@ -151,24 +190,35 @@ class PromptAssemblyMixin:
 
         When ``include_decision_tokens`` is False (call mode), the base is
         swapped to ``NO_DECISION_SYSTEM_PROMPT`` so the model is never taught
-        the silence / speak / delegate framework (issues #44/#45).
+        the silence / speak / delegate framework (issues #44/#45). When
+        ``interaction_mode`` is "live", the base is swapped to the four-state
+        ``LIVE_SYSTEM_PROMPT_EN`` (addressee-detection Phase 2); jarvis keeps
+        the three-state ``config.system_prompt``.
         """
         key = self._system_prompt_cache_key(
-            language, include_decision_tokens=include_decision_tokens
+            language,
+            include_decision_tokens=include_decision_tokens,
+            interaction_mode=interaction_mode,
         )
         cached = self._system_prompt_cache.get(key)
         if cached is not None:
             return cached
-        base = (
-            self.config.system_prompt if include_decision_tokens else NO_DECISION_SYSTEM_PROMPT
-        ) or ""
+        base = _resolve_base_system_prompt(
+            self.config.system_prompt,
+            include_decision_tokens=include_decision_tokens,
+            interaction_mode=interaction_mode,
+        )
         profiles = self._load_character_profiles()
         composed = _build_system_prompt(base, profiles, language)
         self._system_prompt_cache[key] = composed
         return composed
 
     def _build_memory_prompt(
-        self, session_state: SessionState | None, *, include_decision_tokens: bool = True
+        self,
+        session_state: SessionState | None,
+        *,
+        include_decision_tokens: bool = True,
+        interaction_mode: str = "live",
     ) -> str:
         """Return system prompt with optional memory blocks appended.
 
@@ -185,17 +235,23 @@ class PromptAssemblyMixin:
         history and looked-up reference material mentally distinct.
 
         ``include_decision_tokens`` is forwarded to the base-prompt
-        selection so call mode uses ``NO_DECISION_SYSTEM_PROMPT``.
+        selection so call mode uses ``NO_DECISION_SYSTEM_PROMPT``;
+        ``interaction_mode`` selects the four-state live prompt
+        (``LIVE_SYSTEM_PROMPT_EN``) vs the three-state default (jarvis).
         """
         blocks = list(getattr(session_state, "_memory_block_cache", None) or [])
         wiki = list(getattr(session_state, "_memory_wiki_cache", None) or [])
         if not blocks and not wiki:
             return self._build_system_prompt(
-                self.config.language, include_decision_tokens=include_decision_tokens
+                self.config.language,
+                include_decision_tokens=include_decision_tokens,
+                interaction_mode=interaction_mode,
             )
-        base = (
-            self.config.system_prompt if include_decision_tokens else NO_DECISION_SYSTEM_PROMPT
-        ) or ""
+        base = _resolve_base_system_prompt(
+            self.config.system_prompt,
+            include_decision_tokens=include_decision_tokens,
+            interaction_mode=interaction_mode,
+        )
         profiles = self._load_character_profiles()
         return compose_system_prompt_with_memory(
             base,
@@ -304,6 +360,7 @@ class PromptAssemblyMixin:
         session_state: SessionState | None = None,
         max_total_chars: int = 0,
         include_decision_tokens: bool = True,
+        interaction_mode: str = "live",
     ) -> list[dict[str, Any]]:
         """Build the OpenAI chat-completions payload for the main model.
 
@@ -317,7 +374,9 @@ class PromptAssemblyMixin:
 
         ``include_decision_tokens`` is forwarded to the system-prompt
         builder so call mode uses ``NO_DECISION_SYSTEM_PROMPT`` (no
-        silence / speak / delegate framework).
+        silence / speak / delegate framework). ``interaction_mode`` selects
+        the four-state live prompt (addressee Phase 2) vs the three-state
+        default (jarvis — unchanged).
 
         v3.34 prompt guard: when ``max_total_chars`` is positive and the
         assembled messages exceed that budget, the oldest user/assistant
@@ -327,7 +386,9 @@ class PromptAssemblyMixin:
         """
         messages = list(api_messages)
         system_prompt = self._build_memory_prompt(
-            session_state, include_decision_tokens=include_decision_tokens
+            session_state,
+            include_decision_tokens=include_decision_tokens,
+            interaction_mode=interaction_mode,
         )
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}, *messages]

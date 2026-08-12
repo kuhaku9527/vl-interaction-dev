@@ -16,6 +16,7 @@ Run: python -m pytest tests/test_live_mode.py -q
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -297,6 +298,53 @@ async def test_speak_commit_llm_live_sentence_tts(monkeypatch):
         await sm._tts_turn_task
     assert pushes and pushes[0][1] == "好的，我在听。"
     assert sm.turn_state == TurnState.LISTENING
+
+
+@pytest.mark.asyncio
+async def test_not_for_me_decision_no_broadcast_back_to_listening(monkeypatch, caplog):
+    """Addressee Phase 2: decision="not-for-me" -> no TTS, back to LISTENING,
+    with a dedicated ``[addressee] semantic not-for-me`` log (distinct from
+    silence)."""
+    clock = FakeClock(1000.0)
+    sm, vad, asr = build_live(controller=_live_controller(clock))
+    monkeypatch.setattr(live_module, "time", clock)
+
+    pushes: list = []
+    broadcasts: list = []
+    sm.on_tts_sentence = lambda text, seq, audio_b64, session: pushes.append((seq, text))
+    sm.on_llm_response = lambda text, source: broadcasts.append((text, source))
+
+    fake = FakeConsumer(
+        _result(full_response="", decision="not-for-me", sentence_count=0),
+        sentences=[],
+    )
+    monkeypatch.setattr(live_module, "StreamingTurnConsumer", fake)
+
+    with caplog.at_level(logging.INFO, logger="joyai.live_mode"):
+        # 1. Speech onset -> USER_SPEAKING.
+        vad.set_speech(True)
+        await sm.feed_audio(PCM)
+        assert sm.turn_state == TurnState.USER_SPEAKING
+
+        # 2. ASR partial accumulates.
+        clock.now += 0.5
+        asr.set_text("这关怎么这么难啊")
+        await sm.feed_audio(PCM)
+        assert sm._current_asr_text == "这关怎么这么难啊"
+
+        # 3. User stops -> 2s ASR stall -> endpoint -> commit -> LLM.
+        vad.set_speech(False)
+        clock.now += 2.0
+        await sm.feed_audio(PCM)
+
+    assert sm._current_asr_text == ""  # commit reset the ASR stream
+    assert fake.consume_kwargs["interaction_mode"] == "live"
+    # Zero TTS sentences; the turn is not broadcast as a spoken reply and the
+    # controller returns to LISTENING (same lifecycle as silence).
+    assert pushes == []
+    assert broadcasts == [("", "live_text")]
+    assert sm.turn_state == TurnState.LISTENING
+    assert "[addressee] semantic not-for-me" in caplog.text
 
 
 @pytest.mark.asyncio

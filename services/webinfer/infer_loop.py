@@ -91,9 +91,12 @@ def _normalize_interaction_mode(mode: str | None) -> str:
 # that :func:`parse_model_decision` itself recognises are used, so decision
 # semantics are byte-for-byte identical to the non-streaming path (the model
 # is taught to emit the closing ``</silence>`` / ``</response>`` /
-# ``</delegation>`` form, with ``<delegation>`` tolerated like the parser).
+# ``</delegation>`` / ``</not-for-me>`` form, with ``<delegation>`` and
+# ``<not-for-me>`` tolerated like the parser).
 _STREAM_DECISION_MARKER_RE = re.compile(
-    r"</\s*(?:silence|response|delegation)\s*>|<delegation\s*>", re.IGNORECASE
+    r"</\s*(?:silence|response|delegation|not-for-me)\s*>"
+    r"|<\s*(?:delegation|not-for-me)\s*>",
+    re.IGNORECASE,
 )
 
 
@@ -141,9 +144,10 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
         :func:`parse_model_decision` over the accumulated prefix, so the
         semantics match the non-streaming parser exactly.
       * ``{"type": "content", "token": ...}`` frames follow for every delta
-        after a ``response`` decision; silence / delegation produce no
-        content frames (silence has nothing to say; the delegation question
-        is carried by the decision frame and must not be spoken as TTS).
+        after a ``response`` decision; silence / delegation / not-for-me
+        produce no content frames (silence has nothing to say; the
+        delegation question is carried by the decision frame and must not
+        be spoken as TTS; not-for-me is a bare non-addressed marker).
       * **Delegation-taught format hardening**: the system prompt teaches
         ``</response> <note> </delegation> <question>`` — ``</response>``
         PRECEDES the delegation tag. ``parse_model_decision`` gives a
@@ -152,7 +156,9 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
         provisional, and a later ``</delegation>`` / ``<delegation>`` in the
         stream re-judges the whole turn as delegation — the frame list is
         rebuilt as a single delegation decision frame (no content frames, so
-        the question is never spoken as TTS).
+        the question is never spoken as TTS). A later ``</not-for-me>`` /
+        ``<not-for-me>`` re-judges the whole turn as not-for-me the same way
+        (independent single-marker state — never mixed with a response body).
       * Empty / no-token deltas are skipped (never emitted as a frame).
       * If the stream ends before any complete marker, the accumulated text
         is failed-open through :func:`parse_model_decision` (which maps a
@@ -187,15 +193,15 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
         elif decision == "response":
             raw_tail += delta
             if _find_first_decision_marker(raw_tail) is not None:
-                # Late delegation tag (taught format). Re-judge the whole
-                # turn; the question must never stream as content.
-                decision, _clean, delegation_question = parse_model_decision(
-                    raw_prefix + raw_tail
-                )
+                # Late decision tag (taught delegation format, or a model
+                # correction to </not-for-me>). Re-judge the whole turn;
+                # the delegated question / not-for-me body must never
+                # stream as content.
+                decision, _clean, delegation_question = parse_model_decision(raw_prefix + raw_tail)
                 frames = [
                     {
                         "type": "decision",
-                        "decision": "delegation",
+                        "decision": decision,
                         "delegation_question": delegation_question,
                     }
                 ]
@@ -402,9 +408,14 @@ class InferLoopMixin:
             LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
 
         api_messages = list(payload.get("messages") or [])
-        # call mode drops the decision-token framework (issues #44/#45).
+        # call mode drops the decision-token framework (issues #44/#45);
+        # live mode uses the four-state prompt (addressee Phase 2).
         composed_system = (
-            self._build_memory_prompt(state, include_decision_tokens=interaction_mode != "call")
+            self._build_memory_prompt(
+                state,
+                include_decision_tokens=interaction_mode != "call",
+                interaction_mode=interaction_mode,
+            )
             or ""
         ).strip()
 
@@ -578,7 +589,11 @@ class InferLoopMixin:
 
         api_messages = list(payload.get("messages") or [])
         composed_system = (
-            self._build_memory_prompt(state, include_decision_tokens=interaction_mode != "call")
+            self._build_memory_prompt(
+                state,
+                include_decision_tokens=interaction_mode != "call",
+                interaction_mode=interaction_mode,
+            )
             or ""
         ).strip()
 
@@ -640,18 +655,20 @@ class InferLoopMixin:
                 raw_tail += delta
                 full_text += delta
                 if _find_first_decision_marker(raw_tail) is not None:
-                    # Late delegation tag (taught format: ``</response> <note>
-                    # </delegation> <question>``). Re-judge the whole turn —
-                    # the question must never stream as content. Content that
-                    # already streamed for the note cannot be recalled here;
-                    # jarvis drops its buffered remainder on the correction.
+                    # Late decision tag (taught delegation format
+                    # ``</response> <note> </delegation> <question>``, or a
+                    # model correction to </not-for-me>). Re-judge the whole
+                    # turn — the question / non-addressed body must never
+                    # stream as content. Content that already streamed for
+                    # the note cannot be recalled here; the consumer drops
+                    # its buffered remainder on the corrected frame.
                     decision, _clean, delegation_question = parse_model_decision(
                         raw_prefix + raw_tail
                     )
                     full_text = ""
                     yield {
                         "type": "decision",
-                        "decision": "delegation",
+                        "decision": decision,
                         "delegation_question": delegation_question,
                         "corrected": True,
                     }
@@ -679,10 +696,10 @@ class InferLoopMixin:
 
         # The done frame mirrors the unified parser on the FULL raw text: a
         # delegation tag ANYWHERE wins (late tag after </response>), and a
-        # delegation turn never speaks anything.
+        # delegation / not-for-me turn never speaks anything.
         final_decision, _final_clean, final_delegation_question = parse_model_decision(raw_text)
-        if final_decision == "delegation":
-            decision = "delegation"
+        if final_decision in ("delegation", "not-for-me"):
+            decision = final_decision
             delegation_question = final_delegation_question
             full_text = ""
 
@@ -1005,7 +1022,10 @@ class InferLoopMixin:
             api_messages = self._build_cached_api_messages(state, internal_messages)
             generation_kwargs = self._main_generation_kwargs(payload)
             http_messages = self._build_main_http_messages(
-                api_messages, session_state=state, include_decision_tokens=include_decision_tokens
+                api_messages,
+                session_state=state,
+                include_decision_tokens=include_decision_tokens,
+                interaction_mode=interaction_mode,
             )
             turn_model_input_record = build_model_input_record(
                 chunk_index=state.chunk_index,
