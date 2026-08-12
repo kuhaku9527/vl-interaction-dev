@@ -170,6 +170,14 @@ def notify_session_tts_sentence(session_id, text, seq, audio_b64, session):
         "audio_b64": audio_b64 or "",
         "ts": time.time(),
     }
+    targets = session_websockets.get(session_id, set())
+    logger.info(
+        "tts_sentence push seq=%s session=%s text=%r ws_targets=%d",
+        seq,
+        session,
+        (text or "")[:40],
+        len(targets),
+    )
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
 
 

@@ -1060,6 +1060,7 @@ class JarvisStateMachine:
         self._asr_stream_active = True
         self._current_asr_text = ""
         self._last_speech_time = time.time()
+        logger.info("ASR stream started after %s wake; listening for utterance", source)
         await self._transition_to(JarvisState.DIALOG_ACTIVE)
 
     def _feed_kws_shadow_asr(self, pcm: bytes, *, peak: float, rms: float) -> None:
@@ -2067,14 +2068,27 @@ class JarvisStateMachine:
         """
         if self._tts_sentence_epoch != epoch:
             return
+        t0 = time.time()
+        logger.info(
+            "[tts-stream] sentence %d TTS synth start (session=%d, %d chars)",
+            seq,
+            reply_session,
+            len(sentence),
+        )
         try:
             pcm = await self._fetch_tts_pcm(sentence)
         except Exception as exc:
-            logger.error("[tts-stream] sentence %d TTS failed: %s", seq, exc)
+            logger.error("[tts-stream] sentence %d TTS failed after %.0fms: %s", seq, (time.time() - t0) * 1000, exc)
             return
         if self._tts_sentence_epoch != epoch:
             logger.debug("[tts-stream] sentence %d stale (epoch bumped); dropping", seq)
             return
+        logger.info(
+            "[tts-stream] sentence %d TTS ok (%.0fms, %d PCM bytes)",
+            seq,
+            (time.time() - t0) * 1000,
+            len(pcm),
+        )
         try:
             wav = self._wrap_pcm16_wav(pcm, sample_rate=24000)
             audio_b64 = base64.b64encode(wav).decode("ascii")
@@ -2084,6 +2098,12 @@ class JarvisStateMachine:
         if self.on_tts_sentence:
             try:
                 self.on_tts_sentence(sentence, seq, audio_b64, reply_session)
+                logger.info(
+                    "[tts-stream] sentence %d pushed (session=%d, total %.0fms)",
+                    seq,
+                    reply_session,
+                    (time.time() - t0) * 1000,
+                )
             except Exception as exc:
                 logger.warning("[tts-stream] tts_sentence callback failed: %s", exc)
 
