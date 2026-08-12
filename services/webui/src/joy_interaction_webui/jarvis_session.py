@@ -245,6 +245,7 @@ class JarvisSessionManager:
                     session_id,
                     partial.text or "",
                     is_final=bool(getattr(partial, "is_final", False)),
+                    reply_epoch=int(getattr(partial, "reply_epoch", 0) or 0),
                 )
             except Exception as exc:  # pragma: no cover
                 logger.warning("ASR partial broadcast failed for %s: %s", session_id, exc)
@@ -258,7 +259,12 @@ class JarvisSessionManager:
             try:
                 from .server import notify_session_pilot_utterance
 
-                notify_session_pilot_utterance(session_id, text, source="asr")
+                notify_session_pilot_utterance(
+                    session_id,
+                    text,
+                    source="asr",
+                    reply_epoch=self._session_reply_epoch(session_id),
+                )
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "Pilot utterance broadcast failed for %s: %s",
@@ -289,7 +295,14 @@ class JarvisSessionManager:
                 )
                 return
             try:
-                notify_session_llm_reply(session_id, text, source=source)
+                notify_session_llm_reply(
+                    session_id,
+                    text,
+                    source=source,
+                    reply_epoch=self._session_reply_epoch(
+                        session_id, attr="_current_turn_reply_epoch"
+                    ),
+                )
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "LLM reply broadcast failed for %s: %s",
@@ -332,6 +345,22 @@ class JarvisSessionManager:
                 )
 
         return cb
+
+    def _session_reply_epoch(self, session_id: str, attr: str = "_llm_reply_epoch") -> int:
+        """Read a P1 reply-epoch attribute from the session's state machine.
+
+        Used by the WS broadcast callbacks so the payload carries the exact
+        backend generation value (the state machine is the single source of
+        truth for ``_llm_reply_epoch`` / ``_current_turn_reply_epoch``).
+        Returns 0 when the session (or attribute) is unavailable — the
+        front-end treats a missing/0 epoch as "no constraint yet".
+        """
+        session = self._sessions.get(session_id)
+        sm = session.state_machine if session else None
+        try:
+            return int(getattr(sm, attr, 0) or 0)
+        except (TypeError, ValueError):  # pragma: no cover
+            return 0
 
     def get_session(self, session_id: str) -> JarvisSession | None:
         """Get an existing session, or None."""

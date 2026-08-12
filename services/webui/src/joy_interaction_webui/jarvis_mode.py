@@ -466,6 +466,10 @@ class AsrPartial:
     text: str
     is_final: bool = False
     timestamp_ms: float = 0.0
+    # P1: the live ``_llm_reply_epoch`` at the moment this partial was
+    # emitted. The front-end adopts it (``llmReplyGeneration``) so a
+    # barge-in invalidates every llm_reply whose turn started earlier.
+    reply_epoch: int = 0
 
 
 class JarvisStateMachine:
@@ -533,6 +537,16 @@ class JarvisStateMachine:
         self._tts_sentence_epoch: int = 0
         self._tts_reply_seq: int = 0
         self._llm_stream_cancel: bool = False
+        # P1 (late llm_reply suppression). `_llm_reply_epoch` is a monotonic
+        # generation counter bumped once per user turn (in `_send_to_llm`)
+        # and on every barge-in / exit word (`_pause_tts` / `_stop_tts`).
+        # Each turn's llm_reply broadcast carries the epoch captured at its
+        # turn start; a barge-in that bumps the counter therefore expires any
+        # in-flight / not-yet-broadcast reply from an older turn.
+        # `_current_turn_reply_epoch` is set by `_finish_llm_turn` right
+        # before the broadcast so the session callback can tag the WS payload.
+        self._llm_reply_epoch: int = 0
+        self._current_turn_reply_epoch: int = 0
         # v3.37: when webinfer returns decision="delegation", route the
         # delegated question to BackgroundModelService.handle_foreground_response
         # so the same sub-agent fires for voice requests as for video.
@@ -1311,7 +1325,12 @@ class JarvisStateMachine:
 
         if text:
             # Emit partial
-            partial = AsrPartial(text=text, is_final=False, timestamp_ms=now * 1000)
+            partial = AsrPartial(
+                text=text,
+                is_final=False,
+                timestamp_ms=now * 1000,
+                reply_epoch=getattr(self, "_llm_reply_epoch", 0),
+            )
             if self.on_asr_partial:
                 self.on_asr_partial(partial)
 
@@ -1372,7 +1391,12 @@ class JarvisStateMachine:
 
         if text:
             # Emit partial (same as legacy)
-            partial = AsrPartial(text=text, is_final=False, timestamp_ms=now * 1000)
+            partial = AsrPartial(
+                text=text,
+                is_final=False,
+                timestamp_ms=now * 1000,
+                reply_epoch=getattr(self, "_llm_reply_epoch", 0),
+            )
             if self.on_asr_partial:
                 self.on_asr_partial(partial)
 
@@ -1650,6 +1674,10 @@ class JarvisStateMachine:
             self._tts_reply_seq = 0
         if not hasattr(self, "_llm_stream_cancel"):
             self._llm_stream_cancel = False
+        if not hasattr(self, "_llm_reply_epoch"):
+            self._llm_reply_epoch = 0
+        if not hasattr(self, "_current_turn_reply_epoch"):
+            self._current_turn_reply_epoch = 0
 
     @property
     def _tts_playing(self) -> bool:
@@ -1662,8 +1690,7 @@ class JarvisStateMachine:
         """
         self._ensure_tts_stream_state()
         return bool(
-            (self._tts_task is not None and not self._tts_task.done())
-            or self._tts_sentence_tasks
+            (self._tts_task is not None and not self._tts_task.done()) or self._tts_sentence_tasks
         )
 
     async def _stop_tts(self):
@@ -1672,6 +1699,14 @@ class JarvisStateMachine:
         # every in-flight :8985 sentence task, flag the LLM-stream consumer).
         self._ensure_tts_stream_state()
         self._tts_sentence_epoch += 1
+        # P1: expire any in-flight / not-yet-broadcast llm_reply from an
+        # older turn so a late broadcast cannot play over the exit word.
+        self._llm_reply_epoch += 1
+        logger.info(
+            "[llm-reply] epoch bumped to %d (reason=%s)",
+            self._llm_reply_epoch,
+            "exit-word",
+        )
         self._llm_stream_cancel = True
         for task in list(self._tts_sentence_tasks):
             if not task.done():
@@ -1689,6 +1724,15 @@ class JarvisStateMachine:
         # for :8985 synthesis of sentences the user will never hear.
         self._ensure_tts_stream_state()
         self._tts_sentence_epoch += 1
+        # P1: bump the llm_reply epoch so a reply from the interrupted turn
+        # that is still in flight (or not yet broadcast) becomes stale and is
+        # discarded by the front-end's reply_epoch guard.
+        self._llm_reply_epoch += 1
+        logger.info(
+            "[llm-reply] epoch bumped to %d (reason=%s)",
+            self._llm_reply_epoch,
+            "barge-in",
+        )
         self._llm_stream_cancel = True
         for task in list(self._tts_sentence_tasks):
             if not task.done():
@@ -1721,6 +1765,18 @@ class JarvisStateMachine:
         keeps the existing single-shot ``_send_to_llm_non_streaming`` path
         byte-for-byte.
         """
+        # P1: every user turn gets a fresh reply epoch. The value captured
+        # here is carried by this turn's llm_reply broadcast; a barge-in that
+        # bumps ``_llm_reply_epoch`` after this point expires this turn's
+        # reply so the front-end discards it when it finally arrives.
+        self._ensure_tts_stream_state()
+        self._llm_reply_epoch += 1
+        turn_reply_epoch = self._llm_reply_epoch
+        logger.info(
+            "[llm-reply] epoch bumped to %d (reason=%s)",
+            turn_reply_epoch,
+            "turn-start",
+        )
         if (
             interaction_mode == "jarvis"
             and not image_b64
@@ -1730,12 +1786,14 @@ class JarvisStateMachine:
                 text,
                 stream_tts=stream_tts,
                 interaction_mode=interaction_mode,
+                reply_epoch=turn_reply_epoch,
             )
         return await self._send_to_llm_non_streaming(
             text,
             stream_tts=stream_tts,
             image_b64=image_b64,
             interaction_mode=interaction_mode,
+            reply_epoch=turn_reply_epoch,
         )
 
     async def _send_to_llm_non_streaming(
@@ -1745,6 +1803,7 @@ class JarvisStateMachine:
         stream_tts: bool = True,
         image_b64: str | None = None,
         interaction_mode: str = "jarvis",
+        reply_epoch: int | None = None,
     ):
         """Single-shot LLM call (legacy path, unchanged).
 
@@ -1752,6 +1811,9 @@ class JarvisStateMachine:
         JSON response, then optionally triggers TTS with the full text. This
         is the pre-P0-A behavior kept for ``call`` mode, multimodal sends,
         and as the fail-open fallback when streaming errors out.
+
+        ``reply_epoch`` is the P1 turn epoch captured by ``_send_to_llm``; it
+        tags the llm_reply broadcast so the front-end can drop a late reply.
         """
         # v3.24: prepend bounded conversation history so BT-7274 retains
         # short-term context across turns without persisting anything.
@@ -1819,6 +1881,7 @@ class JarvisStateMachine:
             decision=decision,
             delegation_question=delegation_question,
             stream_tts=stream_tts,
+            reply_epoch=reply_epoch,
         )
 
     async def _send_to_llm_streaming(
@@ -1827,24 +1890,25 @@ class JarvisStateMachine:
         *,
         stream_tts: bool = False,
         interaction_mode: str = "jarvis",
+        reply_epoch: int | None = None,
     ):
         """P0-A streaming LLM consumption: decision first, sentence TTS.
 
-        POSTs ``stream: true`` to webinfer's ``/v1/text/chat`` and consumes
-        the NDJSON frames:
-
-          * ``decision`` frame — determines silence / response / delegation
-            (same semantics as the non-streaming path; silence never speaks);
-          * ``content`` frames (decision == ``response``) — fed into a
-            :class:`SentenceBuffer`; each flushed sentence is synthesized
-            (:8985, short single-shot) in a background task and pushed to the
-            browser as a ``tts_sentence`` WS message (seq + session + WAV);
-          * ``done`` frame — full text for history / transcript broadcast.
+        Delegates the actual NDJSON stream consumption + SentenceBuffer
+        flushing + per-sentence TTS wiring to the shared
+        :class:`~.turn_streaming.StreamingTurnConsumer` (spec
+        ``draft-live-interaction-layer.md`` §4.3 — the future live dialog
+        reuses the same consumer). This method keeps the jarvis turn
+        semantics: per-reply session id, sentence-epoch synthesis wiring,
+        fail-open non-streaming retry, and ``_finish_llm_turn`` broadcast.
 
         Fail-open (never lose the reply): if the stream errors before any
         frame, the whole turn is re-run through the non-streaming path; if it
         errors after a decision, the buffered remainder is synthesized and
         the reply is broadcast anyway (logged).
+
+        ``reply_epoch`` is the P1 turn epoch captured by ``_send_to_llm``;
+        it tags the llm_reply broadcast (see ``_finish_llm_turn``).
         """
         import json as _json
 
@@ -1983,6 +2047,7 @@ class JarvisStateMachine:
                     text,
                     stream_tts=stream_tts,
                     interaction_mode=interaction_mode,
+                    reply_epoch=reply_epoch,
                 )
             # Mid-stream failure after a decision: keep what we have (log, do
             # not re-run — sentences may already be playing).
@@ -2032,6 +2097,7 @@ class JarvisStateMachine:
             delegation_question=delegation_question,
             stream_tts=stream_tts,
             force_jarvis_voice=True,
+            reply_epoch=reply_epoch,
         )
 
     def _spawn_sentence_tts(self, sentence: str, seq: int, reply_session: int) -> None:
@@ -2078,7 +2144,12 @@ class JarvisStateMachine:
         try:
             pcm = await self._fetch_tts_pcm(sentence)
         except Exception as exc:
-            logger.error("[tts-stream] sentence %d TTS failed after %.0fms: %s", seq, (time.time() - t0) * 1000, exc)
+            logger.error(
+                "[tts-stream] sentence %d TTS failed after %.0fms: %s",
+                seq,
+                (time.time() - t0) * 1000,
+                exc,
+            )
             return
         if self._tts_sentence_epoch != epoch:
             logger.debug("[tts-stream] sentence %d stale (epoch bumped); dropping", seq)
@@ -2156,6 +2227,7 @@ class JarvisStateMachine:
         delegation_question: str | None,
         stream_tts: bool,
         force_jarvis_voice: bool = False,
+        reply_epoch: int | None = None,
     ) -> None:
         """Shared post-LLM turn completion (delegate, delegation, history, broadcast).
 
@@ -2216,6 +2288,13 @@ class JarvisStateMachine:
         # and tags the transcript as jarvis_voice so the browser does NOT
         # synthesize the full reply again.
         reply_source = "jarvis_voice" if (force_jarvis_voice or stream_tts) else "jarvis_text"
+        # P1: publish the turn's reply epoch on the state machine right before
+        # the broadcast. `_finish_llm_turn` is synchronous from here to the
+        # callback, so the session callback reads exactly this turn's value.
+        self._ensure_tts_stream_state()
+        if reply_epoch is None:
+            reply_epoch = getattr(self, "_llm_reply_epoch", 0)
+        self._current_turn_reply_epoch = reply_epoch
         if self.on_llm_response:
             self.on_llm_response(response, source=reply_source)
 

@@ -876,10 +876,25 @@ limitations under the License.
                     if (typeof event.data === 'string') {
                         const data = JSON.parse(event.data);
                         if (data && data.type === 'llm_reply') {
-                            btLatency.llmReplyAt = performance.now();
-                            renderBtLatency();
-                            appendJarvisToResult(data.text || '', data.source || 'jarvis');
-                            playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' });
+                            // P1 reply_epoch guard: the backend tags every
+                            // llm_reply with the generation of the user turn
+                            // it answers. A barge-in / newer turn raises
+                            // llmReplyGeneration (from asr_partial /
+                            // pilot_utterance payloads), so a late broadcast
+                            // from an older turn is dropped instead of
+                            // rendering/playing over the user's speech.
+                            if (typeof data.reply_epoch === 'number' && data.reply_epoch < llmReplyGeneration) {
+                                console.debug('[llm-reply] stale reply_epoch=' + data.reply_epoch +
+                                    ' < generation=' + llmReplyGeneration + '; dropped');
+                            } else {
+                                if (typeof data.reply_epoch === 'number' && data.reply_epoch >= llmReplyGeneration) {
+                                    llmReplyGeneration = data.reply_epoch;
+                                }
+                                btLatency.llmReplyAt = performance.now();
+                                renderBtLatency();
+                                appendJarvisToResult(data.text || '', data.source || 'jarvis');
+                                playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' });
+                            }
                         } else if (data && data.type === 'tts_sentence') {
                             // P0-A streaming: one sentence's WAV audio. Enqueue
                             // and play strictly in seq order.
@@ -890,6 +905,13 @@ limitations under the License.
                             // so also stop any reply audio that is still
                             // playing (barge-in backstop; idempotent).
                             stopLlmReplyAudio();
+                            // P1: a committed user turn raises the accepted
+                            // generation (the backend bumps its per-turn
+                            // epoch at the same commit point), so an older
+                            // turn's late llm_reply is recognized as stale.
+                            if (typeof data.reply_epoch === 'number' && data.reply_epoch > llmReplyGeneration) {
+                                llmReplyGeneration = data.reply_epoch;
+                            }
                             clearAsrDraft();
                             appendPilotToResult(data.text || '');
                         } else if (data && data.type === 'asr_partial') {
@@ -898,6 +920,13 @@ limitations under the License.
                             // client-first principle — before rendering the
                             // ASR draft. Repeated partials are no-ops.
                             stopLlmReplyAudio();
+                            // P1: adopt the backend's live reply epoch so an
+                            // interrupted turn's late llm_reply is recognized
+                            // as stale (the backend bumps its epoch on the
+                            // barge-in; the following partials carry it).
+                            if (typeof data.reply_epoch === 'number' && data.reply_epoch > llmReplyGeneration) {
+                                llmReplyGeneration = data.reply_epoch;
+                            }
                             // ASR streaming hypothesis: render as a draft
                             // bubble so the operator can see what ASR is
                             // currently thinking (replaces guesswork).
@@ -5192,6 +5221,15 @@ limitations under the License.
         // result that captured an older epoch is discarded so a stale reply
         // can never resume after the user has already barged in.
         let llmReplyEpoch = 0;
+        // P1 reply-generation guard for `llm_reply` broadcasts. This is a
+        // DIFFERENT concept from `llmReplyEpoch` (which guards TTS playback
+        // races): `llmReplyGeneration` is the newest reply_epoch the browser
+        // believes is current, raised ONLY by backend payloads (asr_partial /
+        // pilot_utterance / accepted llm_reply), never bumped locally, so it
+        // mirrors the backend's per-turn counter without drift. A late
+        // llm_reply whose reply_epoch is older is dropped instead of playing
+        // over the user's speech (barge-in / newer turn).
+        let llmReplyGeneration = 0;
         let llmReplyAudioUrl = null;
         // P0-A per-sentence playback queue (tts_sentence WS messages). The
         // browser plays sentences in `seq` order; `llmReplyQueueSession`

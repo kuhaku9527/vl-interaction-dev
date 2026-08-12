@@ -145,11 +145,16 @@ def notify_session_json(session_id, payload):
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
 
 
-def notify_session_llm_reply(session_id, text, source="jarvis"):
+def notify_session_llm_reply(session_id, text, source="jarvis", reply_epoch=0):
     payload = {
         "type": "llm_reply",
         "text": text or "",
         "source": source or "jarvis",
+        # P1: per-turn generation counter captured by the state machine at
+        # turn start. The front-end discards any llm_reply whose reply_epoch
+        # is older than its accepted generation (late broadcast after a
+        # barge-in / newer turn).
+        "reply_epoch": int(reply_epoch or 0),
         "ts": time.time(),
     }
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
@@ -181,21 +186,28 @@ def notify_session_tts_sentence(session_id, text, seq, audio_b64, session):
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
 
 
-def notify_session_pilot_utterance(session_id, text, source="asr"):
+def notify_session_pilot_utterance(session_id, text, source="asr", reply_epoch=0):
     payload = {
         "type": "pilot_utterance",
         "text": text or "",
         "source": source or "asr",
+        # P1: the live llm_reply epoch at commit time. The front-end adopts
+        # it as its accepted generation, so any older llm_reply is dropped.
+        "reply_epoch": int(reply_epoch or 0),
         "ts": time.time(),
     }
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))
 
 
-def notify_session_asr_partial(session_id, text, is_final=False):
+def notify_session_asr_partial(session_id, text, is_final=False, reply_epoch=0):
     payload = {
         "type": "asr_partial",
         "text": text or "",
         "is_final": bool(is_final),
+        # P1: the live llm_reply epoch at speech time. A barge-in (whose
+        # partials carry the post-bump value) raises the front-end's accepted
+        # generation so a late llm_reply from the interrupted turn is dropped.
+        "reply_epoch": int(reply_epoch or 0),
         "ts": time.time(),
     }
     send_to_session(session_id, json.dumps(payload, ensure_ascii=False))

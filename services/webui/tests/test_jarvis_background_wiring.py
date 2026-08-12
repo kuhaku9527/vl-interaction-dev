@@ -104,8 +104,15 @@ def test_llm_callback_does_not_double_route_delegation():
     # an asyncio task internally). Make the fake sync too.
     broadcast: list = []
 
-    def fake_notify_session_llm_reply(session_id, text, source="jarvis"):
-        broadcast.append({"session_id": session_id, "text": text, "source": source})
+    def fake_notify_session_llm_reply(session_id, text, source="jarvis", reply_epoch=0):
+        broadcast.append(
+            {
+                "session_id": session_id,
+                "text": text,
+                "source": source,
+                "reply_epoch": reply_epoch,
+            }
+        )
 
     try:
         # Patch BOTH names: server.notify_session_llm_reply (the canonical
@@ -118,7 +125,12 @@ def test_llm_callback_does_not_double_route_delegation():
             cb("Confirmed.", source="jarvis_voice")
 
         assert broadcast == [
-            {"session_id": "sess-bg-3", "text": "Confirmed.", "source": "jarvis_voice"}
+            {
+                "session_id": "sess-bg-3",
+                "text": "Confirmed.",
+                "source": "jarvis_voice",
+                "reply_epoch": 0,
+            }
         ]
         # Crucially: the callback must NOT trigger background delegation
         # anymore — that path is owned by _send_to_llm via _background_service.
