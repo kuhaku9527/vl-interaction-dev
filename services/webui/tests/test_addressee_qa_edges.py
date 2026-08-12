@@ -589,3 +589,24 @@ def test_frontend_enroll_cancelled_on_live_stop():
     stop = _function_body(html, "stopLiveMode")
     assert "cancelLiveEnroll()" in stop
     assert "liveEnrollActive" in stop
+
+
+def test_live_session_enroll_delegation(monkeypatch):
+    """LiveSession must delegate enroll methods to its state machine (regression:
+    /api/live/enroll called session.start_enroll but LiveSession lacked the passthrough)."""
+    from joy_interaction_webui.jarvis_session import LiveSession
+    from joy_interaction_webui.live_mode import LiveStateMachine
+
+    calls = {"start": 0, "feed": 0, "finish": 0, "cancel": 0}
+    sm = LiveStateMachine.__new__(LiveStateMachine)
+    sm.start_enroll = lambda: (calls.__setitem__("start", calls["start"] + 1), True)[1]
+    sm.feed_enroll_pcm = lambda pcm: calls.__setitem__("feed", calls["feed"] + 1)
+    sm.finish_enroll = lambda: (calls.__setitem__("finish", calls["finish"] + 1), True)[1]
+    sm.cancel_enroll = lambda: calls.__setitem__("cancel", calls["cancel"] + 1)
+    session = LiveSession(session_id="s1", state_machine=sm)
+
+    assert session.start_enroll() is True
+    session.feed_enroll_pcm(b"pcm")
+    assert session.finish_enroll() is True
+    session.cancel_enroll()
+    assert calls == {"start": 1, "feed": 1, "finish": 1, "cancel": 1}

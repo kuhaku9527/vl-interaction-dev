@@ -172,6 +172,22 @@ class LiveSession:
         """Route mic audio to the live state machine."""
         await self.state_machine.feed_audio(pcm)
 
+    def start_enroll(self) -> bool:
+        """Delegate enrollment start to the live state machine."""
+        return self.state_machine.start_enroll()
+
+    def feed_enroll_pcm(self, pcm: bytes) -> None:
+        """Delegate enrollment PCM buffering to the live state machine."""
+        self.state_machine.feed_enroll_pcm(pcm)
+
+    def finish_enroll(self) -> bool:
+        """Delegate enrollment finalize to the live state machine."""
+        return self.state_machine.finish_enroll()
+
+    def cancel_enroll(self) -> None:
+        """Delegate enrollment cancel to the live state machine."""
+        self.state_machine.cancel_enroll()
+
     def attach_audio_output(self, audio_output) -> None:
         """Interface parity with JarvisSession; live replies play in-browser.
 
