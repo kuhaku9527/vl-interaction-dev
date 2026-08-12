@@ -1916,6 +1916,22 @@ class JarvisStateMachine:
                             cancelled = True
                             break
                         if ftype == "decision":
+                            if (
+                                decision_received
+                                and frame.get("decision") == "delegation"
+                            ):
+                                # Corrected decision: the taught delegation
+                                # format is ``</response> <note> </delegation>
+                                # <question>``, so a provisional response is
+                                # re-judged once the delegation tag arrives.
+                                # Drop buffered note content — a delegation
+                                # must not be spoken as TTS.
+                                sentence_buffer = SentenceBuffer()
+                                full_response = ""
+                                logger.info(
+                                    "[tts-stream] corrected to delegation (session=%d)",
+                                    reply_session,
+                                )
                             decision_received = True
                             decision = frame.get("decision") or "silence"
                             delegation_question = frame.get("delegation_question")
@@ -1928,17 +1944,20 @@ class JarvisStateMachine:
                             token = frame.get("token") or ""
                             if not token:
                                 continue
-                            full_response += token
+                            # Content only accumulates while the decision is
+                            # response (delegation question / silence
+                            # whitespace never reaches the sentence buffer).
                             if decision != "response":
                                 continue
+                            full_response += token
                             sentence = sentence_buffer.add_token(token)
                             if sentence is not None:
                                 self._spawn_sentence_tts(sentence, seq, reply_session)
                                 seq += 1
                         elif ftype == "done":
                             done_received = True
-                            if frame.get("full_text"):
-                                full_response = frame["full_text"]
+                            if "full_text" in frame:
+                                full_response = frame["full_text"] or ""
                             if frame.get("decision"):
                                 decision = frame["decision"]
                             if frame.get("delegation_question") is not None:
@@ -1953,17 +1972,20 @@ class JarvisStateMachine:
                 decision_received,
                 exc,
             )
-            if not frames_received:
-                # Nothing was consumed — clean retry through the non-streaming
-                # path so the reply is never lost (and no audio is doubled).
+            if not decision_received:
+                # No decision was ever delivered (transport failure, HTTP
+                # error, or an error frame BEFORE the decision frame): clean
+                # retry through the non-streaming path so the reply is never
+                # lost — nothing was spoken, so there is no double-play risk.
                 logger.info("[tts-stream] fail-open -> non-streaming retry")
                 return await self._send_to_llm_non_streaming(
                     text,
                     stream_tts=stream_tts,
                     interaction_mode=interaction_mode,
                 )
-            # Mid-stream failure: keep what we have (log, do not re-run).
-            if decision_received and decision == "response":
+            # Mid-stream failure after a decision: keep what we have (log, do
+            # not re-run — sentences may already be playing).
+            if decision == "response":
                 remaining = sentence_buffer.flush_remaining()
                 if remaining:
                     self._spawn_sentence_tts(remaining, seq, reply_session)

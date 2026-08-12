@@ -255,6 +255,64 @@ async def test_streaming_delegation_routes_to_background_and_skips_tts():
         server.sessions.pop("stream-delegation", None)
 
 
+@pytest.mark.asyncio
+async def test_streaming_corrected_delegation_taught_format():
+    """Taught format ``</response> note </delegation> question``.
+
+    webinfer first commits a provisional ``response`` (the model emits
+    ``</response>`` before the note), then corrects to ``delegation`` once
+    ``</delegation>`` arrives. jarvis must: never speak the question, drop the
+    buffered note, fire BackgroundModelService, and broadcast an empty reply
+    (matching the non-streaming delegation behavior).
+    """
+    from joy_interaction_webui import server
+
+    bg = SimpleNamespace(enabled=True, _closed=False, handle_foreground_response=Mock())
+    server.sessions["stream-corrected-delegation"] = {
+        "background_service": bg,
+        "vlm_service": SimpleNamespace(),
+    }
+    try:
+        sm = _build_sm()
+        sm._background_service = bg
+        sentences: list = []
+        sm.on_tts_sentence = lambda text, seq, audio_b64, session: sentences.append(
+            (seq, text)
+        )
+        with patch.object(sm, "_fetch_tts_pcm", new=AsyncMock(return_value=b"\x00\x00" * 100)):
+            lines = [
+                _frame(type="decision", decision="response", delegation_question=None),
+                _frame(type="content", token="Let me check"),
+                _frame(
+                    type="decision",
+                    decision="delegation",
+                    delegation_question="what is 2+2",
+                    corrected=True,
+                ),
+                _frame(
+                    type="done",
+                    decision="delegation",
+                    full_text="",
+                    delegation_question="what is 2+2",
+                ),
+            ]
+            client = FakeAsyncClient(stream_response=FakeStreamResponse(lines))
+            with patch("httpx.AsyncClient", return_value=client):
+                await sm._send_to_llm_streaming("what is 2+2")
+
+        await asyncio.gather(*list(sm._tts_sentence_tasks), return_exceptions=True)
+        # The delegation question is never spoken as TTS.
+        assert all("2+2" not in (t or "") for _, t in sentences)
+        bg.handle_foreground_response.assert_called_once()
+        call = bg.handle_foreground_response.call_args
+        metrics = call.kwargs.get("metrics") or {}
+        assert metrics.get("delegation_question") == "what is 2+2"
+        # Nothing spoken/broadcast for a delegation (non-streaming parity).
+        assert sm._conv_history[-1] == ("assistant", "")
+    finally:
+        server.sessions.pop("stream-corrected-delegation", None)
+
+
 # ---------------------------------------------------------------------------
 # Fail-open
 # ---------------------------------------------------------------------------

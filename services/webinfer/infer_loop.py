@@ -144,6 +144,15 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
         after a ``response`` decision; silence / delegation produce no
         content frames (silence has nothing to say; the delegation question
         is carried by the decision frame and must not be spoken as TTS).
+      * **Delegation-taught format hardening**: the system prompt teaches
+        ``</response> <note> </delegation> <question>`` — ``</response>``
+        PRECEDES the delegation tag. ``parse_model_decision`` gives a
+        delegation tag ANYWHERE priority (documented hardening); the frame
+        builder mirrors it: a ``response`` commit at the first marker is
+        provisional, and a later ``</delegation>`` / ``<delegation>`` in the
+        stream re-judges the whole turn as delegation — the frame list is
+        rebuilt as a single delegation decision frame (no content frames, so
+        the question is never spoken as TTS).
       * Empty / no-token deltas are skipped (never emitted as a frame).
       * If the stream ends before any complete marker, the accumulated text
         is failed-open through :func:`parse_model_decision` (which maps a
@@ -151,8 +160,9 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
     """
     frames: list[dict[str, Any]] = []
     pending = ""
+    raw_prefix = ""  # accumulated text up to and including the FIRST marker
+    raw_tail = ""  # content after the first marker (watched for a late delegation tag)
     decision: str | None = None
-    clean_text = ""
     delegation_question: str | None = None
     for delta in deltas:
         if not delta:
@@ -162,6 +172,7 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
             if _find_first_decision_marker(pending) is None:
                 continue
             decision, clean_text, delegation_question = parse_model_decision(pending)
+            raw_prefix = pending
             frames.append(
                 {
                     "type": "decision",
@@ -170,10 +181,33 @@ def build_stream_frames(deltas: Iterable[str]) -> list[dict[str, Any]]:
                 }
             )
             if decision == "response" and clean_text:
+                raw_tail += clean_text
                 frames.append({"type": "content", "token": clean_text})
             pending = ""
         elif decision == "response":
-            frames.append({"type": "content", "token": delta})
+            raw_tail += delta
+            if _find_first_decision_marker(raw_tail) is not None:
+                # Late delegation tag (taught format). Re-judge the whole
+                # turn; the question must never stream as content.
+                decision, _clean, delegation_question = parse_model_decision(
+                    raw_prefix + raw_tail
+                )
+                frames = [
+                    {
+                        "type": "decision",
+                        "decision": "delegation",
+                        "delegation_question": delegation_question,
+                    }
+                ]
+            else:
+                frames.append({"type": "content", "token": delta})
+        elif decision == "delegation":
+            # The delegated question may arrive in later deltas; keep the
+            # decision frame's question fresh so it is never truncated.
+            raw_tail += delta
+            _d, _c, delegation_question = parse_model_decision(raw_prefix + raw_tail)
+            if frames and frames[0].get("type") == "decision":
+                frames[0]["delegation_question"] = delegation_question
     if decision is None:
         decision, clean_text, delegation_question = parse_model_decision(pending)
         frames.append(
@@ -573,6 +607,8 @@ class InferLoopMixin:
 
         raw_parts: list[str] = []
         pending = ""
+        raw_prefix = ""  # accumulated text up to and including the FIRST marker
+        raw_tail = ""  # content after the first marker (watched for a late delegation tag)
         decision: str | None = None
         clean_text = ""
         full_text = ""
@@ -589,18 +625,43 @@ class InferLoopMixin:
                 if _find_first_decision_marker(pending) is None:
                     continue
                 decision, clean_text, delegation_question = parse_model_decision(pending)
+                raw_prefix = pending
                 yield {
                     "type": "decision",
                     "decision": decision,
                     "delegation_question": delegation_question,
                 }
                 if decision == "response" and clean_text:
+                    raw_tail += clean_text
                     full_text += clean_text
                     yield {"type": "content", "token": clean_text}
                 pending = ""
             elif decision == "response":
+                raw_tail += delta
                 full_text += delta
-                yield {"type": "content", "token": delta}
+                if _find_first_decision_marker(raw_tail) is not None:
+                    # Late delegation tag (taught format: ``</response> <note>
+                    # </delegation> <question>``). Re-judge the whole turn —
+                    # the question must never stream as content. Content that
+                    # already streamed for the note cannot be recalled here;
+                    # jarvis drops its buffered remainder on the correction.
+                    decision, _clean, delegation_question = parse_model_decision(
+                        raw_prefix + raw_tail
+                    )
+                    full_text = ""
+                    yield {
+                        "type": "decision",
+                        "decision": "delegation",
+                        "delegation_question": delegation_question,
+                        "corrected": True,
+                    }
+                else:
+                    yield {"type": "content", "token": delta}
+            elif decision == "delegation":
+                # The delegated question may arrive in later deltas; keep
+                # parsing so the done frame carries the complete question.
+                raw_tail += delta
+                _d, _c, delegation_question = parse_model_decision(raw_prefix + raw_tail)
 
         raw_text = "".join(raw_parts)
         if decision is None:
@@ -615,6 +676,15 @@ class InferLoopMixin:
             if decision == "response" and clean_text:
                 full_text += clean_text
                 yield {"type": "content", "token": clean_text}
+
+        # The done frame mirrors the unified parser on the FULL raw text: a
+        # delegation tag ANYWHERE wins (late tag after </response>), and a
+        # delegation turn never speaks anything.
+        final_decision, _final_clean, final_delegation_question = parse_model_decision(raw_text)
+        if final_decision == "delegation":
+            decision = "delegation"
+            delegation_question = final_delegation_question
+            full_text = ""
 
         usage_dict = usage.model_dump() if getattr(usage, "model_dump", None) else None
         # Keep qa_history consistent with the non-streaming text path
