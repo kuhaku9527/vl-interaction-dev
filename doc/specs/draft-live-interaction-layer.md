@@ -1,8 +1,16 @@
 # Spec Draft：Phase C — live 可交互层（接入设计 v3）
 
-> 生命周期: **草稿 v3**（2026-08-12）——Phase A/B 已实现，Phase C 为当前主线；走 草稿→设计评审→实现→QA→真机 流程
+> 生命周期: **草稿 v4**（2026-08-12 20:2x）——C.A 已实现（commit b08c856）+ 三项优化已落地（00a84eb/5976581/5ae9401/2f3ec43）；走 草稿→设计评审→实现→QA→真机 流程
 > 上游: `draft-unified-turn-controller.md`（v2 状态机 + live 预设）+ `draft-turn-controller-integration.md`（v2 三阶段蓝图）+ `draft-tts-streaming-optimization.md`（P0-A 流式链路）
 > 用户全局观: **live 为当前主线，jarvis 模式之后搞**（避免局部优化崩坏全局）；最终验证"直播=核心、jarvis=配置矩阵"
+
+---
+
+## §0 战略决策（2026-08-12 20:1x，用户拍板）
+
+- **不推倒重来，继续收敛式重构**：底层选型已验证正确（块0 + 交叉验证 + 源项目对照三重确认：级联流式 = 2026 生产默认；GPU(LLM)+CPU(语音侧)+云TTS 混合部署 = 现实最优），推倒重来成本/风险极高且最终架构与收敛式重构趋同。
+- **收敛终点（定死，防无限重构）**：统一 Turn Controller 跑通 live **C.B**（VLM 持续看画面 + 主动搭话）→ jarvis 收敛到同一核心 → 架构层达到"干净态"（共享核心 + 配置矩阵 + 流式链路）。此后代码库不再有"打补丁"痕迹。
+- **部署形态真值**（run-windows.ps1:372 `-ngl 999` 实证）：LLM/VLM 8.19B = **GPU**（VRAM~7GB）；语音侧（ASR int8 CPU / KWS CPU / VAD·Smart Turn CPU / 可选云端 ASR）= CPU；TTS = 云端 MiniMax。**"纯 CPU"仅指语音侧**，禁止笼统表述（见 2026-08-12 记忆更正段）。
 
 ---
 
@@ -17,9 +25,9 @@
 
 ## §2 目标（Phase C，分两步）
 
-- **C.A 常驻监听形态**（本轮主线）：前端 live 入口按钮 → 进入 live 会话 → **免唤醒词**（wake_gate=False）常驻监听 → 说话即 VAD→ASR→LLM(live)→流式 TTS → 回复；含打断/冷却。复用 jarvis 会话框架 + P0-A 流式链路。
-- **C.B 完整直播形态**（后续）：VLM 持续看画面 + 主动搭话 + 沉默判断自主发言（需 video 帧决策循环接入）。
-- **地基 P1**：后端抑制迟到旧 llm_reply（Known Issue，live/jarvis 共用流式广播正确性）。
+- **C.A 常驻监听形态**（✅ 已实现，commit b08c856 + QA PASS）：前端 live 入口 → 免唤醒词常驻监听 → 说话即 VAD→ASR→LLM(live)→流式 TTS → 回复；含打断/冷却。**三项体验优化已落地**（见 §3.2 决策留痕）。
+- **C.B 完整直播形态**（下一步主线）：VLM 持续看画面 + 主动搭话 + 沉默判断自主发言（需 video 帧决策循环接入）。
+- **地基 P1**（✅ 已实现，commit 59201d3）：后端抑制迟到旧 llm_reply（reply_epoch 守卫，live/jarvis 共用流式广播正确性）。
 
 ## §3 架构决策（本轮裁定，供评审）
 
@@ -30,6 +38,29 @@
 3. **音频链路复用**：浏览器 WebRTC → `feed_audio(pcm)`（同一入口），live 状态机内部把音频帧喂 VAD（vad_bypass.is_speech）→ ASR（JarvisASR 复用）→ endpoint → `_send_to_llm(interaction_mode="live", stream=True)`。
 4. **P1 地基先行**：后端 llm_reply 广播带 reply_epoch/session 守卫，barge-in 时抑制迟到旧 llm_reply（live/jarvis 共用正确性，先修再搭 live 播放）。
 5. **PRE_SPEECH 填充语**：P1 后置（本轮不启用，保持 jarvis 同款行为面）。
+
+### 3.1 模式互斥 UI（用户决策 2026-08-12 18:5x，已实现 00a84eb+2f3ec43）
+
+- **用户明确**：不需要 jarvis+live 双开（"没这个需求"）；UI 上**区分与限制**（显式单选）；**不要自动切换**（"自动切换是空需求，人类没有这个操作习惯"）。
+- **实现**：btListenBtn + liveModeBtn 包进 `role="radiogroup"` 单选组（role=radio/aria-checked）；`selectLiveMode`/`selectBtListenMode`：点击 A 若 B 激活先停 B 再启 A（用户主动点击导致的切换 = 单选固有语义）；**无任何自动切换路径**（无 timer/state watcher）；快速来回点击竞态用 re-check guard（await stop-other 后重查另一模式 active/starting）修复。
+- **后端双开能力保留**（create_session mode 参数 + _live_sessions dict 不动）——仅前端 UI 层限制。
+
+### 3.2 2026-08-12 已落地决策留痕（含 commit）
+
+| 决策 | 内容 | commit |
+|---|---|---|
+| P1 迟到 llm_reply 抑制 | reply_epoch 守卫（turn-start/barge-in/exit 三处 bump；前端只由后端抬升不自增） | 59201d3 |
+| P0-A 流式共享抽取 | StreamingTurnConsumer → turn_streaming.py（jarvis 行为零变化） | 667e302 |
+| 模式互斥 UI | radiogroup 显式单选 + re-check 竞态守卫 | 00a84eb / 2f3ec43 |
+| 日志心跳分离 | `_is_heartbeat_path()` 心跳降级 DEBUG（失败≥400 仍 INFO）+ `JOYAI_LOG_LEVEL` 可恢复 | 5976581 |
+| 分句粒度修复 | SentenceBuffer 逗号次级切分（`，、；;,`，max_sentence_chars=80，短句不切碎，jarvis/live 共用） | 5ae9401 |
+| 部署形态更正 | "纯 CPU"→"GPU(LLM)+CPU(语音侧)+云TTS"（run-windows.ps1 -ngl 999 实证） | e63651b |
+
+### 3.3 说话对象判定（addressee detection）——调研中，决策待定
+
+- 用户问题：模型怎么判断"在跟它说话 vs 自言自语"？块0/块3 未覆盖（turn-taking≠addressee detection）；源项目无先例。
+- 云端专项调研进行中（5 维度：场景建模/声学 speaker embedding/语义 LLM 判定/混合/工程决策）。
+- **已定代价偏好**：误响应（AI 乱插话）更不能接受——"宁可漏、不可乱插"（免唤醒常驻监听下乱插话极烦人）。调研结果到后据此落地方案。
 
 ## §4 C.A 详细设计
 
