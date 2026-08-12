@@ -44,7 +44,7 @@
 ### Phase C：live 接入——无唤醒门常驻 + 主动搭话
 - 用 turn_controller（live 预设，wake_gate=False）驱动 live 路径：常驻 LISTENING → USER_SPEAKING → 决策（复用 webinfer decision token）→ SPEAKING，含打断/冷却。
 - 与现有 live 三判断（webinfer 决策 token 驱动）的关系：**决策 token 仍是 L3 语义判定源**（核心 IP 不动），turn_controller 提供**状态机骨架与节奏控制**（何时进/出 LISTENING、打断、冷却、PRE_SPEECH 填充语）。
-- 验收：直播模式主动搭话/打断节奏（块3 目标：打断响应 <200ms 目标值，纯 CPU 可达性实测）；jarvis 回归不受影响。
+- 验收：直播模式主动搭话/打断节奏（块3 目标：打断响应 <200ms 目标值，GPU(LLM)+CPU(语音侧) 混合部署可达性实测）；jarvis 回归不受影响。
 
 ## §3 事件桥接设计（原型 ↔ 现有管线）
 

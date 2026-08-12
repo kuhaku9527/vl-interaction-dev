@@ -19,7 +19,7 @@
 ## §2 范围与负面约束
 
 - **做**：统一状态机 v2 + 7 场景配置矩阵；Sentence Buffer / LLM 超时三层设计；与 jarvis/live/Smart Turn 的收敛映射。
-- **不做**：不实现代码（待原型）；**不推翻 ADR0006 决策 token**（分类头方案否决——纯 CPU llama.cpp 不可行且逆转核心 IP）；不引入 LiveKit Turn Detector（本地 Smart Turn 已音频原生，无需替换）；不引入两层 HSM 嵌套（单机单会话，扁平足够）；不实现 7 场景中未映射的场景（仅入矩阵）。
+- **不做**：不实现代码（待原型）；**不推翻 ADR0006 决策 token**（分类头方案否决——CPU-only llama.cpp 分类头不可行且逆转核心 IP）；不引入 LiveKit Turn Detector（本地 Smart Turn 已音频原生，无需替换）；不引入两层 HSM 嵌套（单机单会话，扁平足够）；不实现 7 场景中未映射的场景（仅入矩阵）。
 
 ## §3 方案
 
@@ -77,7 +77,7 @@
 > **映射修正（QA 交叉验证 2026-08-12 裁定）**：项目 live 模式是"陪伴型双向实时对话"（主动搭话+快打断），应映射**实时对话**参数族（silence 400-700 / 打断开），**非**"单向直播"（主播输出、听众只听，silence 1000-1500 / 打断关）。单向直播列为预留场景。jarvis 模式（唤醒门）对应语音助手族。
 
 - **三预设**（采纳 Vapi 思想）：Aggressive（实时对话，wait ~200ms）/ Normal（语音助手 ~800ms）/ Conservative（~2700ms，预留）。
-- **LLM 总生成超时裁定（QA 2026-08-12）**：`llm_total_timeout_ms=10s`（与块3 参考实现一致，纯 CPU 8B 模型长回复合理）；草稿原"5s"为块3 主报告推荐值，更新为 10s。
+- **LLM 总生成超时裁定（QA 2026-08-12）**：`llm_total_timeout_ms=10s`（与块3 参考实现一致，GPU+CPU 混合部署下长回复余量更充足）；草稿原"5s"为块3 主报告推荐值，更新为 10s。
 - 动态切换：条件切换（多人→会议）作 P2。
 
 ### 3.4 工程落地（块3 修正点 5，P0 采纳）
@@ -86,7 +86,7 @@
 2. **LLM 超时三层**（P0）：TTFT>500ms → PRE_SPEECH 填充语（"让我想想…"）；总生成>10s → fallback；连续 3 次 → 降级规则引擎。
 3. **四级降级**（P1，与本地 fail-open 传统一致）：完整链 → 去 L3 → 去 L2 → WebRTC VAD + 固定超时。
 4. **可观测性**（P1）：结构化为 OTel 预留；turn_decision_latency / e2e_latency / barge_in_count。
-5. **KV Cache 预热**（P2）：llama.cpp prefix caching 验证后定；vLLM 方案不适用（纯 CPU）。
+5. **KV Cache 预热**（P2）：llama.cpp prefix caching 验证后定；vLLM 方案不适用（当前为 llama.cpp 部署）。
 
 ## §4 Harness / 验证
 
