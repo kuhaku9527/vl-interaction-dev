@@ -5246,6 +5246,11 @@ limitations under the License.
         // on the other mode button — clicking one mode stops the other first.
         // There is deliberately NO automatic switch path (no timer, state
         // watcher, or status callback ever toggles a mode on its own).
+        // Each selector re-checks the other mode's active/starting flags right
+        // after its awaited stop-other call: a rapid toggle can re-start the
+        // other mode while the stop fetch is in flight, and the losing handler
+        // must give up so both modes can never run at once (single-mode
+        // invariant, PRD mutual exclusion).
         // -------------------------------------------------------------------
         async function selectBtListenMode() {
             if (btListening || btListeningStarting) {
@@ -5254,6 +5259,9 @@ limitations under the License.
             }
             if (liveModeActive || liveModeStarting) {
                 await stopLiveMode();
+                if (liveModeActive || liveModeStarting) {
+                    return;
+                }
             }
             await startBtListening();
         }
@@ -5265,6 +5273,9 @@ limitations under the License.
             }
             if (btListening || btListeningStarting) {
                 await stopBtListening();
+                if (btListening || btListeningStarting) {
+                    return;
+                }
             }
             await startLiveMode();
         }
