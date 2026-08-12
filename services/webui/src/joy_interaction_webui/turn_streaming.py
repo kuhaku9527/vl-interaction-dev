@@ -77,6 +77,8 @@ class StreamingTurnConsumer:
         max_tokens: int = 200,
         temperature: float = 0.7,
         timeout_s: float = 30.0,
+        max_sentence_chars: int = 80,
+        comma_split_enabled: bool = True,
         on_sentence: Callable[[str, int, int], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
         stream_logger: logging.Logger | None = None,
@@ -88,6 +90,8 @@ class StreamingTurnConsumer:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.timeout_s = timeout_s
+        self.max_sentence_chars = max_sentence_chars
+        self.comma_split_enabled = comma_split_enabled
         self.on_sentence = on_sentence
         self.is_cancelled = is_cancelled
         self._log = stream_logger or logger
@@ -126,7 +130,10 @@ class StreamingTurnConsumer:
         messages = self.build_messages(text)
         history_turns = len(self.history_snapshot) // 2
 
-        sentence_buffer = SentenceBuffer()
+        sentence_buffer = SentenceBuffer(
+            max_sentence_chars=self.max_sentence_chars,
+            comma_split_enabled=self.comma_split_enabled,
+        )
         seq = 0
         full_response = ""
         decision = "silence"
@@ -188,7 +195,10 @@ class StreamingTurnConsumer:
                             # re-judged once the delegation tag arrives.
                             # Drop buffered note content — a delegation
                             # must not be spoken as TTS.
-                            sentence_buffer = SentenceBuffer()
+                            sentence_buffer = SentenceBuffer(
+                                max_sentence_chars=self.max_sentence_chars,
+                                comma_split_enabled=self.comma_split_enabled,
+                            )
                             full_response = ""
                             self._log.info(
                                 "[tts-stream] corrected to delegation (session=%d)",

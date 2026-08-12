@@ -46,6 +46,12 @@ logger = logging.getLogger("joyai.turn_controller")
 #: of a known abbreviation (see ``FALSE_POSITIVES``).
 SENTENCE_ENDINGS: re.Pattern[str] = re.compile(r"[.!?。！？\n]")
 
+#: Secondary split characters (Chinese comma / enumeration comma / semicolons,
+#: plus ASCII comma/semicolon for mixed text). Used ONLY when a long buffer
+#: (> ``max_sentence_chars``) has no hard sentence ending — conservative:
+#: short sentences are never split at commas, so short phrases stay whole.
+COMMA_SPLIT_CHARS: frozenset[str] = frozenset({"，", "、", "；", ";", ","})
+
 #: Abbreviations whose trailing dot must NOT be treated as a sentence end.
 FALSE_POSITIVES: frozenset[str] = frozenset(
     {
@@ -86,6 +92,13 @@ class SentenceBuffer:
         flush on its own — it is merged into the following text.
       * When the buffer reaches ``max_buffer_chars`` without a boundary, it
         is force-flushed (returns everything accumulated).
+      * When the buffer exceeds ``max_sentence_chars`` without a hard
+        sentence ending AND ``comma_split_enabled``, it is split at the
+        closest comma (Chinese comma / enumeration comma / fullwidth
+        semicolon, or ASCII semicolon/comma) so a long comma-connected
+        Chinese reply is spoken in ~``max_sentence_chars`` chunks instead of
+        one huge block. Chunks shorter than ``min_sentence_length`` are never
+        split (avoids over-fragmentation).
       * ``should_flush_on_timeout()`` tells the caller a flush is overdue
         (``flush_on_timeout_ms`` since the last token); the caller then calls
         ``flush_remaining()``.
@@ -96,11 +109,15 @@ class SentenceBuffer:
         min_sentence_length: int = 10,
         max_buffer_chars: int = 500,
         flush_on_timeout_ms: int = 500,
+        max_sentence_chars: int = 80,
+        comma_split_enabled: bool = True,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self.min_sentence_length = min_sentence_length
         self.max_buffer_chars = max_buffer_chars
         self.flush_on_timeout_ms = flush_on_timeout_ms
+        self.max_sentence_chars = max_sentence_chars
+        self.comma_split_enabled = comma_split_enabled
         self._clock: Callable[[], float] = clock or time.monotonic
         self._buffer: str = ""
         self._last_token_ms: float = 0.0
@@ -144,7 +161,37 @@ class SentenceBuffer:
 
         if len(self._buffer) >= self.max_buffer_chars:
             return self.flush_remaining()
+
+        # Secondary split: a long buffer without a hard sentence ending is cut
+        # at the closest comma so Chinese long replies stream in ~80-char
+        # chunks instead of one huge TTS synthesis (see _find_comma_split).
+        if self.comma_split_enabled and len(self._buffer) >= self.max_sentence_chars:
+            split_at = self._find_comma_split()
+            if split_at is not None:
+                candidate = self._buffer[: split_at + 1]
+                self._buffer = self._buffer[split_at + 1 :]
+                self._last_scan_pos = 0
+                return candidate
         return None
+
+    def _find_comma_split(self) -> int | None:
+        """Locate a conservative comma split point inside the buffer.
+
+        Only called when the buffer exceeds ``max_sentence_chars`` without a
+        hard sentence ending. Prefers the comma nearest to (but not beyond)
+        ``max_sentence_chars`` so flushed chunks land near the target size;
+        falls back to the first valid comma when every comma lies beyond the
+        window. Chunks shorter than ``min_sentence_length`` are never split,
+        so short comma-connected phrases stay whole until a real ending.
+        """
+        candidates: list[int] = []
+        for i, ch in enumerate(self._buffer):
+            if ch in COMMA_SPLIT_CHARS and i + 1 >= self.min_sentence_length:
+                candidates.append(i)
+        if not candidates:
+            return None
+        within_window = [i for i in candidates if i < self.max_sentence_chars]
+        return within_window[-1] if within_window else candidates[0]
 
     def flush_remaining(self) -> str | None:
         """Return and clear any un-flushed text (``None`` if buffer empty)."""

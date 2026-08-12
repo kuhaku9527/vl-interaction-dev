@@ -139,6 +139,33 @@ def test_flushes_sentences_in_order_and_returns_full_text():
     assert result.reply_session == 42
 
 
+def test_long_chinese_reply_splits_at_commas():
+    """A long comma-connected Chinese reply (no hard ending) is flushed in
+    ~max_sentence_chars chunks instead of one huge block (the 2026-08-12
+    sentence-granularity fix)."""
+    sentences: list = []
+    consumer = _consumer(
+        on_sentence=lambda s, seq, rs: sentences.append((seq, s.strip())),
+        max_sentence_chars=20,
+    )
+    full_text = "今天天气很好，我们一起去公园散步，然后回家吃饭，再去看一场电影，"
+    lines = [
+        _frame(type="decision", decision="response", delegation_question=None),
+        _frame(type="content", token="今天天气很好，我们一起去公园散步，"),
+        _frame(type="content", token="然后回家吃饭，再去看一场电影，"),
+        _frame(type="done", decision="response", full_text=full_text, delegation_question=None),
+    ]
+    result = _run(consumer, lines, reply_session=7)
+    assert [s[0] for s in sentences] == [0, 1]
+    assert [s[1] for s in sentences] == [
+        "今天天气很好，我们一起去公园散步，",
+        "然后回家吃饭，再去看一场电影，",
+    ]
+    assert result.sentence_count == 2
+    assert result.full_response == full_text
+    assert result.cancelled is False
+
+
 def test_silence_never_flushes_sentences():
     sentences: list = []
     consumer = _consumer(on_sentence=lambda s, seq, rs: sentences.append(seq))

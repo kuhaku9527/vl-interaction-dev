@@ -386,6 +386,58 @@ def test_sentence_buffer_flush_on_timeout():
     assert not buf.should_flush_on_timeout()
 
 
+def test_sentence_buffer_comma_split_when_long():
+    """A long comma-connected Chinese reply (no hard ending) splits at the
+    comma nearest to max_sentence_chars instead of accumulating to one block."""
+    buf = SentenceBuffer(max_sentence_chars=20)
+    out = buf.add_token("今天天气很好，我们一起去公园散步，然后回家吃饭")
+    assert out == "今天天气很好，我们一起去公园散步，"
+    assert buf.text == "然后回家吃饭"
+    assert buf.flush_remaining() == "然后回家吃饭"
+
+
+def test_sentence_buffer_comma_does_not_split_short_text():
+    """Short sentences (<= max_sentence_chars) are never cut at a comma."""
+    buf = SentenceBuffer()
+    assert buf.add_token("你好，我叫小明，很高兴认识你。") == "你好，我叫小明，很高兴认识你。"
+    assert buf.is_empty
+
+
+def test_sentence_buffer_comma_split_falls_back_beyond_window():
+    """When every comma lies beyond max_sentence_chars, the first valid comma
+    is used so the buffer still breaks instead of growing unbounded."""
+    buf = SentenceBuffer(max_sentence_chars=10, min_sentence_length=5)
+    out = buf.add_token("一二三四五六七八九十，十一")
+    assert out == "一二三四五六七八九十，"
+    assert buf.text == "十一"
+
+
+def test_sentence_buffer_comma_split_can_be_disabled():
+    buf = SentenceBuffer(max_sentence_chars=20, comma_split_enabled=False)
+    assert buf.add_token("今天天气很好，我们一起去公园散步，然后回家吃饭") is None
+    assert buf.text == "今天天气很好，我们一起去公园散步，然后回家吃饭"
+
+
+def test_sentence_buffer_no_comma_keeps_buffering():
+    """Without a comma the secondary split cannot fire; text stays buffered."""
+    buf = SentenceBuffer(max_sentence_chars=20, max_buffer_chars=50)
+    text = "这是一个完全没有标点符号的长句子没有逗号"
+    assert buf.add_token(text) is None
+    assert buf.text == text
+
+
+def test_sentence_buffer_comma_split_repeated_across_tokens():
+    """Streamed tokens keep producing ~max_sentence_chars chunks at commas."""
+    buf = SentenceBuffer(max_sentence_chars=20)
+    # 17 chars < threshold: buffers without splitting.
+    assert buf.add_token("今天天气很好，我们一起去公园散步，") is None
+    # Buffer now 31 chars -> split at the comma nearest to (<=) 20.
+    assert buf.add_token("然后回家吃饭，再去看一场电影，") == "今天天气很好，我们一起去公园散步，"
+    # Remainder (14 chars) is below the threshold again; a short tail buffers.
+    assert buf.add_token("回家") is None
+    assert buf.flush_remaining() == "然后回家吃饭，再去看一场电影，回家"
+
+
 def test_sentence_ending_regex_matches_documented_set():
     for ch in ".!?。！？\n":
         assert SENTENCE_ENDINGS.fullmatch(ch)
