@@ -515,6 +515,31 @@ class JarvisStateMachine:
             "yes",
         )
 
+        # Turn Controller shadow (Phase A: observe-only). Default OFF via the
+        # JARVIS_TURN_SHADOW_ENABLED env gate — when off, no shadow is created
+        # and jarvis behavior is byte-for-byte unchanged. Fail-open: any init
+        # error only logs, never breaks jarvis.
+        self._turn_shadow = None
+        if os.environ.get("JARVIS_TURN_SHADOW_ENABLED", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            try:
+                from .turn_controller import TurnConfig, TurnController
+                from .turn_controller_shadow import ShadowTurnController
+
+                self._turn_shadow = ShadowTurnController(
+                    TurnController(TurnConfig.jarvis()),
+                    shadow_enabled=True,
+                    logger=logger,
+                )
+                logger.info("[turn-shadow] shadow enabled (JARVIS_TURN_SHADOW_ENABLED)")
+            except Exception as exc:
+                logger.warning("[turn-shadow] shadow init failed; running without it: %s", exc)
+                self._turn_shadow = None
+
         # VAD bypass (Silero, sherpa-onnx) — form A fail-open. Default OFF via
         # JARVIS_VAD_ENABLED. When unavailable it is transparent (KWS gets all
         # audio). Mirrors the Smart Turn fail-open pattern above.
@@ -1274,6 +1299,16 @@ class JarvisStateMachine:
         old = self.state
         self.state = new_state
         logger.debug("State: %s → %s", old.name, new_state.name)
+        # Turn Controller shadow (Phase A): observe-only, fail-open. Mirrors
+        # the real transition into the shadow for alignment logging; it never
+        # affects jarvis behavior (any error is swallowed here).
+        if getattr(self, "_turn_shadow", None) is not None:
+            try:
+                self._turn_shadow.on_jarvis_transition(
+                    old.name, new_state.name, "jarvis-transition"
+                )
+            except Exception as exc:
+                logger.warning("[turn-shadow] shadow observation failed: %s", exc)
 
     async def _reset_to_kws(self):
         """Clean up dialog state and return to KWS_LISTENING."""
