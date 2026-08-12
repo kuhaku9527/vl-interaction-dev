@@ -125,6 +125,7 @@ ignore = [
 "src/joy_interaction_webui/rtsp_track.py" = ["BLE001"]
 "src/joy_interaction_webui/server.py" = ["BLE001"]
 "src/joy_interaction_webui/tts.py" = ["BLE001"]
+"src/joy_interaction_webui/turn_streaming.py" = ["BLE001"]
 "src/joy_interaction_webui/video_processor.py" = ["BLE001"]
 "src/joy_interaction_webui/vlm_service.py" = ["BLE001"]
 # S101 (assert) / BLE001 (blind except) are benign in tests.

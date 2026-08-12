@@ -1910,191 +1910,58 @@ class JarvisStateMachine:
         ``reply_epoch`` is the P1 turn epoch captured by ``_send_to_llm``;
         it tags the llm_reply broadcast (see ``_finish_llm_turn``).
         """
-        import json as _json
-
-        from .turn_controller import SentenceBuffer
+        from .turn_streaming import StreamingTurnConsumer
 
         # v3.24: prepend bounded conversation history (same as non-streaming).
-        messages = [{"role": "system", "content": self.config.llm_system_prompt}]
         history_snapshot = list(self._conv_history)[-self._max_history_turns * 2 :]
-        for role, content in history_snapshot:
-            messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": text})
 
         endpoint_url = f"{self.config.llm_api_url}{self.config.llm_text_path}"
         self._ensure_tts_stream_state()
         self._llm_stream_cancel = False
         reply_session = self._tts_reply_seq
         self._tts_reply_seq += 1
-        sentence_buffer = SentenceBuffer()
-        seq = 0
-        full_response = ""
-        decision = "silence"
-        delegation_question = None
-        frames_received = False
-        decision_received = False
-        done_received = False
-        cancelled = False
 
-        logger.info(
-            "[tts-stream] LLM stream start: '%s' (session=%d, history_turns=%d)",
-            text,
-            reply_session,
-            len(history_snapshot) // 2,
+        consumer = StreamingTurnConsumer(
+            endpoint_url=endpoint_url,
+            model=self.config.llm_model,
+            system_prompt=self.config.llm_system_prompt,
+            history_snapshot=history_snapshot,
+            max_tokens=200,
+            temperature=0.7,
+            timeout_s=30.0,
+            on_sentence=self._spawn_sentence_tts,
+            is_cancelled=lambda: self._llm_stream_cancel,
+            stream_logger=logger,
         )
-        import httpx
+        result = await consumer.consume(
+            text,
+            interaction_mode=interaction_mode,
+            reply_session=reply_session,
+        )
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                async with client.stream(
-                    "POST",
-                    endpoint_url,
-                    json={
-                        "model": self.config.llm_model,
-                        "messages": messages,
-                        "max_tokens": 200,
-                        "temperature": 0.7,
-                        "interaction_mode": interaction_mode,
-                        "stream": True,
-                    },
-                ) as resp:
-                    if resp.status_code != 200:
-                        raise RuntimeError(
-                            f"webinfer stream HTTP {resp.status_code}: "
-                            f"{await resp.aread()!r}"[:200]
-                        )
-                    async for line in resp.aiter_lines():
-                        if not line.strip():
-                            continue
-                        frames_received = True
-                        try:
-                            frame = _json.loads(line)
-                        except Exception as exc:
-                            logger.warning("[tts-stream] skipping malformed frame: %s", exc)
-                            continue
-                        ftype = frame.get("type")
-                        if self._llm_stream_cancel:
-                            logger.info(
-                                "[tts-stream] cancelled mid-stream (session=%d); stopping",
-                                reply_session,
-                            )
-                            cancelled = True
-                            break
-                        if ftype == "decision":
-                            if (
-                                decision_received
-                                and frame.get("decision") == "delegation"
-                            ):
-                                # Corrected decision: the taught delegation
-                                # format is ``</response> <note> </delegation>
-                                # <question>``, so a provisional response is
-                                # re-judged once the delegation tag arrives.
-                                # Drop buffered note content — a delegation
-                                # must not be spoken as TTS.
-                                sentence_buffer = SentenceBuffer()
-                                full_response = ""
-                                logger.info(
-                                    "[tts-stream] corrected to delegation (session=%d)",
-                                    reply_session,
-                                )
-                            decision_received = True
-                            decision = frame.get("decision") or "silence"
-                            delegation_question = frame.get("delegation_question")
-                            logger.info(
-                                "[tts-stream] decision=%s (session=%d)",
-                                decision,
-                                reply_session,
-                            )
-                        elif ftype == "content":
-                            token = frame.get("token") or ""
-                            if not token:
-                                continue
-                            # Content only accumulates while the decision is
-                            # response (delegation question / silence
-                            # whitespace never reaches the sentence buffer).
-                            if decision != "response":
-                                continue
-                            full_response += token
-                            sentence = sentence_buffer.add_token(token)
-                            if sentence is not None:
-                                self._spawn_sentence_tts(sentence, seq, reply_session)
-                                seq += 1
-                        elif ftype == "done":
-                            done_received = True
-                            if "full_text" in frame:
-                                full_response = frame["full_text"] or ""
-                            if frame.get("decision"):
-                                decision = frame["decision"]
-                            if frame.get("delegation_question") is not None:
-                                delegation_question = frame["delegation_question"]
-                        elif ftype == "error":
-                            raise RuntimeError(frame.get("error") or "webinfer stream error")
-        except Exception as exc:
-            logger.error(
-                "[tts-stream] streaming LLM failed (session=%d, frames=%s, decision=%s): %s",
-                reply_session,
-                frames_received,
-                decision_received,
-                exc,
+        if result.needs_non_streaming_retry:
+            # No decision was ever delivered (transport failure, HTTP error,
+            # or an error frame BEFORE the decision frame): clean retry
+            # through the non-streaming path so the reply is never lost —
+            # nothing was spoken, so there is no double-play risk.
+            return await self._send_to_llm_non_streaming(
+                text,
+                stream_tts=stream_tts,
+                interaction_mode=interaction_mode,
+                reply_epoch=reply_epoch,
             )
-            if not decision_received:
-                # No decision was ever delivered (transport failure, HTTP
-                # error, or an error frame BEFORE the decision frame): clean
-                # retry through the non-streaming path so the reply is never
-                # lost — nothing was spoken, so there is no double-play risk.
-                logger.info("[tts-stream] fail-open -> non-streaming retry")
-                return await self._send_to_llm_non_streaming(
-                    text,
-                    stream_tts=stream_tts,
-                    interaction_mode=interaction_mode,
-                    reply_epoch=reply_epoch,
-                )
-            # Mid-stream failure after a decision: keep what we have (log, do
-            # not re-run — sentences may already be playing).
-            if decision == "response":
-                remaining = sentence_buffer.flush_remaining()
-                if remaining:
-                    self._spawn_sentence_tts(remaining, seq, reply_session)
-                    seq += 1
-                    logger.info(
-                        "[tts-stream] flushed %d buffered char(s) after mid-stream failure",
-                        len(remaining),
-                    )
 
-        if cancelled:
+        if result.cancelled:
             # Barge-in / exit word: stop everything. The epoch bump already
             # cancelled every in-flight sentence task; the partial reply is
             # intentionally not broadcast (the user is talking over it).
             return
 
-        if not done_received:
-            # Stream ended without a done frame (e.g. mid-stream failure above):
-            # flush any remaining buffered sentence so no text is lost.
-            remaining = sentence_buffer.flush_remaining()
-            if remaining:
-                self._spawn_sentence_tts(remaining, seq, reply_session)
-                seq += 1
-            full_response = full_response or remaining or ""
-
-        # sentence_buffer may still hold text if neither path flushed it.
-        if not sentence_buffer.is_empty:
-            remaining = sentence_buffer.flush_remaining()
-            if remaining:
-                self._spawn_sentence_tts(remaining, seq, reply_session)
-                seq += 1
-
-        logger.info(
-            "[tts-stream] LLM stream done (session=%d, decision=%s, sentences=%d, chars=%d)",
-            reply_session,
-            decision,
-            seq,
-            len(full_response),
-        )
         await self._finish_llm_turn(
             text=text,
-            response=full_response,
-            decision=decision,
-            delegation_question=delegation_question,
+            response=result.full_response,
+            decision=result.decision,
+            delegation_question=result.delegation_question,
             stream_tts=stream_tts,
             force_jarvis_voice=True,
             reply_epoch=reply_epoch,
