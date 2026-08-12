@@ -46,6 +46,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import os
 import time
 from collections import deque
 from collections.abc import Callable
@@ -66,6 +67,16 @@ LIVE_VAD_SPEECH_CONF: float = 0.9
 
 #: ASR staleness (seconds) that ends an utterance — identical to jarvis.
 LIVE_ENDPOINT_TIMEOUT_S: float = 2.0
+
+#: Minimum gated segment length (0.3s @ 16 kHz mono int16 = 9600 bytes) before
+#: AddresseeDetector.classify is worth running — shorter blips are dropped.
+_ADDRESSEE_MIN_SEGMENT_BYTES: int = 9600
+
+#: Minimum enrollment segment duration (seconds) accepted from the mic stream.
+_ADDRESSEE_ENROLL_MIN_SEGMENT_S: float = 1.0
+
+#: Max enrollment segments collected (spec §3.1: 2-3 segments).
+_ADDRESSEE_ENROLL_MAX_SEGMENTS: int = 3
 
 
 class LiveStateMachine:
@@ -165,6 +176,53 @@ class LiveStateMachine:
         # v3.37: webinfer decision="delegation" routing (BackgroundModelService).
         self._background_service: object | None = None
 
+        # v3.40: Addressee Detection Phase 1 (acoustic pre-filter, spec
+        # draft-addressee-detection.md). Env gate JARVIS_ADDRESSEE_DETECTOR_ENABLED
+        # defaults OFF -> no detector, zero behavior change. When ON, lazily
+        # build the CAM++ AddresseeDetector; load failure logs + keeps None
+        # (fail-open: all audio passes through unchanged).
+        self._addressee: Any | None = None
+        self._addressee_model_dir: str = os.environ.get(
+            "JARVIS_ADDRESSEE_MODEL_DIR",
+            "D:/AI/models/sherpa-onnx/models/speaker",
+        )
+        if os.environ.get("JARVIS_ADDRESSEE_DETECTOR_ENABLED", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            try:
+                from .addressee_detector import AddresseeDetector
+
+                detector = AddresseeDetector(self._addressee_model_dir)
+                if not detector.available:
+                    logger.error("[addressee] detector unavailable; fail-open (all audio passes)")
+                else:
+                    self._addressee = detector
+                    logger.info(
+                        "[addressee] detector enabled (model_dir=%s)",
+                        self._addressee_model_dir,
+                    )
+            except Exception as exc:  # fail-open on init error
+                logger.error("[addressee] detector init failed (%s); fail-open", exc)
+
+        # ENROLL phase (live_mode layer — NOT in the turn controller core).
+        # During enrollment, mic audio goes to the enroll buffer only (no
+        # ASR / dialog); the frontend drives start -> speak 3 utterances ->
+        # finish via /api/live/enroll.
+        self._enroll_phase: bool = False
+        self._enroll_segments: list[bytes] = []
+        self._enroll_in_seg: bool = False
+        self._enroll_cur_segment: bytearray = bytearray()
+
+        # Gated segment buffering: when the detector is active AND enrolled AND
+        # a real VAD is available, a speech segment is buffered from the VAD
+        # rising edge to the falling edge, then classified. Non-target segments
+        # are dropped BEFORE ASR (no ASR / turn_controller work).
+        self._addressee_in_seg: bool = False
+        self._addressee_seg_buffer: bytearray = bytearray()
+
         logger.info(
             "[live-mode] session %s initialized (state=%s, vad_threshold=%.2f, "
             "barge_in_threshold=%.2f, silence_timeout_ms=%d)",
@@ -192,6 +250,9 @@ class LiveStateMachine:
             "interrupted": state
             in (TurnState.HARD_INTERRUPTED, TurnState.SOFT_INTERRUPTED, TurnState.COOLDOWN),
             "reply_epoch": self._llm_reply_epoch,
+            "enroll_phase": self._enroll_phase,
+            "enroll_segment_count": self.enroll_segment_count,
+            "addressee_enrolled": self.addressee_enrolled,
         }
 
     def is_active(self) -> bool:
@@ -202,6 +263,31 @@ class LiveStateMachine:
     def turn_state(self) -> TurnState:
         """The underlying turn controller state (tests + status)."""
         return self._ctrl.state
+
+    # ------------------------------------------------------------------
+    # Addressee detection (Phase 1) introspection
+    # ------------------------------------------------------------------
+
+    @property
+    def addressee_enrolled(self) -> bool:
+        """True when a target voice is registered in the active detector."""
+        if self._addressee is None:
+            return False
+        try:
+            return bool(self._addressee.is_enrolled())
+        except Exception as exc:  # fail-open
+            logger.error("[addressee] is_enrolled failed (%s); treated as not enrolled", exc)
+            return False
+
+    @property
+    def enroll_segment_count(self) -> int:
+        """Number of enrollment segments buffered so far (browser progress)."""
+        return len(self._enroll_segments)
+
+    @property
+    def enroll_phase(self) -> bool:
+        """True while the Addressee enrollment phase is active."""
+        return self._enroll_phase
 
     # ------------------------------------------------------------------
     # Engine helpers
@@ -232,6 +318,90 @@ class LiveStateMachine:
                 self._asr.start()
             except Exception as exc:
                 logger.warning("[live-mode] ASR stream reset failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Addressee enrollment (Phase 1, live_mode layer)
+    # ------------------------------------------------------------------
+
+    def start_enroll(self) -> bool:
+        """Enter the enrollment phase: mic audio buffers segments, no ASR/dialog.
+
+        Returns False (with an explicit log) when the detector is unavailable —
+        the caller should surface that to the user.
+        """
+        if self._addressee is None or not self._addressee.available:
+            logger.error("[addressee] enroll rejected: detector unavailable (fail-open)")
+            return False
+        self._enroll_phase = True
+        self._enroll_segments = []
+        self._enroll_in_seg = False
+        self._enroll_cur_segment = bytearray()
+        logger.info("[addressee] enroll phase started (say 3 utterances)")
+        return True
+
+    def feed_enroll_pcm(self, pcm: bytes) -> None:
+        """Append one complete enrollment utterance (whole PCM segment).
+
+        Used by the ``/api/live/enroll {action: pcm}`` route (frontend pushes
+        each recorded utterance). The WebRTC streaming path instead uses
+        ``_feed_enroll_audio`` (VAD-segmented from feed_audio).
+        """
+        if not self._enroll_phase:
+            logger.debug("[addressee] feed_enroll_pcm ignored: not in enroll phase")
+            return
+        if not pcm or len(pcm) % 2 != 0:
+            logger.warning(
+                "[addressee] feed_enroll_pcm invalid len=%d; ignored", len(pcm) if pcm else 0
+            )
+            return
+        if len(self._enroll_segments) >= _ADDRESSEE_ENROLL_MAX_SEGMENTS:
+            logger.info(
+                "[addressee] enroll already has %d segments; extra ignored",
+                len(self._enroll_segments),
+            )
+            return
+        self._enroll_segments.append(pcm)
+        logger.info(
+            "[addressee] enroll segment %d buffered (%.2fs)",
+            len(self._enroll_segments),
+            len(pcm) / 32000.0,
+        )
+
+    def finish_enroll(self) -> bool:
+        """Extract + register the buffered enrollment segments.
+
+        On success the target voice is registered and the phase ends. On
+        failure the phase also ends (buffer cleared) with an explicit error —
+        the caller may retry with a fresh ``start_enroll``.
+        """
+        if not self._enroll_phase:
+            logger.warning("[addressee] finish_enroll called without start_enroll")
+            return False
+        segments = list(self._enroll_segments)
+        self._enroll_phase = False
+        self._enroll_segments = []
+        self._enroll_in_seg = False
+        self._enroll_cur_segment = bytearray()
+        if self._addressee is None or not self._addressee.available:
+            logger.error("[addressee] finish_enroll failed: detector unavailable")
+            return False
+        ok = self._addressee.enroll(segments)
+        if ok:
+            logger.info("[addressee] enroll finished; voice registered")
+        else:
+            logger.error(
+                "[addressee] enroll failed (need >=2 usable segments, got %d)",
+                len(segments),
+            )
+        return ok
+
+    def cancel_enroll(self) -> None:
+        """Abort the enrollment phase and discard buffered segments."""
+        self._enroll_phase = False
+        self._enroll_segments = []
+        self._enroll_in_seg = False
+        self._enroll_cur_segment = bytearray()
+        logger.info("[addressee] enroll cancelled")
 
     # ------------------------------------------------------------------
     # Turn controller callbacks (sync → pending flags)
@@ -268,39 +438,52 @@ class LiveStateMachine:
         rising edge and ASR partial growth both feed ``on_speech_started``;
         ASR 2s staleness feeds ``on_speech_stopped`` (commit / interrupt
         release); pending controller actions are drained at the end.
+
+        Addressee gating (Phase 1): when a detector is active AND enrolled AND
+        a real VAD is available, a speech segment is buffered from the VAD
+        rising edge to the falling edge, then ``classify()``'d. Non-target
+        segments are dropped before ASR (zero ASR / controller work);
+        target segments are released to the ASR in sub-chunks. When the
+        detector is absent / not enrolled / VAD unavailable -> the original
+        streaming path is used (fail-open, zero behavior change).
         """
         now = time.time()
+
+        # 0. ENROLL phase: audio goes to the enroll buffer only (no ASR /
+        #    dialog). Returns early so the live loop stays quiet during
+        #    registration.
+        if self._enroll_phase:
+            self._feed_enroll_audio(pcm, now)
+            return
+
+        addressee_gated = (
+            self._addressee is not None
+            and self._addressee.available
+            and self.addressee_enrolled
+            and self._vad is not None
+            and self._vad.available
+        )
+
+        # When a gated segment was dropped, its closing (silence) chunk must
+        # not reach the ASR either — the whole dropped segment is "not spoken".
+        skip_asr_chunk = False
 
         # 1. VAD acoustic onset (rising edge). Fail-open: when the VAD is
         #    unavailable, ASR partial growth below is the speech signal.
         if self._vad is not None and self._vad.available and pcm and len(pcm) % 2 == 0:
             vad_speech = self._vad_speech(pcm)
-            if vad_speech and not self._prev_vad_speech:
-                self._feed_speech_started()
-            self._prev_vad_speech = vad_speech
+            if addressee_gated:
+                skip_asr_chunk = self._feed_addressee_vad(vad_speech, pcm, now)
+            else:
+                if vad_speech and not self._prev_vad_speech:
+                    self._feed_speech_started()
+                self._prev_vad_speech = vad_speech
 
-        # 2. Streaming ASR (16 kHz mono int16).
-        if self._asr is None:
-            try:
-                self._init_asr()
-            except Exception as exc:
-                logger.error("[live-mode] ASR init failed: %s", exc)
-        text = ""
-        if self._asr is not None:
-            try:
-                text = self._asr.feed_chunk(pcm) or ""
-            except Exception as exc:
-                logger.error("[live-mode] ASR feed_chunk failed: %s", exc)
-                text = ""
-
-        if text and text != self._current_asr_text:
-            self._current_asr_text = text
-            self._last_speech_time = now
-            # Speech signal: partial growth means the user is talking (also
-            # the backstop when the VAD is unavailable).
-            self._feed_speech_started()
-            self._feed_partial_transcript(text, is_final=False)
-            self._push_asr_partial(text, is_final=False)
+        # 2. Streaming ASR (16 kHz mono int16). While a gated segment is being
+        #    buffered, chunks are NOT fed to the ASR — they are released (or
+        #    dropped) at the segment end by ``_gate_addressee_segment``.
+        if not (addressee_gated and self._addressee_in_seg) and not skip_asr_chunk:
+            self._feed_asr_chunk(pcm, now)
 
         # 3. Endpoint detection: ASR holds the last partial on silence; after
         #    the 2s stall the utterance ends (identical rule to jarvis).
@@ -342,6 +525,138 @@ class LiveStateMachine:
         except Exception as exc:
             logger.debug("[live-mode] VAD annotation failed (%s); treat as speech", exc)
             return True
+
+    def _feed_asr_chunk(self, pcm: bytes, now: float) -> str:
+        """Feed one PCM chunk into the streaming ASR and push partials.
+
+        Shared by the streaming path and the addressee-gated release path.
+        Returns the current ASR text ("" on failure, fail-open).
+        """
+        if self._asr is None:
+            try:
+                self._init_asr()
+            except Exception as exc:
+                logger.error("[live-mode] ASR init failed: %s", exc)
+        text = ""
+        if self._asr is not None:
+            try:
+                text = self._asr.feed_chunk(pcm) or ""
+            except Exception as exc:
+                logger.error("[live-mode] ASR feed_chunk failed: %s", exc)
+                text = ""
+
+        if text and text != self._current_asr_text:
+            self._current_asr_text = text
+            self._last_speech_time = now
+            # Speech signal: partial growth means the user is talking (also
+            # the backstop when the VAD is unavailable).
+            self._feed_speech_started()
+            self._feed_partial_transcript(text, is_final=False)
+            self._push_asr_partial(text, is_final=False)
+        return text
+
+    def _feed_addressee_vad(self, vad_speech: bool, pcm: bytes, now: float) -> bool:
+        """Buffer a VAD speech segment; classify it at the falling edge.
+
+        Rising edge -> start the buffer; speech chunks -> extend it; falling
+        edge -> ``_gate_addressee_segment`` releases (target) or drops
+        (non-target). Runs only when the detector is active AND enrolled AND a
+        real VAD is available.
+
+        Returns True when the current chunk belongs to a DROPPED segment (its
+        closing chunk must not reach the ASR); False otherwise.
+        """
+        if vad_speech and not self._prev_vad_speech:
+            self._addressee_in_seg = True
+            self._addressee_seg_buffer = bytearray(pcm)
+        elif vad_speech and self._addressee_in_seg:
+            self._addressee_seg_buffer.extend(pcm)
+        elif not vad_speech and self._addressee_in_seg:
+            self._addressee_in_seg = False
+            segment = bytes(self._addressee_seg_buffer)
+            self._addressee_seg_buffer = bytearray()
+            dropped = self._gate_addressee_segment(segment, now)
+            self._prev_vad_speech = vad_speech
+            return dropped
+        self._prev_vad_speech = vad_speech
+        return False
+
+    def _gate_addressee_segment(self, segment: bytes, now: float) -> bool:
+        """Classify one buffered VAD segment and release/drop it.
+
+        * too short -> drop (no ASR / controller work);
+        * non-target -> drop + ``[addressee] non-target dropped`` log;
+        * target -> drive speech onset then release to ASR in sub-chunks.
+        * any exception -> fail-open (treat as target, keep the segment).
+
+        Returns True when the segment was dropped (caller skips ASR for the
+        closing chunk).
+        """
+        if len(segment) < _ADDRESSEE_MIN_SEGMENT_BYTES:
+            logger.debug(
+                "[addressee] segment too short (%.2fs); dropped",
+                len(segment) / 32000.0,
+            )
+            return True
+        try:
+            is_target, score = self._addressee.classify(segment)
+        except Exception as exc:  # fail-open: never drop on error
+            logger.error("[addressee] classify failed (%s); fail-open", exc)
+            is_target, score = True, 1.0
+
+        if not is_target:
+            logger.info(
+                "[addressee] non-target dropped (score=%.2f, len=%.2fs)",
+                score,
+                len(segment) / 32000.0,
+            )
+            return True
+
+        logger.info(
+            "[addressee] target passed (score=%.2f, len=%.2fs)",
+            score,
+            len(segment) / 32000.0,
+        )
+        # Speech onset: LISTENING -> USER_SPEAKING (or barge-in release).
+        self._feed_speech_started()
+        # Release the buffered utterance to ASR in ~100ms sub-chunks so the
+        # streaming partial path behaves like the unfiltered path.
+        chunk = 3200  # 100ms @ 16 kHz mono int16
+        for i in range(0, len(segment), chunk):
+            self._feed_asr_chunk(segment[i : i + chunk], now)
+        return False
+
+    def _feed_enroll_audio(self, pcm: bytes, now: float) -> None:
+        """VAD-segment the mic stream into enrollment utterances.
+
+        Called from ``feed_audio`` while ``enroll_phase`` is active. Each
+        completed speech segment (>=1s) is appended to ``_enroll_segments``
+        (up to 3); silence between utterances is discarded.
+        """
+        if self._vad is None or not self._vad.available or not pcm or len(pcm) % 2 != 0:
+            return
+        vad_speech = self._vad_speech(pcm)
+        if vad_speech and not self._prev_vad_speech:
+            self._enroll_in_seg = True
+            self._enroll_cur_segment = bytearray(pcm)
+        elif vad_speech and self._enroll_in_seg:
+            self._enroll_cur_segment.extend(pcm)
+        elif not vad_speech and self._enroll_in_seg:
+            self._enroll_in_seg = False
+            segment = bytes(self._enroll_cur_segment)
+            self._enroll_cur_segment = bytearray()
+            duration_s = len(segment) / 32000.0
+            if (
+                duration_s >= _ADDRESSEE_ENROLL_MIN_SEGMENT_S
+                and len(self._enroll_segments) < _ADDRESSEE_ENROLL_MAX_SEGMENTS
+            ):
+                self._enroll_segments.append(segment)
+                logger.info(
+                    "[addressee] enroll segment %d captured (%.2fs)",
+                    len(self._enroll_segments),
+                    duration_s,
+                )
+        self._prev_vad_speech = vad_speech
 
     def _feed_speech_started(self) -> None:
         """Feed VAD/ASR speech onset into the controller (fail-open)."""

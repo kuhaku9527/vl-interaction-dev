@@ -110,6 +110,36 @@ class BoomASR(FakeASR):
         raise RuntimeError("asr boom")
 
 
+class FakeDetector:
+    """Fake AddresseeDetector (Phase 1) — controllable classify/enroll."""
+
+    available = True
+
+    def __init__(self, *, enrolled=True, target=True, score=0.9, boom=False) -> None:
+        self._enrolled = enrolled
+        self._target = target
+        self._score = score
+        self.boom = boom
+        self.enroll_calls: list = []
+        self.num_enroll_calls = 0
+
+    def is_enrolled(self) -> bool:
+        return self._enrolled
+
+    def classify(self, pcm: bytes) -> tuple[bool, float]:
+        if self.boom:
+            raise RuntimeError("detector boom")
+        if not self._enrolled:
+            return True, 1.0
+        return self._target, self._score
+
+    def enroll(self, segments) -> bool:
+        self.enroll_calls.append(list(segments))
+        self.num_enroll_calls += 1
+        self._enrolled = True
+        return True
+
+
 class FakeConsumer:
     """Fake StreamingTurnConsumer: records kwargs + yields sentences."""
 
@@ -546,3 +576,308 @@ async def test_live_status_endpoint():
         data2 = await resp2.json()
         assert data2["exists"] is False
         assert data2["turn_state"] == "idle"
+
+
+# ---------------------------------------------------------------------------
+# 8. Addressee Detection Phase 1 — env gate / gating / enroll
+# ---------------------------------------------------------------------------
+
+
+def _set_detector(sm, **kwargs) -> FakeDetector:
+    det = FakeDetector(**kwargs)
+    sm._addressee = det
+    return det
+
+
+def test_addressee_env_gate_default_off_no_detector():
+    """JARVIS_ADDRESSEE_DETECTOR_ENABLED defaults off -> no detector, no change."""
+    sm, _, _ = build_live()
+    assert sm._addressee is None
+    assert sm.addressee_enrolled is False
+
+
+def test_addressee_env_gate_on_creates_detector(monkeypatch):
+    import joy_interaction_webui.addressee_detector as add_module
+
+    monkeypatch.setattr(
+        add_module,
+        "AddresseeDetector",
+        lambda *a, **k: FakeDetector(enrolled=False),
+    )
+    monkeypatch.setenv("JARVIS_ADDRESSEE_DETECTOR_ENABLED", "true")
+    sm, _, _ = build_live()
+    assert sm._addressee is not None
+    assert sm._addressee.available is True
+
+
+@pytest.mark.asyncio
+async def test_addressee_non_target_segment_dropped_no_asr():
+    """Enrolled detector + non-target VAD segment -> dropped, ASR zero calls."""
+    sm, vad, asr = build_live()
+    _set_detector(sm, enrolled=True, target=False, score=0.3)
+
+    # VAD rising edge -> buffer; keep feeding speech chunks.
+    vad.set_speech(True)
+    for _ in range(6):  # 6 x 2000 bytes = 12000 bytes >= min 9600
+        await sm.feed_audio(b"\x00\x00" * 1000)
+    assert sm._addressee_in_seg is True
+
+    # Falling edge -> classify -> non-target -> dropped.
+    vad.set_speech(False)
+    await sm.feed_audio(b"\x00\x00" * 1000)
+
+    assert asr.feed_calls == 0, "non-target segment must never reach ASR"
+    assert sm.turn_state == TurnState.LISTENING
+    assert sm._addressee_in_seg is False
+    assert sm._addressee_seg_buffer == bytearray()
+
+
+@pytest.mark.asyncio
+async def test_addressee_target_segment_released_to_asr():
+    """Enrolled detector + target VAD segment -> released to ASR normally."""
+    sm, vad, asr = build_live()
+    _set_detector(sm, enrolled=True, target=True, score=0.9)
+    asr.set_text("你好")
+
+    vad.set_speech(True)
+    for _ in range(6):
+        await sm.feed_audio(b"\x00\x00" * 1000)
+    vad.set_speech(False)
+    await sm.feed_audio(b"\x00\x00" * 1000)
+
+    assert asr.feed_calls > 0, "target segment must reach ASR"
+    assert sm._current_asr_text == "你好"
+    assert sm.turn_state == TurnState.USER_SPEAKING
+
+
+@pytest.mark.asyncio
+async def test_addressee_detector_boom_fail_open_releases():
+    """Detector classify raises -> fail-open: segment released (never dropped)."""
+    sm, vad, asr = build_live()
+    _set_detector(sm, enrolled=True, target=True, boom=True)
+
+    vad.set_speech(True)
+    for _ in range(6):
+        await sm.feed_audio(b"\x00\x00" * 1000)
+    vad.set_speech(False)
+    await sm.feed_audio(b"\x00\x00" * 1000)
+
+    assert asr.feed_calls > 0, "classify exception must fail-open (release to ASR)"
+
+
+@pytest.mark.asyncio
+async def test_addressee_not_enrolled_fail_open_passthrough():
+    """Detector present but not enrolled -> current streaming behavior (no gate)."""
+    sm, vad, asr = build_live()
+    _set_detector(sm, enrolled=False)
+
+    vad.set_speech(True)
+    await sm.feed_audio(b"\x00\x00" * 1000)
+    assert sm.turn_state == TurnState.USER_SPEAKING  # unfiltered
+    assert asr.feed_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# 9. Addressee enroll flow (live_mode layer)
+# ---------------------------------------------------------------------------
+
+
+async def _capture_enroll_segment(sm, vad, pcm=b"\x00\x00" * 8000):
+    """One VAD speech burst -> falling edge finalizes one enrollment segment."""
+    vad.set_speech(True)
+    await sm.feed_audio(pcm)  # 8000 bytes = 0.25s per call; repeat for >=1s
+    await sm.feed_audio(pcm)
+    await sm.feed_audio(pcm)
+    await sm.feed_audio(pcm)  # 32000 bytes = 1.0s
+    vad.set_speech(False)
+    await sm.feed_audio(pcm)
+
+
+@pytest.mark.asyncio
+async def test_addressee_enroll_start_finish_flow():
+    sm, vad, _ = build_live()
+    det = _set_detector(sm, enrolled=False)
+
+    assert sm.start_enroll() is True
+    assert sm.enroll_phase is True
+
+    # 3 utterances -> 3 enrollment segments.
+    for _ in range(3):
+        await _capture_enroll_segment(sm, vad)
+    assert sm.enroll_segment_count == 3
+
+    # finish -> detector.enroll called with the buffered segments.
+    assert sm.finish_enroll() is True
+    assert sm.enroll_phase is False
+    assert det.num_enroll_calls == 1
+    assert len(det.enroll_calls[0]) == 3
+    assert sm.addressee_enrolled is True
+
+
+@pytest.mark.asyncio
+async def test_addressee_enroll_cancel():
+    sm, vad, _ = build_live()
+    _set_detector(sm, enrolled=False)
+
+    assert sm.start_enroll() is True
+    await _capture_enroll_segment(sm, vad)
+    assert sm.enroll_segment_count == 1
+
+    sm.cancel_enroll()
+    assert sm.enroll_phase is False
+    assert sm.enroll_segment_count == 0
+
+
+def test_addressee_start_enroll_rejected_no_detector():
+    sm, _, _ = build_live()
+    assert sm._addressee is None
+    assert sm.start_enroll() is False
+    assert sm.enroll_phase is False
+
+
+def test_addressee_finish_enroll_without_start():
+    sm, _, _ = build_live()
+    _set_detector(sm, enrolled=False)
+    assert sm.finish_enroll() is False
+
+
+# ---------------------------------------------------------------------------
+# 10. /api/live/enroll endpoint
+# ---------------------------------------------------------------------------
+
+
+class FakeEnrollSession:
+    """Live-session double with the Phase 1 enroll surface (route tests)."""
+
+    def __init__(self, *, detector_available=True) -> None:
+        self._detector_available = detector_available
+        self._enroll_phase = False
+        self._segments: list = []
+        self._enrolled = False
+
+    @property
+    def enroll_phase(self) -> bool:
+        return self._enroll_phase
+
+    @property
+    def enroll_segment_count(self) -> int:
+        return len(self._segments)
+
+    @property
+    def addressee_enrolled(self) -> bool:
+        return self._enrolled
+
+    def start_enroll(self) -> bool:
+        if not self._detector_available:
+            return False
+        self._enroll_phase = True
+        self._segments = []
+        return True
+
+    def feed_enroll_pcm(self, pcm: bytes) -> None:
+        if self._enroll_phase:
+            self._segments.append(pcm)
+
+    def finish_enroll(self) -> bool:
+        if not self._enroll_phase or len(self._segments) < 2:
+            return False
+        self._enroll_phase = False
+        self._enrolled = True
+        return True
+
+    def cancel_enroll(self) -> None:
+        self._enroll_phase = False
+        self._segments = []
+
+    def get_state_for_browser(self) -> dict:
+        return {
+            "mode": "live",
+            "turn_state": "LISTENING",
+            "listening": True,
+            "speaking": False,
+            "replying": False,
+            "interrupted": False,
+            "reply_epoch": 0,
+            "enroll_phase": self._enroll_phase,
+            "enroll_segment_count": self.enroll_segment_count,
+            "addressee_enrolled": self._enrolled,
+        }
+
+
+class FakeEnrollManager:
+    def __init__(self, session=None) -> None:
+        self.session = session
+
+    def get_live_session(self, session_id):
+        return self.session
+
+
+def _enroll_app(session) -> web.Application:
+    app = web.Application()
+    app["jarvis_manager"] = FakeEnrollManager(session)
+    setup_live_routes(app)
+    return app
+
+
+async def test_live_enroll_start_finish_endpoint():
+    session = FakeEnrollSession()
+    async with TestServer(_enroll_app(session)) as srv, TestClient(srv) as client:
+        resp = await client.post(
+            "/api/live/enroll",
+            json={"session_id": "s1", "action": "start"},
+        )
+        data = await resp.json()
+        assert resp.status == 200
+        assert data["started"] is True
+        assert session.enroll_phase is True
+
+
+async def test_live_enroll_pcm_and_finish_endpoint():
+    session = FakeEnrollSession()
+    async with TestServer(_enroll_app(session)) as srv, TestClient(srv) as client:
+        await client.post("/api/live/enroll", json={"session_id": "s1", "action": "start"})
+        import base64
+
+        pcm = b"\x00\x00" * 4000
+        resp = await client.post(
+            "/api/live/enroll",
+            json={"session_id": "s1", "action": "pcm", "audio_b64": base64.b64encode(pcm).decode()},
+        )
+        data = await resp.json()
+        assert data["buffered"] == 1
+
+        resp = await client.post(
+            "/api/live/enroll",
+            json={"session_id": "s1", "action": "pcm", "audio_b64": base64.b64encode(pcm).decode()},
+        )
+        assert (await resp.json())["buffered"] == 2
+
+        resp = await client.post("/api/live/enroll", json={"session_id": "s1", "action": "finish"})
+        data = await resp.json()
+        assert resp.status == 200
+        assert data["enrolled"] is True
+        assert session.addressee_enrolled is True
+
+
+async def test_live_enroll_cancel_and_errors():
+    session = FakeEnrollSession(detector_available=False)
+    async with TestServer(_enroll_app(session)) as srv, TestClient(srv) as client:
+        resp = await client.post(
+            "/api/live/enroll",
+            json={"session_id": "s1", "action": "start"},
+        )
+        assert (await resp.json())["started"] is False
+
+    # session not found -> 404
+    async with TestServer(_enroll_app(None)) as srv, TestClient(srv) as client:
+        resp = await client.post(
+            "/api/live/enroll",
+            json={"session_id": "ghost", "action": "start"},
+        )
+        assert resp.status == 404
+
+        resp = await client.post(
+            "/api/live/enroll",
+            json={"session_id": "ghost", "action": "bogus"},
+        )
+        assert resp.status == 404  # session check comes before action validation

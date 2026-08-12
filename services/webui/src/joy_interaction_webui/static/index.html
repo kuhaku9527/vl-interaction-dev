@@ -764,6 +764,13 @@ limitations under the License.
                                 <span class="live-label">Live 常驻</span>
                             </button>
                         </div>
+                        <div class="live-enroll-row" id="liveEnrollRow">
+                            <button class="chat-prompt-action live-enroll" id="liveEnrollBtn" title="注册你的声音（Addressee 过滤：只响应你）" type="button" aria-label="注册声音" disabled>
+                                <i data-lucide="user-check"></i>
+                                <span class="live-enroll-label">注册声音</span>
+                            </button>
+                            <span class="live-enroll-hint" id="liveEnrollHint" role="status" aria-live="polite"></span>
+                        </div>
                         <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
                             <i class="mic-icon" data-lucide="mic"></i>
                             <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
@@ -827,6 +834,8 @@ limitations under the License.
         const btListenBtn = document.getElementById('btListenBtn');
         const btListenPlayer = document.getElementById('btListenPlayer');
         const liveModeBtn = document.getElementById('liveModeBtn');
+        const liveEnrollBtn = document.getElementById('liveEnrollBtn');
+        const liveEnrollHint = document.getElementById('liveEnrollHint');
         const speechBtn = document.getElementById('speechBtn');
         const speechButtons = [speechBtn].filter(Boolean);
         const promptSendBtn = document.getElementById('promptSendBtn');
@@ -864,6 +873,10 @@ limitations under the License.
         let liveModePeerConnection = null;
         let liveModeStream = null;
         let _livePollTimer = null;
+        // Addressee Detection Phase 1 enrollment (live 注册声音).
+        let liveEnrollActive = false;
+        let liveEnrollTimer = null;
+        let liveEnrollCompleted = false;
         let btMicLevelAudioContext = null;
         let btListenGainNode = null;
         let btMicGainAudioContext = null;
@@ -4319,7 +4332,116 @@ limitations under the License.
             liveModeBtn.setAttribute('aria-checked', liveModeActive ? 'true' : 'false');
             liveModeBtn.title = liveModeActive ? '退出 Live 常驻模式（点击可切换回 Jarvis 唤醒）' : '进入 Live 常驻模式';
             liveModeBtn.disabled = Boolean(liveModeStarting && !liveModeActive);
+            if (liveEnrollBtn) {
+                // 注册声音 only makes sense while the live session is active.
+                liveEnrollBtn.disabled = !liveModeActive || liveEnrollActive;
+            }
             lucide.createIcons();
+        }
+
+        function setLiveEnrollActive(active) {
+            liveEnrollActive = Boolean(active);
+            if (!liveEnrollBtn) return;
+            liveEnrollBtn.classList.toggle('listening', liveEnrollActive);
+            liveEnrollBtn.disabled = !liveModeActive || liveEnrollActive;
+            liveEnrollBtn.title = liveEnrollActive
+                ? '正在注册声音…（说 3 遍：你好我是用户）'
+                : '注册你的声音（Addressee 过滤：只响应你）';
+            const label = liveEnrollBtn.querySelector('.live-enroll-label');
+            if (label) {
+                label.textContent = liveEnrollActive ? '注册中…' : (liveEnrollCompleted ? '已注册 ✓' : '注册声音');
+            }
+            lucide.createIcons();
+        }
+
+        function setLiveEnrollHint(text) {
+            if (liveEnrollHint) liveEnrollHint.textContent = text || '';
+        }
+
+        async function startLiveEnroll() {
+            if (!liveModeActive || liveEnrollActive) return;
+            setLiveEnrollHint('');
+            try {
+                const resp = await fetch('/api/live/enroll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, action: 'start' })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.started) {
+                    setLiveEnrollHint((data.error || '注册不可用（Addressee 未启用）'));
+                    return;
+                }
+                liveEnrollCompleted = false;
+                setLiveEnrollActive(true);
+                setLiveEnrollHint('说 3 遍：你好，我是用户（每遍间隔停顿）…');
+                let tries = 0;
+                liveEnrollTimer = setInterval(async () => {
+                    tries += 1;
+                    try {
+                        const stResp = await fetch('/api/live/status?session_id=' + encodeURIComponent(sessionId));
+                        const st = await stResp.json().catch(() => ({}));
+                        if (st && st.enroll_segment_count >= 3) {
+                            await finishLiveEnroll();
+                            return;
+                        }
+                        if (tries >= 25) {  // ~25s safety timeout
+                            await finishLiveEnroll();
+                        }
+                    } catch (error) {
+                        console.warn('live enroll poll failed:', error);
+                    }
+                }, 1000);
+            } catch (error) {
+                console.error('Error starting live enroll:', error);
+                setLiveEnrollHint('注册启动失败');
+            }
+        }
+
+        async function finishLiveEnroll() {
+            if (liveEnrollTimer) {
+                clearInterval(liveEnrollTimer);
+                liveEnrollTimer = null;
+            }
+            if (!liveEnrollActive) return;
+            setLiveEnrollActive(false);
+            try {
+                const resp = await fetch('/api/live/enroll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, action: 'finish' })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data.enrolled) {
+                    liveEnrollCompleted = true;
+                    setLiveEnrollHint('声音注册成功，现在只响应你');
+                } else {
+                    setLiveEnrollHint('注册失败：' + (data.error || '需要至少 2 段有效语音'));
+                }
+            } catch (error) {
+                console.error('Error finishing live enroll:', error);
+                setLiveEnrollHint('注册失败');
+            }
+        }
+
+        async function cancelLiveEnroll() {
+            if (liveEnrollTimer) {
+                clearInterval(liveEnrollTimer);
+                liveEnrollTimer = null;
+            }
+            if (!liveEnrollActive) return;
+            liveEnrollActive = false;
+            try {
+                await fetch('/api/live/enroll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, action: 'cancel' })
+                });
+            } catch (error) {
+                console.warn('live enroll cancel failed:', error);
+            }
+            setLiveEnrollActive(false);
+            setLiveEnrollHint('');
         }
 
         async function startLiveMode() {
@@ -4392,6 +4514,9 @@ limitations under the License.
         async function stopLiveMode({ notifyServer = true } = {}) {
             liveModeStarting = false;
             stopLlmReplyAudio();
+            if (liveEnrollActive) {
+                await cancelLiveEnroll();
+            }
             if (liveModePeerConnection) {
                 liveModePeerConnection.oniceconnectionstatechange = null;
                 liveModePeerConnection.close();
@@ -5282,6 +5407,9 @@ limitations under the License.
 
         btListenBtn.addEventListener('click', selectBtListenMode);
         liveModeBtn.addEventListener('click', selectLiveMode);
+        if (liveEnrollBtn) {
+            liveEnrollBtn.addEventListener('click', startLiveEnroll);
+        }
         promptSendBtn.addEventListener('click', () => {
             sendBtPrompt();
         });
