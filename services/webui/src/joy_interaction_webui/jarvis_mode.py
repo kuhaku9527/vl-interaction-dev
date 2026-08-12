@@ -540,6 +540,32 @@ class JarvisStateMachine:
                 logger.warning("[turn-shadow] shadow init failed; running without it: %s", exc)
                 self._turn_shadow = None
 
+        # Turn Controller delegate (Phase B: active arbitration for the
+        # DIALOG_ACTIVE turn rhythm). Default OFF via the
+        # JARVIS_TURN_DELEGATE_ENABLED env gate — when off, no delegate is
+        # created and jarvis behavior is byte-for-byte unchanged (this is the
+        # production default; Phase B acceptance runs with the gate ON).
+        # Fail-open: any init error only logs, never breaks jarvis.
+        self._turn_delegate = None
+        if os.environ.get("JARVIS_TURN_DELEGATE_ENABLED", "").lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            try:
+                from .turn_controller import TurnConfig, TurnController
+                from .turn_controller_delegate import TurnControllerDelegate
+
+                self._turn_delegate = TurnControllerDelegate(
+                    TurnController(TurnConfig.jarvis()),
+                    logger=logger,
+                )
+                logger.info("[turn-delegate] delegate enabled (JARVIS_TURN_DELEGATE_ENABLED)")
+            except Exception as exc:
+                logger.warning("[turn-delegate] delegate init failed; running without it: %s", exc)
+                self._turn_delegate = None
+
         # VAD bypass (Silero, sherpa-onnx) — form A fail-open. Default OFF via
         # JARVIS_VAD_ENABLED. When unavailable it is transparent (KWS gets all
         # audio). Mirrors the Smart Turn fail-open pattern above.
@@ -1176,10 +1202,37 @@ class JarvisStateMachine:
         await self._promote_from_confirm(matched_pattern=text)
 
     async def _handle_dialog(self, pcm: bytes):
-        """DIALOG_ACTIVE / TTS_PAUSED: stream ASR, check exit words, manage TTS."""
+        """DIALOG_ACTIVE / TTS_PAUSED: stream ASR, check exit words, manage TTS.
+
+        Phase B: when the turn-controller delegate is enabled
+        (``JARVIS_TURN_DELEGATE_ENABLED``), the DIALOG_ACTIVE turn rhythm is
+        arbitrated by the turn_controller (jarvis preset); otherwise (the
+        default) the legacy hand-written logic runs byte-for-byte unchanged.
+        Fail-open: any delegate error disables it and falls back to the
+        legacy path for the rest of the session.
+        """
         if not self._asr_stream_active:
             return
+        if getattr(self, "_turn_delegate", None) is None:
+            await self._handle_dialog_legacy(pcm)
+            return
+        try:
+            await self._handle_dialog_delegated(pcm)
+        except Exception as exc:
+            logger.warning(
+                "[turn-delegate] dialog delegation failed (%s); falling back to legacy",
+                exc,
+            )
+            self._turn_delegate = None
+            await self._handle_dialog_legacy(pcm)
 
+    async def _handle_dialog_legacy(self, pcm: bytes):
+        """Legacy DIALOG_ACTIVE / TTS_PAUSED handler (current behavior).
+
+        This is the pre-Phase-B logic, kept verbatim so the default (delegate
+        OFF) path is byte-for-byte unchanged. The endpoint-commit block is
+        shared with the delegated path via :meth:`_handle_dialog_commit`.
+        """
         try:
             text = self._asr.feed_chunk(pcm)
         except Exception as e:
@@ -1226,52 +1279,159 @@ class JarvisStateMachine:
         # on silence frames (stale). The `if text` block above only updates
         # _last_speech_time when partial grew, so this fires after ~2s of stale.
         if self._current_asr_text and (time.time() - self._last_speech_time) > 2.0:
-            utterance = self._current_asr_text
-            self._current_asr_text = ""
+            await self._handle_dialog_commit()
 
-            # Reset the streaming ASR session so the next chunk starts
-            # fresh; otherwise Paraformer keeps returning the stale partial
-            # and we loop the same junk text into the LLM.
-            if self._asr is not None:
-                try:
-                    self._asr.start()
-                except Exception as exc:
-                    logger.warning("ASR stream reset failed: %s", exc)
+    async def _handle_dialog_delegated(self, pcm: bytes):
+        """DIALOG_ACTIVE / TTS_PAUSED with turn_controller arbitration.
 
-            if _is_garbage_text(utterance):
-                logger.info(
-                    "ASR endpoint reached, dropping garbage: %r",
-                    utterance,
-                )
-            else:
-                # Smart Turn semantic gate (fail-open + default-off). When it
-                # judges the user has NOT finished (e.g. trailing "嗯……那个"),
-                # defer: keep the partial, do NOT clear/reset/send/transition.
-                if not self._smart_turn_allows_send(utterance):
-                    logger.debug(
-                        "Smart Turn deferred send; keeping DIALOG_ACTIVE for: '%s'",
-                        utterance,
-                    )
-                    return
-                logger.info(
-                    "ASR endpoint reached, sending to LLM: '%s'",
-                    utterance,
-                )
-                if self.on_user_utterance:
-                    self.on_user_utterance(utterance)
-                # stream_tts=False: backend does NOT push PCM via WebRTC
-                # SpeakerAudioTrack. The browser plays TTS through
-                # <audio> via `playLlmReplyAudio` on llm_reply. Setting
-                # this back to True would replay every reply twice (once
-                # from the browser, once from the WebRTC speaker).
-                await self._send_to_llm(utterance, stream_tts=False, interaction_mode="jarvis")
+        ASR-derived signals are fed into the turn controller (jarvis preset)
+        and the controller's decisions drive the same jarvis actions as the
+        legacy path:
+          * commit  -> existing :meth:`_handle_dialog_commit` (reuses
+            ``_send_to_llm`` verbatim — no new LLM call path),
+          * barge-in -> existing TTS-pause logic (TTS_PAUSED entry),
+          * EXIT_WORDS / KWS remain jarvis-owned mode extensions.
 
-                # Resume TTS if paused (LLM response will trigger new TTS)
-                if self.state == JarvisState.TTS_PAUSED and self._tts_task:
-                    # Cancel old TTS and restart with new LLM response
-                    self._tts_task.cancel()
-                    self._tts_task = None
+        The controller's ``on_speech_stopped`` is fed at the same 2s ASR
+        staleness rule jarvis uses today, so commit timing is unchanged.
+        """
+        delegate = self._turn_delegate
+        try:
+            text = self._asr.feed_chunk(pcm)
+        except Exception as e:
+            logger.exception("ASR feed_chunk failed: %s", e)
+            return
+        now = time.time()
+
+        if text and text != self._current_asr_text:
+            # New speech (partial grew) — update accumulator and timer, then
+            # feed the acoustic + transcript events into the controller.
+            # conf=0.9 >= jarvis preset barge_in_threshold (0.75) so a
+            # barge-in while the controller tracks an agent turn maps to
+            # HARD_INTERRUPTED deterministically.
+            logger.info("ASR partial: %r", text)
+            self._current_asr_text = text
+            self._last_speech_time = now
+            delegate.on_speech_started(conf=0.9)
+            delegate.on_partial_transcript(text, is_final=False)
+
+        if text:
+            # Emit partial (same as legacy)
+            partial = AsrPartial(text=text, is_final=False, timestamp_ms=now * 1000)
+            if self.on_asr_partial:
+                self.on_asr_partial(partial)
+
+            # EXIT_WORDS stay jarvis-owned (mode extension, not delegated).
+            stripped = text.strip().lower()
+            if any(stripped.endswith(w) for w in EXIT_WORDS):
+                logger.info("Exit word detected: %s", text)
+                await self._transition_to(JarvisState.EXIT_DETECTED)
+                await self._stop_tts()
+                await self._play_goodbye_wav()
+                await self._reset_to_kws()
+                return
+
+        # Barge-in decision. The controller fires ``on_barge_in`` from
+        # HARD_INTERRUPTED when it is tracking an agent turn; ``text`` is the
+        # fail-safe backstop for the jarvis dialog path where TTS is played by
+        # the browser (stream_tts=False => no in-process ``_tts_task`` => the
+        # controller never sits in SPEAKING). Both reuse the existing TTS-pause
+        # logic, so the interrupt rhythm is unchanged.
+        barge_in = delegate.take_barge_in()
+        tts_playing = (
+            self.state == JarvisState.DIALOG_ACTIVE and self._tts_task and not self._tts_task.done()
+        )
+        if (barge_in or text) and tts_playing:
+            await self._pause_tts()
+            await self._transition_to(JarvisState.TTS_PAUSED)
+            logger.debug("TTS paused")
+
+        # Endpoint: the jarvis 2s staleness rule feeds the controller's
+        # speech-stop; the controller's commit decision then reuses the
+        # existing commit path. Timing is identical to the legacy rule.
+        if self._current_asr_text and (now - self._last_speech_time) > 2.0:
+            silence_ms = int((now - self._last_speech_time) * 1000)
+            delegate.on_speech_stopped(silence_ms)
+            if delegate.take_commit():
+                outcome = await self._handle_dialog_commit()
+                if outcome != "sent":
+                    # The controller committed but jarvis declined the turn
+                    # (garbage / smart-turn defer): drive the controller back
+                    # to LISTENING so the next user turn commits cleanly.
+                    delegate.on_llm_response_token("")
+                    delegate.on_tts_started()
+                    delegate.on_tts_finished()
+            elif self.state == JarvisState.TTS_PAUSED:
+                # Post-barge-in commit: the controller's FSM has no commit
+                # from HARD_INTERRUPTED (it went COOLDOWN), so jarvis keeps
+                # the legacy commit for the barge-in utterance (TTS_PAUSED is
+                # a jarvis mode extension), then realigns to LISTENING.
+                delegate.on_cooldown_elapsed()
+                await self._handle_dialog_commit()
+
+    async def _handle_dialog_commit(self) -> str:
+        """Endpoint commit: send the accumulated utterance to the LLM.
+
+        Shared by the legacy and turn-delegate dialog paths; mirrors the old
+        inline endpoint block exactly: transcript reset, ASR stream reset,
+        garbage drop, smart-turn gate, ``_send_to_llm``, paused-TTS resume,
+        and the return to DIALOG_ACTIVE.
+
+        Returns:
+            ``"sent"`` when the utterance was forwarded to the LLM,
+            ``"garbage"`` when it was dropped as noise, or ``"deferred"``
+            when the Smart Turn gate deferred the send.
+        """
+        utterance = self._current_asr_text
+        self._current_asr_text = ""
+
+        # Reset the streaming ASR session so the next chunk starts
+        # fresh; otherwise Paraformer keeps returning the stale partial
+        # and we loop the same junk text into the LLM.
+        if self._asr is not None:
+            try:
+                self._asr.start()
+            except Exception as exc:
+                logger.warning("ASR stream reset failed: %s", exc)
+
+        if _is_garbage_text(utterance):
+            logger.info(
+                "ASR endpoint reached, dropping garbage: %r",
+                utterance,
+            )
             await self._transition_to(JarvisState.DIALOG_ACTIVE)
+            return "garbage"
+
+        # Smart Turn semantic gate (fail-open + default-off). When it
+        # judges the user has NOT finished (e.g. trailing "嗯……那个"),
+        # defer: keep the partial, do NOT clear/reset/send/transition.
+        if not self._smart_turn_allows_send(utterance):
+            logger.debug(
+                "Smart Turn deferred send; keeping DIALOG_ACTIVE for: '%s'",
+                utterance,
+            )
+            return "deferred"
+
+        logger.info(
+            "ASR endpoint reached, sending to LLM: '%s'",
+            utterance,
+        )
+        if self.on_user_utterance:
+            self.on_user_utterance(utterance)
+        # stream_tts=False: backend does NOT push PCM via WebRTC
+        # SpeakerAudioTrack. The browser plays TTS through
+        # <audio> via `playLlmReplyAudio` on llm_reply. Setting
+        # this back to True would replay every reply twice (once
+        # from the browser, once from the WebRTC speaker).
+        await self._send_to_llm(utterance, stream_tts=False, interaction_mode="jarvis")
+
+        # Resume TTS if paused (LLM response will trigger new TTS)
+        if self.state == JarvisState.TTS_PAUSED and self._tts_task:
+            # Cancel old TTS and restart with new LLM response
+            self._tts_task.cancel()
+            self._tts_task = None
+        await self._transition_to(JarvisState.DIALOG_ACTIVE)
+        return "sent"
 
     # ------------------------------------------------------------------
     # Transition helpers
@@ -1309,6 +1469,18 @@ class JarvisStateMachine:
                 )
             except Exception as exc:
                 logger.warning("[turn-shadow] shadow observation failed: %s", exc)
+        # Turn Controller delegate (Phase B): keep the controller aligned with
+        # the jarvis dialog lifecycle. Entering DIALOG_ACTIVE drives the wake
+        # gate to LISTENING; returning to KWS_LISTENING resets the controller.
+        # Fail-open: any error only logs, never breaks jarvis.
+        if getattr(self, "_turn_delegate", None) is not None:
+            try:
+                if new_state == JarvisState.DIALOG_ACTIVE:
+                    self._turn_delegate.on_dialog_enter()
+                elif new_state == JarvisState.KWS_LISTENING:
+                    self._turn_delegate.on_dialog_reset()
+            except Exception as exc:
+                logger.warning("[turn-delegate] dialog lifecycle hook failed: %s", exc)
 
     async def _reset_to_kws(self):
         """Clean up dialog state and return to KWS_LISTENING."""
@@ -1513,6 +1685,23 @@ class JarvisStateMachine:
 
         logger.info("LLM response (decision=%s): '%s'", decision, response)
 
+        # Turn Controller delegate (Phase B): feed the LLM response into the
+        # controller so it tracks the agent turn (PROCESSING -> THINKING).
+        # Gated on the delegate existing; fail-open. This is NOT a streaming
+        # token feed — jarvis's LLM path is a single response, so the whole
+        # response is fed as one token (the controller only needs the
+        # PROCESSING -> THINKING edge, not sentence-level fidelity).
+        delegate = getattr(self, "_turn_delegate", None)
+        if delegate is not None:
+            try:
+                delegate.on_llm_response_token(response)
+            except Exception as exc:
+                logger.warning("[turn-delegate] on_llm_response_token failed: %s", exc)
+                # Fail-open contract: a wedged controller (stuck in PROCESSING
+                # after a failed feed) would silently drop the next user turn,
+                # so disable the delegate and fall back to legacy.
+                self._turn_delegate = None
+
         # v3.37: when the model opted to delegate, fire BackgroundModelService
         # with the assistant's reply + the user's original ask as the
         # delegated question (webinfer extracts it from </delegation> Q).
@@ -1548,6 +1737,49 @@ class JarvisStateMachine:
         # Stream TTS for true voice mode. Silence + delegation suppress TTS.
         if stream_tts and decision != "silence":
             self._tts_task = asyncio.create_task(self._stream_tts(response))
+            self._notify_delegate_tts_started()
+            self._tts_task.add_done_callback(self._on_delegate_tts_done)
+        else:
+            # No in-process TTS (browser plays via llm_reply, or silence /
+            # delegation): complete the agent turn in the controller
+            # immediately so the next user turn commits cleanly.
+            self._notify_delegate_tts_started()
+            self._notify_delegate_tts_finished()
+
+    def _notify_delegate_tts_started(self) -> None:
+        """Feed TTS-started into the turn controller (Phase B; fail-open)."""
+        delegate = getattr(self, "_turn_delegate", None)
+        if delegate is None:
+            return
+        try:
+            delegate.on_tts_started()
+        except Exception as exc:
+            logger.warning("[turn-delegate] on_tts_started failed: %s", exc)
+            # Fail-open contract (see _send_to_llm hook): disable + legacy.
+            self._turn_delegate = None
+
+    def _notify_delegate_tts_finished(self) -> None:
+        """Feed TTS-finished into the turn controller (Phase B; fail-open)."""
+        delegate = getattr(self, "_turn_delegate", None)
+        if delegate is None:
+            return
+        try:
+            delegate.on_tts_finished()
+        except Exception as exc:
+            logger.warning("[turn-delegate] on_tts_finished failed: %s", exc)
+            # Fail-open contract (see _send_to_llm hook): disable + legacy.
+            self._turn_delegate = None
+
+    def _on_delegate_tts_done(self, task: asyncio.Task) -> None:
+        """Done-callback for the in-process TTS task (stream_tts=True).
+
+        A cancelled task means the agent was interrupted (barge-in / exit) —
+        the controller already knows via ``on_speech_started`` /
+        ``on_dialog_reset``, so no spurious finish is fed.
+        """
+        if task.cancelled():
+            return
+        self._notify_delegate_tts_finished()
 
     async def _stream_tts(self, text: str):
         """Stream TTS audio via voice_clone_api /v1/synthesize.
