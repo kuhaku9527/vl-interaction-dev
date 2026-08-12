@@ -53,10 +53,48 @@
 
 ## §4 Phase 2：四态 decision token + 融合（后续，另行 spec 细化）
 
-- decision token 三态 → 四态（+`not-for-me`）：prompt_constants 教学 + parse_model_decision + turn_streaming 消费侧 + GBNF grammar。**ADR0006 随此演进**（单入口语义扩展，走 spec→验证→替换→整合）。
+- decision token 三态 → 四态（+`not-for-me`）：prompt_constants 教学 + parse_model_decision + turn_streaming 消费侧（**注意：本地 webinfer 未用 GBNF grammar**——llama.cpp 侧是 prompt 教学 + 自由生成 + 解析，四态扩展无需 grammar，报告假设不适用本地，已实证）。**ADR0006 随此演进**（单入口语义扩展，走 spec→验证→替换→整合）。
 - 融合决策层：`S_fusion = 0.4 × S_acoustic + 0.6 × S_semantic`，双阈值 T_low 0.3 / T_high 0.7（声学低于 0.3 直接判非目标，高于 0.7 直接放行，中间走融合）。
 - 本地 llama.cpp not-for-me 准确率实测（必测 ②）+ 数据采集后权重网格搜索。
 - 待 Phase1 验收 + 实测数据回填后启动。
+
+### 4.1 四态定义与语义（Phase2 核心）
+
+| token | 语义 | 行为 | 与三态差异 |
+|---|---|---|---|
+| `</silence>` | 用户在跟我说话，但无需回复 | 不播报，回 LISTENING | 原有 |
+| `</response>` | 正常回复 | 播报 | 原有 |
+| `</delegation>` | 转后台检索 | 后台触发，不念问题 | 原有 |
+| `</not-for-me>` | **非面向 AI**（自言自语/对旁人） | **不播报，回 LISTENING，且不把该轮计入对话历史**（可选） | **新增** |
+
+判定规则（prompt 教学，来源调研断言 44）：
+- 话语含对 AI 的称呼（"嘿""喂"）→ 大概率对 AI 说；
+- 明确提问/指令且未指定其他对象 → 默认对 AI 说；
+- 明显回应旁人的话 / 无信息意图的自言自语 → `</not-for-me>`。
+
+### 4.2 实现分层（改动面）
+
+1. **prompt_constants.py**：LIVE_SYSTEM_PROMPT 加四态教学（Not-For-Me 定义 + 判定规则 + 2-4 个边界 few-shot 示例）；NO_DECISION 提示词同步说明。
+2. **response_format.py / infer_loop.py**：`parse_model_decision` + 流式帧协议支持 `not-for-me`（标记识别 + 帧类型）；`normalize_model_output` 的 marker 集合扩展。
+3. **turn_streaming.py**：`StreamingTurnConsumer` 消费 `not-for-me` 帧——不触发 on_sentence（零 TTS）、decision 返回 not-for-me；`StreamingTurnResult.decision` 新增值。
+4. **live_mode.py `_finish_llm_turn`**：`decision == "not-for-me"` → 不播报、controller 回 LISTENING（与 silence 同路径，但可加独立日志 `[addressee] semantic not-for-me` 区分）；jarvis 路径（jarvis 预设）默认不受影响（四态教学仅 live prompt，jarvis 仍三态——**决策**：四态教学加在 live 专用 prompt，jarvis 保持三态，避免 jarvis 行为变化）。
+5. **融合决策层（live_mode 门控增强）**：声学（AddresseeDetector.classify 分数）+ 语义（LLM decision）融合：
+   - 声学已拦（<0.3 直接 drop，Phase1 已有）→ 融合层只处理"声学放行但语义判 not-for-me"（目标说话人自言自语）；
+   - `decision == "not-for-me"` 且声学分数 ∈ (0.3, 0.7) 模糊区 → 融合判非目标；声学 ≥0.7 且语义 response → 目标放行。
+   - 简化落地：**本轮融合 = 语义 not-for-me 与声学分数加权**，权重 0.4/0.6 可配（env），先实现后调参。
+6. **前端**：not-for-me 轮的 UI（无新播报，字幕可不显示或显示灰色"（未面向 AI，已忽略）"——按最小实现：不显示）。
+
+### 4.3 必测 ②：本地 llama.cpp 四态准确率实测（实施前先做）
+
+- 设计小型测试集（30-50 句）：面向 AI（提问/指令/称呼）vs 非面向（自言自语/回应旁人/无信息意图），中英混合；
+- 用现有 webinfer（interaction_mode="live" + 四态 prompt 临时版）或 llama-server 直测：统计四态输出的**准确率/混淆**（尤其 not-for-me 的精确率+召回率）；
+- 判据：not-for-me 精确率 ≥80%（宁可漏不可乱插：误判 not-for-me 可接受，漏判 not-for-me 不可接受）；若不足 → 调 prompt few-shot 再测；
+- 数据记入交叉验证报告附录 B。
+
+### 4.4 ADR0006 演进记录
+
+- ADR0006（llm-gateway 单入口）**不违反**：四态是同一入口内语义扩展，路由/网关结构不变；
+- 演进动作：spec 记录 → 验证（必测②+QA）→ 替换（更新 ADR0006 文本中的决策 token 三态描述为四态，标注演进日期）→ 整合（用户后续统一整合 spec+adr+决策文档）。
 
 ## §5 风险与回滚
 
