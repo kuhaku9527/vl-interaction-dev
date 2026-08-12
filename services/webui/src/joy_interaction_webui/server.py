@@ -74,6 +74,7 @@ from .background_model import BackgroundModelService  # noqa: E402
 from .jarvis_mode import JarvisState, asr_model_display_name  # noqa: E402
 from .jarvis_routes import bind_audio, setup_jarvis_routes  # noqa: E402
 from .jarvis_session import JarvisSessionManager  # noqa: E402
+from .live_routes import bind_live_audio_for_peer, setup_live_routes  # noqa: E402
 from .local_file_server import setup_local_file_routes  # noqa: E402
 from .tts import setup_tts_routes  # noqa: E402
 from .vlm_service import VLMService  # noqa: E402
@@ -878,7 +879,16 @@ async def offer(request):
     pc = RTCPeerConnection(configuration=RTCConfiguration(iceServers=[]))
     pcs.add(pc)
     session_peer_connections[session_id].add(pc)
-    if _offer_has_jarvis_audio(params):
+    if params.get("live_audio") is True:
+        # Phase C live mode: independent listening chain (免唤醒词常驻监听).
+        # Must be checked BEFORE the jarvis branch because the live offer also
+        # carries an m=audio SDP line (which _offer_has_jarvis_audio would
+        # otherwise treat as a jarvis offer).
+        manager = request.app.get("jarvis_manager")
+        if manager is None:
+            return web.json_response({"error": "jarvis_manager not initialised"}, status=503)
+        await bind_live_audio_for_peer(pc, session_id, manager)
+    elif _offer_has_jarvis_audio(params):
         manager = request.app.get("jarvis_manager")
         if manager is None:
             return web.json_response({"error": "jarvis_manager not initialised"}, status=503)
@@ -2095,6 +2105,7 @@ def main():
     setup_tts_routes(app)
     setup_local_file_routes(app)
     setup_jarvis_routes(app)
+    setup_live_routes(app)
     app.router.add_post("/offer", offer)
     app.router.add_post("/api/session/cleanup", session_cleanup)
     app.router.add_get("/api/llm/status", llm_status)

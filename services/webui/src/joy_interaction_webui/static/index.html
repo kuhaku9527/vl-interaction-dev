@@ -137,6 +137,7 @@ limitations under the License.
             <span class="status-badge llm-unknown" id="ttsServiceStatus" title="TTS (voice_clone_api) reachability -- polled every 3s">TTS ?</span>
             <span class="status-badge llm-unknown" id="kwsServiceStatus" title="KWS (sherpa-onnx wake-word) model presence -- polled every 3s">KWS ?</span>
             <span class="status-badge jarvis-disconnected" id="jarvisStatus" title="Jarvis state machine (KWS_LISTENING -> WAKE_DETECTED -> DIALOG_ACTIVE) -- polled every 1s">Jarvis ?</span>
+            <span class="status-badge live-disconnected" id="liveStatus" title="Live 常驻模式 (免唤醒词) turn state -- polled every 1s">Live ?</span>
             <span class="status-badge llm-unknown" id="memoryBadge" title="Memory (memory-store) 健康状态" role="status" aria-live="polite">记忆 ?</span>
             <span class="status-badge llm-unknown" id="wikiBadge" title="[Local Wiki] 召回健康状态" role="status" aria-live="polite">知识库 ?</span>
 
@@ -757,6 +758,10 @@ limitations under the License.
                             <i data-lucide="radio"></i>
                             <span class="listen-label">监听</span>
                         </button>
+                        <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" aria-pressed="false" aria-label="进入 Live 常驻模式">
+                            <i data-lucide="radio-tower"></i>
+                            <span class="live-label">Live</span>
+                        </button>
                         <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
                             <i class="mic-icon" data-lucide="mic"></i>
                             <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
@@ -819,6 +824,7 @@ limitations under the License.
         const promptText = document.getElementById('promptText');
         const btListenBtn = document.getElementById('btListenBtn');
         const btListenPlayer = document.getElementById('btListenPlayer');
+        const liveModeBtn = document.getElementById('liveModeBtn');
         const speechBtn = document.getElementById('speechBtn');
         const speechButtons = [speechBtn].filter(Boolean);
         const promptSendBtn = document.getElementById('promptSendBtn');
@@ -851,6 +857,11 @@ limitations under the License.
         let btListenStream = null;
         let btListening = false;
         let btListeningStarting = false;
+        let liveModeActive = false;
+        let liveModeStarting = false;
+        let liveModePeerConnection = null;
+        let liveModeStream = null;
+        let _livePollTimer = null;
         let btMicLevelAudioContext = null;
         let btListenGainNode = null;
         let btMicGainAudioContext = null;
@@ -4299,6 +4310,110 @@ limitations under the License.
                 setBtMicLevel('n/a', shortLabel);
             }
         }
+        function setLiveModeActive(active) {
+            liveModeActive = Boolean(active);
+            if (!liveModeBtn) return;
+            liveModeBtn.classList.toggle('listening', liveModeActive);
+            liveModeBtn.setAttribute('aria-pressed', liveModeActive ? 'true' : 'false');
+            liveModeBtn.title = liveModeActive ? '退出 Live 常驻模式' : '进入 Live 常驻模式';
+            liveModeBtn.disabled = Boolean(liveModeStarting && !liveModeActive);
+            lucide.createIcons();
+        }
+
+        async function startLiveMode() {
+            if (liveModeActive || liveModeStarting) return;
+            liveModeStarting = true;
+            try {
+                const startResp = await fetch('/api/live/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                if (!startResp.ok) {
+                    const err = await startResp.json().catch(() => ({}));
+                    throw new Error(err.error || ('Live 启动失败：HTTP ' + startResp.status));
+                }
+                if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                    connectWebSocket();
+                }
+                liveModeStream = await navigator.mediaDevices.getUserMedia({ audio: {
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }, video: false });
+                liveModePeerConnection = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                liveModePeerConnection.oniceconnectionstatechange = () => {
+                    const state = liveModePeerConnection?.iceConnectionState;
+                    console.log('Live ICE state:', state);
+                    if (['disconnected', 'failed', 'closed'].includes(state)) {
+                        stopLiveMode({ notifyServer: state !== 'closed' });
+                    }
+                };
+                const audioTransceiver = liveModePeerConnection.addTransceiver('audio', { direction: 'sendrecv' });
+                const liveAudioTrack = liveModeStream.getAudioTracks()[0];
+                if (liveAudioTrack) {
+                    await audioTransceiver.sender.replaceTrack(liveAudioTrack);
+                }
+                const offer = await liveModePeerConnection.createOffer();
+                await liveModePeerConnection.setLocalDescription(offer);
+                const response = await fetch('/offer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sdp: liveModePeerConnection.localDescription.sdp,
+                        type: liveModePeerConnection.localDescription.type,
+                        session_id: sessionId,
+                        live_audio: true
+                    })
+                });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || ('Live 启动失败：HTTP ' + response.status));
+                }
+                const answer = await response.json();
+                await liveModePeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                setLiveModeActive(true);
+                updateStatus('Live 常驻监听中', 'connected');
+            } catch (error) {
+                console.error('Error starting Live mode:', error);
+                updateStatus(getMicErrorMessage(error), 'disconnected');
+                await stopLiveMode({ notifyServer: false });
+            } finally {
+                liveModeStarting = false;
+                setLiveModeActive(Boolean(liveModePeerConnection && liveModeStream));
+            }
+        }
+
+        async function stopLiveMode({ notifyServer = true } = {}) {
+            liveModeStarting = false;
+            stopLlmReplyAudio();
+            if (liveModePeerConnection) {
+                liveModePeerConnection.oniceconnectionstatechange = null;
+                liveModePeerConnection.close();
+                liveModePeerConnection = null;
+            }
+            if (liveModeStream) {
+                liveModeStream.getTracks().forEach(track => track.stop());
+                liveModeStream = null;
+            }
+            setLiveModeActive(false);
+            if (notifyServer) {
+                try {
+                    await fetch('/api/live/stop', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_id: sessionId })
+                    });
+                } catch (error) {
+                    console.warn('Live stop failed:', error);
+                }
+            }
+            updateStatus(window.JoyI18n.localizeUiString('Connected'), 'connected');
+        }
+
         function setBtListeningActive(active) {
             btListening = Boolean(active);
             if (!btListenBtn) return;
@@ -5130,6 +5245,13 @@ limitations under the License.
                 await startBtListening();
             }
         });
+        liveModeBtn.addEventListener('click', async () => {
+            if (liveModeActive || liveModeStarting) {
+                await stopLiveMode();
+            } else {
+                await startLiveMode();
+            }
+        });
         promptSendBtn.addEventListener('click', () => {
             sendBtPrompt();
         });
@@ -5264,12 +5386,13 @@ limitations under the License.
         }
         async function playLlmReplyAudio(text, meta) {
             if (!text || !btTtsPlayer) return;
-            // The jarvis state machine streams TTS to the WebRTC audio_output
-            // track in addition to broadcasting llm_reply. Skip the front-end
-            // /api/tts/synthesize call in that case so we don't double-play.
-            // jarvis_voice is the back-end's tag for the streaming path;
-            // jarvis_text is the text-only path that needs the front-end TTS.
-            if (meta && meta.source === 'jarvis_voice') return;
+            // The jarvis/live state machine streams TTS to the browser via
+            // tts_sentence WS messages in addition to broadcasting llm_reply.
+            // Skip the front-end /api/tts/synthesize call in that case so we
+            // don't double-play. jarvis_voice / live_voice are the back-end's
+            // tags for the streaming paths; jarvis_text / live_text are the
+            // text-only paths that need the front-end TTS.
+            if (meta && (meta.source === 'jarvis_voice' || meta.source === 'live_voice')) return;
             // Dedupe: same reply text within 8s is treated as one utterance so a
             // retry / late WS broadcast never replays the last reply.
             const dedupKey = text + '|' + ((meta && meta.source) || 'default');
@@ -6197,6 +6320,77 @@ limitations under the License.
         }
 
         // ====================================================================
+        // Live state-pill (polls /api/live/status every 1s)
+        // Shows the live turn-state transitions (免唤醒词常驻监听).
+        // ====================================================================
+        const LIVE_STATE_MAP = {
+            'LISTENING':       { emoji: '🟢', text: 'Live 监听中', cls: 'live-listening' },
+            'USER_SPEAKING':   { emoji: '🔵', text: 'Live 听你说',  cls: 'live-speaking' },
+            'PROCESSING':      { emoji: '🟡', text: 'Live 处理中',  cls: 'live-processing' },
+            'THINKING':        { emoji: '🟡', text: 'Live 思考中',  cls: 'live-processing' },
+            'PRE_SPEECH':      { emoji: '🟡', text: 'Live 回复中',  cls: 'live-speaking' },
+            'SPEAKING':        { emoji: '🔊', text: 'Live 回复中',  cls: 'live-speaking' },
+            'HARD_INTERRUPTED': { emoji: '⏸️', text: 'Live 已打断', cls: 'live-interrupted' },
+            'SOFT_INTERRUPTED': { emoji: '⏸️', text: 'Live 已打断', cls: 'live-interrupted' },
+            'COOLDOWN':        { emoji: '⏳', text: 'Live 冷却中',  cls: 'live-interrupted' },
+            'ENDED':           { emoji: '⚫', text: 'Live 已结束',  cls: 'live-disconnected' },
+            'ERROR':           { emoji: '❌', text: 'Live 错误',    cls: 'live-error' },
+        };
+
+        function renderLiveStatus(payload) {
+            const el = document.getElementById('liveStatus');
+            if (!el) return;
+            if (!payload || !payload.exists || !liveModeActive) {
+                el.textContent = '⚫ Live 未连接';
+                el.className = 'status-badge live-disconnected';
+                return;
+            }
+            const info = LIVE_STATE_MAP[payload.turn_state] ||
+                { emoji: '⚪', text: payload.turn_state, cls: 'live-unknown' };
+            el.textContent = info.emoji + ' ' + info.text;
+            el.className = 'status-badge ' + info.cls;
+        }
+
+        async function pollLiveStatus() {
+            if (!liveModeActive) {
+                renderLiveStatus(null);
+                return;
+            }
+            try {
+                const sid = sessionId || 'default';
+                const resp = await fetch('/api/live/status?session_id=' + encodeURIComponent(sid));
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                renderLiveStatus(data);
+            } catch (err) {
+                const el = document.getElementById('liveStatus');
+                if (el) {
+                    el.textContent = '⚪ Live 状态查询失败';
+                    el.className = 'status-badge live-unknown';
+                }
+            }
+        }
+
+        function startLiveStatusPoll() {
+            if (_livePollTimer) return;
+            _livePollTimer = setInterval(pollLiveStatus, 1000);
+        }
+
+        function stopLiveStatusPoll() {
+            if (_livePollTimer) {
+                clearInterval(_livePollTimer);
+                _livePollTimer = null;
+            }
+            const el = document.getElementById('liveStatus');
+            if (el) {
+                el.textContent = '⚫ Live 未连接';
+                el.className = 'status-badge live-disconnected';
+            }
+        }
+        window.startLiveStatusPoll = startLiveStatusPoll;
+        window.stopLiveStatusPoll = stopLiveStatusPoll;
+
+        // ====================================================================
         // Extended health badges: Memory / Wiki (#46)
         // Polls /api/services/extended-status every 5s; renders two header
         // badges with 3-state coloring (green / gray / red).
@@ -6275,8 +6469,10 @@ limitations under the License.
         // Auto-start alongside the other status polls.
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', startJarvisStatusPoll);
+            document.addEventListener('DOMContentLoaded', startLiveStatusPoll);
         } else {
             startJarvisStatusPoll();
+            startLiveStatusPoll();
         }
 
             // Auto-start the service-status poll when the page is ready.

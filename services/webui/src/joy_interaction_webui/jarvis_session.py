@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .jarvis_mode import (
     EXIT_WORDS,
@@ -26,6 +27,9 @@ from .jarvis_mode import (
     JarvisState,
     JarvisStateMachine,
 )
+
+if TYPE_CHECKING:
+    from .live_mode import LiveStateMachine
 
 logger = logging.getLogger("joyai.jarvis.session")
 
@@ -135,6 +139,58 @@ class JarvisSession:
         )
 
 
+@dataclass
+class LiveSession:
+    """A single live session (免唤醒词常驻监听) attached to a webui session.
+
+    Live reuses the same session frame as JarvisSession (session registration,
+    WS push callbacks, ``feed_audio`` entry) while mounting a
+    :class:`~.live_mode.LiveStateMachine` instead of a ``JarvisStateMachine``.
+    The agent reply is played by the browser through the P0-A ``tts_sentence``
+    queue, so no server-side audio output track is used.
+    """
+
+    session_id: str
+    state_machine: LiveStateMachine
+    _feed_task: asyncio.Task | None = None
+
+    async def start(self):
+        """Prewarm the ASR engine (same one-shot cost as jarvis prewarm)."""
+        await self.state_machine.prewarm_engines()
+
+    async def stop(self):
+        """Stop the live session, cancelling all tasks and ending the turn."""
+        await self.state_machine.stop()
+
+    def attach_feed_task(self, task: asyncio.Task) -> None:
+        """Track a background feed task so it can be cancelled on stop()."""
+        if self._feed_task and not self._feed_task.done():
+            self._feed_task.cancel()
+        self._feed_task = task
+
+    async def feed_audio(self, pcm: bytes):
+        """Route mic audio to the live state machine."""
+        await self.state_machine.feed_audio(pcm)
+
+    def attach_audio_output(self, audio_output) -> None:
+        """Interface parity with JarvisSession; live replies play in-browser.
+
+        Live plays TTS via ``tts_sentence`` WS messages (P0-A queue), so the
+        WebRTC speaker track is never used. The callback is stored on the
+        state machine so the interface stays symmetric.
+        """
+        self.state_machine.audio_output = audio_output
+
+    def get_state_for_browser(self) -> dict:
+        """Return a JSON-safe live state snapshot for the browser UI."""
+        return self.state_machine.get_state_for_browser()
+
+    @property
+    def is_active(self) -> bool:
+        """Is the live session still listening/replying?"""
+        return self.state_machine.is_active()
+
+
 # ============================================================================
 # Session Manager
 # ============================================================================
@@ -146,6 +202,10 @@ class JarvisSessionManager:
     def __init__(self, config: JarvisConfig | None = None):
         self.config = config or JarvisConfig()
         self._sessions: dict[str, JarvisSession] = {}
+        # Phase C: live sessions live in a SEPARATE dict so a jarvis session
+        # and a live session for the same webui session_id can coexist (双开)
+        # without mutating each other's state machines.
+        self._live_sessions: dict[str, LiveSession] = {}
 
     def set_asr_promotion_enabled(self, enabled: bool) -> None:
         """Toggle ASR promotion (local paraformer recall booster) at runtime.
@@ -178,13 +238,22 @@ class JarvisSessionManager:
         self,
         session_id: str,
         audio_output=None,
-    ) -> JarvisSession:
-        """Create a new Jarvis session for the given webui session.
+        mode: str = "jarvis",
+    ) -> JarvisSession | LiveSession:
+        """Create a new session for the given webui session.
 
-        If a session for session_id already exists, attach the new
-        audio_output callback (e.g. SpeakerAudioTrack.push_pcm) and
-        return the existing one instead of creating a duplicate.
+        ``mode`` selects the mounted state machine:
+          * ``"jarvis"`` (default) — ``JarvisStateMachine`` (wake-gated KWS);
+          * ``"live"`` — :class:`~.live_mode.LiveStateMachine` (免唤醒词常驻监听).
+
+        If a session for session_id already exists (same mode), attach the
+        new audio_output callback (if any) and return the existing one
+        instead of creating a duplicate. Live sessions are tracked in a
+        separate dict, so jarvis and live can run simultaneously.
         """
+        if mode == "live":
+            return await self._create_live_session(session_id, audio_output)
+
         if session_id in self._sessions:
             existing = self._sessions[session_id]
             if audio_output is not None:
@@ -225,6 +294,58 @@ class JarvisSessionManager:
         await session.start()
         self._sessions[session_id] = session
         logger.info("Jarvis session created: %s", session_id)
+        return session
+
+    async def _create_live_session(
+        self,
+        session_id: str,
+        audio_output=None,
+    ) -> LiveSession:
+        """Create a live session (LiveStateMachine) for the webui session.
+
+        Mirrors ``create_session``'s jarvis wiring: the same WS callbacks
+        (``_make_asr_callback`` / ``_make_user_utterance_callback`` /
+        ``_make_llm_callback`` / ``_make_tts_sentence_callback``) broadcast
+        on the session's WebSocket, and the P1 reply_epoch is read from the
+        live state machine (which owns ``_llm_reply_epoch`` like jarvis).
+        """
+        if session_id in self._live_sessions:
+            existing = self._live_sessions[session_id]
+            if audio_output is not None:
+                existing.attach_audio_output(audio_output)
+            return existing
+
+        from .live_mode import LiveStateMachine
+
+        sm = LiveStateMachine(
+            config=self.config,
+            session_id=session_id,
+            on_asr_partial=self._make_asr_callback(session_id),
+            on_user_utterance=self._make_user_utterance_callback(session_id),
+            on_llm_response=self._make_llm_callback(session_id),
+            on_tts_sentence=self._make_tts_sentence_callback(session_id),
+        )
+
+        # v3.37: wire the BackgroundModelService that server.py registered in
+        # ``sessions[session_id]`` so ``</delegation>`` replies route to the
+        # same hermes shim as jarvis / the video path (looked up lazily).
+        try:
+            from .server import sessions as _server_sessions
+
+            def _bind_background_service():
+                session_dict = _server_sessions.get(session_id) or {}
+                bg = session_dict.get("background_service")
+                if bg is not None:
+                    sm._background_service = bg
+
+            _bind_background_service()
+        except Exception:  # pragma: no cover
+            logger.debug("background_service lookup skipped for %s", session_id)
+
+        session = LiveSession(session_id=session_id, state_machine=sm)
+        await session.start()
+        self._live_sessions[session_id] = session
+        logger.info("Live session created: %s", session_id)
         return session
 
     def _make_asr_callback(self, session_id: str):
@@ -352,10 +473,14 @@ class JarvisSessionManager:
         Used by the WS broadcast callbacks so the payload carries the exact
         backend generation value (the state machine is the single source of
         truth for ``_llm_reply_epoch`` / ``_current_turn_reply_epoch``).
-        Returns 0 when the session (or attribute) is unavailable — the
-        front-end treats a missing/0 epoch as "no constraint yet".
+        Checks jarvis sessions first, then live sessions (both mount a state
+        machine with the same epoch attributes). Returns 0 when the session
+        (or attribute) is unavailable — the front-end treats a missing/0
+        epoch as "no constraint yet".
         """
         session = self._sessions.get(session_id)
+        if session is None:
+            session = self._live_sessions.get(session_id)
         sm = session.state_machine if session else None
         try:
             return int(getattr(sm, attr, 0) or 0)
@@ -363,8 +488,12 @@ class JarvisSessionManager:
             return 0
 
     def get_session(self, session_id: str) -> JarvisSession | None:
-        """Get an existing session, or None."""
+        """Get an existing Jarvis session, or None."""
         return self._sessions.get(session_id)
+
+    def get_live_session(self, session_id: str) -> LiveSession | None:
+        """Get an existing live session, or None."""
+        return self._live_sessions.get(session_id)
 
     async def remove_session(self, session_id: str):
         """Stop and remove a session."""
@@ -372,6 +501,13 @@ class JarvisSessionManager:
         if session:
             await session.stop()
             logger.info("Jarvis session removed: %s", session_id)
+
+    async def remove_live_session(self, session_id: str):
+        """Stop and remove a live session."""
+        session = self._live_sessions.pop(session_id, None)
+        if session:
+            await session.stop()
+            logger.info("Live session removed: %s", session_id)
 
 
 # ============================================================================

@@ -872,6 +872,42 @@
             background: rgba(60, 60, 60, 0.30);
             color: var(--joy-999999);
             border-color: rgba(120, 120, 120, 0.30);
+        }
+        /* Live state-pill colours (Phase C live mode, 免唤醒词常驻监听) */
+        .status-badge.live-listening {
+            background: rgba(140, 90, 255, 0.18);
+            color: #b18cff;
+            border-color: rgba(140, 90, 255, 0.45);
+        }
+        .status-badge.live-speaking {
+            background: rgba(255, 120, 200, 0.18);
+            color: #ff8fd8;
+            border-color: rgba(255, 120, 200, 0.45);
+        }
+        .status-badge.live-processing {
+            background: rgba(255, 200, 0, 0.18);
+            color: #ffcc44;
+            border-color: rgba(255, 200, 0, 0.45);
+        }
+        .status-badge.live-interrupted {
+            background: rgba(255, 170, 0, 0.20);
+            color: #ffaa44;
+            border-color: rgba(255, 170, 0, 0.50);
+        }
+        .status-badge.live-error {
+            background: rgba(255, 80, 80, 0.18);
+            color: var(--joy-ff5050);
+            border-color: rgba(255, 80, 80, 0.45);
+        }
+        .status-badge.live-unknown {
+            background: rgba(150, 150, 150, 0.18);
+            color: var(--joy-c0c0c0);
+            border-color: rgba(150, 150, 150, 0.30);
+        }
+        .status-badge.live-disconnected {
+            background: rgba(60, 60, 60, 0.30);
+            color: var(--joy-999999);
+            border-color: rgba(120, 120, 120, 0.30);
         }/* LLM / TTS / KWS service-status badge colours */
         .status-badge.llm-ok {
             background: rgba(0, 200, 100, 0.18);
@@ -2268,7 +2304,18 @@
             stroke: white;
         }
 
+        .chat-prompt-action.listen.live-mode.listening {
+            background: linear-gradient(135deg, #8b5cf6, #4f46e5);
+            border-color: rgba(255, 255, 255, 0.14);
+            color: white;
+            box-shadow: 0 8px 18px rgba(79, 70, 229, 0.30);
+        }
+
         .listen-label {
+            display: none;
+        }
+
+        .live-label {
             display: none;
         }
 

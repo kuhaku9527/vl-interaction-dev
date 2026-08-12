@@ -81,7 +81,11 @@ async def test_kws_miss_logs_shadow_asr_but_does_not_wake(tmp_path, caplog):
     assert sm.state == JarvisState.KWS_LISTENING
     assert sm._kws.fed, "KWS still owns the wake decision"
     assert sm._asr.fed, "shadow ASR should receive speech-like KWS misses"
-    assert any("KWS MISS: shadow ASR saw wake pattern" in rec.message for rec in caplog.records)
+    # jarvis_mode logs the promotion-recall suffix "(local paraformer)".
+    assert any(
+        "KWS MISS: shadow ASR (local paraformer) saw wake pattern" in rec.message
+        for rec in caplog.records
+    )
     assert not any("ASR confirmed wake" in rec.message for rec in caplog.records)
 
 
