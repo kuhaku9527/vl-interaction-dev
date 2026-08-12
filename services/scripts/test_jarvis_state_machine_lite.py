@@ -33,8 +33,8 @@ from joy_interaction_webui.jarvis_mode import (
 
 assert "bt" in ("bt",), "doc-test: only 'bt' wake word now (post 2026-07-10)"
 print(f"EXIT_WORDS = {sorted(EXIT_WORDS)}")
-print(f"len(EXIT_WORDS) = {len(EXIT_WORDS)} (expected 8: 行/明白/了解/ok/好的/知道了/谢谢/感谢)")
-assert len(EXIT_WORDS) == 8, f"EXIT_WORDS count != 8, got {len(EXIT_WORDS)}"
+print(f"len(EXIT_WORDS) = {len(EXIT_WORDS)} (expected 5: 明白/了解/ok/好的/知道了 — 2026-08-12 用户裁定去掉 行/谢谢/感谢)")
+assert len(EXIT_WORDS) == 5, f"EXIT_WORDS count != 5, got {len(EXIT_WORDS)}"
 
 
 class MockAsr:

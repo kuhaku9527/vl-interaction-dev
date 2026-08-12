@@ -305,7 +305,7 @@ def test_full_cycle_state_chain_and_controller_alignment(monkeypatch):
     trace.append(("commit", sm.state.name, delegate.controller.state.name))
 
     # exit word stays jarvis-owned -> controller must reset to IDLE
-    sm._asr = ScriptedASR(["谢谢"])
+    sm._asr = ScriptedASR(["好的"])
     sm._play_goodbye_wav = lambda: asyncio.sleep(0)
     asyncio.run(sm._handle_dialog(b"\x00\x00" * 80))
     assert sm.state == JarvisState.KWS_LISTENING
@@ -551,7 +551,7 @@ def test_exit_word_not_committed_by_controller_and_resets_it(monkeypatch):
     delegate = sm._turn_delegate
     assert delegate.controller.state == TurnState.LISTENING
 
-    sm._asr = ScriptedASR(["谢谢"])
+    sm._asr = ScriptedASR(["好的"])
     sm._play_goodbye_wav = lambda: asyncio.sleep(0)
     calls = []
     sm._send_to_llm = _make_send_stub(calls)

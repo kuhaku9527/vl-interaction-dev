@@ -43,7 +43,7 @@ logger = logging.getLogger("joyai.jarvis")
 # emoji, etc.) to a single space when normalising ASR confirm text.
 _ASR_CONFIRM_NON_WORD = re.compile(r"[^\w]+", flags=re.UNICODE)
 
-EXIT_WORDS = {"行", "明白", "了解", "ok", "好的", "知道了", "谢谢", "感谢"}
+EXIT_WORDS = {"明白", "了解", "ok", "好的", "知道了"}
 """Words that signal "I’m done talking" — treated as end-of-conversation signal."""
 
 _GARBAGE_PUNCT_ONLY = {

@@ -253,9 +253,9 @@ def test_normal_turn_identical_with_and_without_delegate():
 
 
 def _exit_word_outcome(with_delegate: bool):
-    """Drive one exit word ("谢谢") from DIALOG_ACTIVE."""
+    """Drive one exit word ("好的") from DIALOG_ACTIVE."""
     sm, _clock = _make_sm(with_delegate=with_delegate)
-    sm._asr = ScriptedASR(["谢谢"])
+    sm._asr = ScriptedASR(["好的"])
     goodbye_calls = []
 
     async def fake_goodbye():
