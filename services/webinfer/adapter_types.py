@@ -118,7 +118,12 @@ class AdapterConfig:
     allowed_local_image_roots: tuple[str, ...] = ()
     frame_seconds: float = 1.0
     max_pixels: int = 1048576
-    main_max_tokens: int = 128
+    # v3.35: default raised 128 -> 1024. The old 128 was a leftover from the
+    # early "decision-token short reply" design; under question/chat turns the
+    # hard cap truncated long answers (~80-100 Chinese chars). Live reply
+    # conciseness is governed by the system prompt's concise-reply instruction,
+    # not by a hard max_tokens cut. Keep in sync with app.py MAIN_MAX_TOKENS.
+    main_max_tokens: int = 1024
     # v3.34: llama-server -c context window (sync with run-windows.env MAIN_CTX_TOKENS).
     # Visual pipeline + 3-layer memory + accumulated turns can blow past it.
     # webinfer estimates total chars in _build_main_http_messages and trims the

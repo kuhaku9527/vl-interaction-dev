@@ -16,7 +16,15 @@ LOGGER = logging.getLogger("streaming_infer_adapter")
 
 
 def normalize_model_output(text: str) -> str:
-    """Normalize raw model text into a clean decision token plus response body."""
+    """Normalize raw model text into a clean decision token plus response body.
+
+    The full response body (all lines) is preserved after the decision token;
+    only leading/trailing whitespace is stripped. Historically this function
+    kept only the first line (``" ".join(response_text.splitlines()[0].split())``),
+    which silently dropped every subsequent line of a multi-line reply from the
+    display ``generated_text`` / ``content``. ``parse_model_decision`` uses the
+    RAW text independently, so the two views are now consistent again.
+    """
     raw = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     if not raw:
         return "</silence>"
@@ -34,11 +42,9 @@ def normalize_model_output(text: str) -> str:
         response_text = raw.split(marker, 1)[1].strip()
         if not response_text:
             return "</response>"
-        first_line = " ".join(response_text.splitlines()[0].split())
-        return f"</response> {first_line}" if first_line else "</response>"
+        return f"</response> {response_text}"
 
-    first_line = " ".join(raw.splitlines()[0].split())
-    return f"</response> {first_line}" if first_line else "</silence>"
+    return f"</response> {raw}" if raw else "</silence>"
 
 
 def extract_response_payload(text: str) -> str | None:

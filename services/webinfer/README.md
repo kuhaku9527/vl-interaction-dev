@@ -177,7 +177,7 @@ when present, otherwise fall through to the single main client.
 | `SUMMARY_MODEL_PATH` | `/tmp/models/Qwen3-VL-4B-Instruct` | Local path of the summary model; download it first if it does not exist. |
 | `ADAPTER_PORT` | `8070` | Adapter listen port. |
 | `MAIN_BACKENDS` | See `scripts/start_adapter.sh` | Main-model backend JSON, routed by request `model`. |
-| `MAIN_MAX_TOKENS` | Script default `256` | Main-model output length. |
+| `MAIN_MAX_TOKENS` | Script default `1024` | Main-model output length. |
 | `MAIN_TEMPERATURE` | `0.8` | Main-model sampling temperature. |
 | `CHUNK` | Script default `100` | Number of frames per memory chunk. |
 | `COMPRESS_EVERY_N_CHUNKS` | `5` | Number of intermediate summaries to accumulate before compressing into long-term memory. |

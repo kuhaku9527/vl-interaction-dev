@@ -175,7 +175,7 @@ python services/webinfer/live_adapter.py     --main-api-base http://127.0.0.1:70
 | `SUMMARY_MODEL_PATH` | `/tmp/models/Qwen3-VL-4B-Instruct` | 摘要模型本地路径；如果不存在，请先下载。 |
 | `ADAPTER_PORT` | `8070` | 适配器监听端口。 |
 | `MAIN_BACKENDS` | 见 `scripts/start_adapter.sh` | 主模型后端 JSON，按请求中的 `model` 路由。 |
-| `MAIN_MAX_TOKENS` | 脚本默认 `256` | 主模型输出长度。 |
+| `MAIN_MAX_TOKENS` | 脚本默认 `1024` | 主模型输出长度。 |
 | `MAIN_TEMPERATURE` | `0.8` | 主模型采样温度。 |
 | `CHUNK` | 脚本默认 `100` | 每个记忆 chunk 的帧数。 |
 | `COMPRESS_EVERY_N_CHUNKS` | `5` | 压缩为长期记忆前累计的中间摘要数量。 |
