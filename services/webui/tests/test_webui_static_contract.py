@@ -55,6 +55,56 @@ def test_llm_reply_goes_to_vlm_output_and_triggers_tts():
     assert "appendPilotToResult(data.text || '')" in body
 
 
+def test_barge_in_stops_reply_audio_on_user_speech():
+    """P0 barge-in: the front-end stops the reply audio as soon as the user
+    starts speaking instead of waiting for the next llm_reply (client-first
+    principle).
+
+    Signals that must stop the reply audio:
+      * jarvis WS ``asr_partial`` (primary — fires while the user speaks);
+      * jarvis WS ``pilot_utterance`` (backstop — ASR final commit);
+      * browser ASR ``IS_PARTIAL`` (BT path — any user-speech event).
+
+    The stop helper is idempotent (pause + reset, no-op when idle) and the
+    play path also stops the previous reply before starting a new one so
+    overlapping playback can never happen (P0.1).
+    """
+    html = _index_html()
+
+    # P0.2: jarvis WS asr_partial / pilot_utterance both stop reply audio.
+    llm_handler_body = _function_body(html, "installLlmReplyHandler")
+    assert "stopLlmReplyAudio()" in llm_handler_body
+
+    # P0.2: browser ASR IS_PARTIAL also stops reply audio.
+    asr_body = _function_body(html, "handleAsrResult")
+    assert "data.event === 'IS_PARTIAL'" in asr_body
+    assert "stopLlmReplyAudio()" in asr_body
+
+    # P0.1: a new reply stops the previous one before playing (no overlap).
+    play_body = _function_body(html, "playLlmReplyAudio")
+    assert "stopLlmReplyAudio()" in play_body
+
+    # stop helper exists and is idempotent (pause + reset + epoch guard).
+    stop_body = _function_body(html, "stopLlmReplyAudio")
+    assert "btTtsPlayer.pause()" in stop_body
+    assert "btTtsPlayer.currentTime = 0" in stop_body
+    assert "llmReplyEpoch += 1" in stop_body
+
+
+def test_barge_in_discards_stale_reply_synthesized_during_user_speech():
+    """P0.2 race guard: a reply whose TTS synthesis was already in flight when
+    the user started speaking must be discarded (never resumes over speech).
+    The play path captures the epoch after stopping the old audio and checks it
+    again after the /api/tts/synthesize await returns.
+    """
+    html = _index_html()
+    body = _function_body(html, "playLlmReplyAudio")
+
+    assert "const playEpoch = llmReplyEpoch" in body
+    assert "playEpoch !== llmReplyEpoch" in body
+    assert "stale reply TTS discarded" in body
+
+
 def test_jarvis_dialog_is_rendered_through_vlm_history():
     html = _index_html()
 

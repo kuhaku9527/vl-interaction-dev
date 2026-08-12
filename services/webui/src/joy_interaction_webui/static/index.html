@@ -882,10 +882,18 @@ limitations under the License.
                             playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' });
                         } else if (data && data.type === 'pilot_utterance') {
                             // ASR final: drop the draft bubble and commit
-                            // the canonical pilot message.
+                            // the canonical pilot message. The user has spoken,
+                            // so also stop any reply audio that is still
+                            // playing (barge-in backstop; idempotent).
+                            stopLlmReplyAudio();
                             clearAsrDraft();
                             appendPilotToResult(data.text || '');
                         } else if (data && data.type === 'asr_partial') {
+                            // Barge-in (P0): the user has started speaking.
+                            // Stop any reply audio playing right now — the
+                            // client-first principle — before rendering the
+                            // ASR draft. Repeated partials are no-ops.
+                            stopLlmReplyAudio();
                             // ASR streaming hypothesis: render as a draft
                             // bubble so the operator can see what ASR is
                             // currently thinking (replaces guesswork).
@@ -4657,6 +4665,12 @@ limitations under the License.
                     stopSpeech({ sendEnd: false, sendPrompt: true });
                 }
             } else {
+                if (data.event === 'IS_PARTIAL') {
+                    // Barge-in signal from the browser ASR path: the user is
+                    // speaking, so stop any reply audio (client-first; no-op
+                    // when nothing is playing).
+                    stopLlmReplyAudio();
+                }
                 asrPartialText = transcriptText;
                 updatePromptFromSpeech();
             }
@@ -5168,6 +5182,31 @@ limitations under the License.
         // Hooked BEFORE connectWebSocket so the very first reply is caught.
         let lastLlmReplyAt = 0;
         let lastLlmReplyKey = null;
+        // Barge-in (P0) reply-audio lifecycle state. `llmReplyEpoch` is bumped
+        // every time the reply audio is stopped (user started speaking, or a
+        // new reply supersedes the old one). Any in-flight /api/tts/synthesize
+        // result that captured an older epoch is discarded so a stale reply
+        // can never resume after the user has already barged in.
+        let llmReplyEpoch = 0;
+        let llmReplyAudioUrl = null;
+        // Client-first stop primitive: pause the reply audio element, reset its
+        // position, release the object URL and invalidate any in-flight
+        // synthesis. Idempotent — calling it when nothing is playing is a no-op.
+        // Only affects the LLM-reply audio (btTtsPlayer); never wake/end tones
+        // (those are short-lived events owned by the jarvis state machine).
+        function stopLlmReplyAudio() {
+            llmReplyEpoch += 1;
+            if (!btTtsPlayer) return;
+            btTtsPlayer.pause();
+            btTtsPlayer.currentTime = 0;
+            btTtsPlayer.onended = null;
+            if (llmReplyAudioUrl) {
+                URL.revokeObjectURL(llmReplyAudioUrl);
+                llmReplyAudioUrl = null;
+            }
+            btTtsPlayer.removeAttribute('src');
+            btTtsPlayer.load();
+        }
         async function playLlmReplyAudio(text, meta) {
             if (!text || !btTtsPlayer) return;
             // The jarvis state machine streams TTS to the WebRTC audio_output
@@ -5183,6 +5222,10 @@ limitations under the License.
             if (lastLlmReplyKey === dedupKey && (now - lastLlmReplyAt) < 8000) return;
             lastLlmReplyKey = dedupKey;
             lastLlmReplyAt = now;
+            // P0.1: stop the previous reply audio before starting a new one so
+            // overlapping playback can never happen (switch-at-once semantics).
+            stopLlmReplyAudio();
+            const playEpoch = llmReplyEpoch;
             btLatency.ttsStartAt = performance.now();
             btLatency.ttsReadyAt = null;
             btLatency.ttsPlayAt = null;
@@ -5198,16 +5241,33 @@ limitations under the License.
                     return;
                 }
                 const blob = await resp.blob();
+                // P0.2 race guard: if the user started speaking while this
+                // reply was being synthesized, the reply is stale — discard it
+                // so it never resumes over the user's speech.
+                if (playEpoch !== llmReplyEpoch) {
+                    console.debug('[barge-in] stale reply TTS discarded (user spoke during synthesis)');
+                    return;
+                }
                 btLatency.ttsReadyAt = performance.now();
                 renderBtLatency();
                 const url = URL.createObjectURL(blob);
+                llmReplyAudioUrl = url;
                 btTtsPlayer.src = url;
                 try {
                     await btTtsPlayer.play();
+                    // A barge-in may land while play() is starting; keep silent.
+                    if (playEpoch !== llmReplyEpoch) {
+                        btTtsPlayer.pause();
+                        btTtsPlayer.currentTime = 0;
+                        return;
+                    }
                     btLatency.ttsPlayAt = performance.now();
                     renderBtLatency();
                 } catch (e) { console.warn('audio play blocked', e); }
-                btTtsPlayer.onended = () => URL.revokeObjectURL(url);
+                btTtsPlayer.onended = () => {
+                    URL.revokeObjectURL(url);
+                    if (llmReplyAudioUrl === url) llmReplyAudioUrl = null;
+                };
             } catch (err) {
                 console.warn('playLlmReplyAudio error', err);
             }
