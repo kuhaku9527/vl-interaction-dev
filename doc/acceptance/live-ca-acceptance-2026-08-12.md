@@ -1,0 +1,88 @@
+# live 模式 C.A 真机验收清单（2026-08-12）
+
+> 目的：规范 live 模式真机测试流程，每轮测试留痕（结果记录表），可追溯、可复现。
+> 被测版本：commit `b08c856`（C.A live 可交互层，446 测试绿）
+> 测试人：＿＿＿＿＿＿　日期：＿＿＿＿＿＿　环境：＿＿＿＿＿＿（麦型号：＿＿＿＿＿＿）
+
+---
+
+## §0 前置条件（每次测试前确认）
+
+- [ ] 重启栈：`stop-joyai.ps1` → `start-joyai.ps1 -Mode minimal`
+- [ ] 浏览器 **Ctrl+F5** 强刷（加载新前端）
+- [ ] 页面出现 **live 模式按钮**（紫色）+ jarvis 监听按钮共存
+- [ ] 日志就绪：`services/.logs/webui.err.log`（观察 `[live-mode]` / `[tts-stream]` / `decision=` 关键词）
+
+---
+
+## §1 功能用例（逐条执行，结果填 §4 记录表）
+
+| 编号 | 用例 | 操作步骤 | 预期结果 | 观察点（日志） |
+|---|---|---|---|---|
+| **L1** | live 入口 | 点击 live 模式按钮 | 状态 pill 变"Live 常驻监听中"；再次点击 → 退出复位 | `/api/live/start` / `stop` 200 |
+| **L2** | 免唤醒基本对话 | live 开启后**不喊任何词**直接说话（如"你好"） | 流式回复：首句快出（体感 ≤1s）+ 字幕同步 + 语音播放 | `[live-mode] ASR endpoint` → `decision=response` → `[tts-stream] sentence N TTS synth start/ok/pushed` |
+| **L3** | 打断 | 回复播报中直接开口说话 | 旧声**立即停**（体感 <150ms）；说完 2s 新回复出 | `[live-mode] HARD_INTERRUPTED` → `[llm-reply] epoch bumped (reason=barge-in)` |
+| **L4** | 双开 | live 开启的同时点 jarvis 监听，再各自使用 | 两边互不干扰：live 说话走 live 回复，jarvis 喊"bt"唤醒正常 | 两个会话各自状态上报正常 |
+| **L5** | 退出 | live 回复中/监听中点按钮退出 | 状态 pill 复位；音频停止；再进入正常 | `/api/live/stop` 200 |
+| **L6** | 长回复分句 | 问需要多句回答的问题（如"介绍下艾尔登法环开局"） | 分句逐句播放（不等全文），无新旧叠加 | `[tts-stream] sentence 0/1/2... queued + TTS ok` |
+| **R1** | jarvis 回归 | 测试后回归：喊"bt"唤醒 → 问答 → 说"好的"退出 | jarvis 行为与 live 前一致 | jarvis 唤醒/退出词/打断日志正常 |
+
+---
+
+## §2 三决策判断诱发测试（live 核心，重点）
+
+**背景**：live 的"三判断"= 模型对每轮用户输入输出一个 decision token：
+- `</silence>`（沉默：不开口回复）
+- `</response>`（回复：播报内容）
+- `</delegation>`（委派：转后台检索，不念问题）
+
+**代码实现已完整**（三层实证）：
+1. webinfer：`interaction_mode="live"`（默认）教学三态 + `parse_model_decision` 解析（infer_loop.py:63-66, prompt_constants.py:62-81）；
+2. 流式协议：decision 帧先行（turn_streaming.py:13-15，silence 从不发声）；
+3. live_mode.py `_finish_llm_turn`：三态路由（response→播报 / silence→静默 / delegation→BackgroundModelService，live_mode.py:165）。
+
+**真机诱发方法**（三态由模型自主判定，用问题类型诱发，以日志 decision 字段为判定依据）：
+
+| 编号 | 目标决策 | 建议诱发语句 | 预期 | 判定（日志） |
+|---|---|---|---|---|
+| **D1** | `</silence>` | 无信息量/无需回答的话（如"嗯""我在呢""哦"——多试几种语气） | 无语音播报、无字幕回复 | `decision=silence`（`[tts-stream] LLM stream done (decision=silence)`）；若模型仍回复，属模型判定，记录即可 |
+| **D2** | `</response>` | 正常问答（"你好""讲个笑话""介绍一下玛尔基特"） | 有语音回复 + 字幕 | `decision=response` + sentence 播报 |
+| **D3** | `</delegation>` | 需查资料的问题（"查一下玛尔基特怎么打""这个 wiki 里怎么说"） | 不念问题本身；后台检索触发；返回结果播报 | `decision=delegation` → BackgroundModelService 触发日志；无 tts_sentence 播报问题文本 |
+
+**注意**：三态触发不保证 100%（模型自主），单次未触发≠bug——请每个目标试 2-3 种语句，以 `decision=` 日志为准记录实际结果。
+
+---
+
+## §3 性能体感（可选项，计时记录）
+
+| 项 | 目标 | 实测 | 备注 |
+|---|---|---|---|
+| 首句出声延迟（唤醒后提问到听到第一句） | ≤1s | ＿＿＿s | 可看日志 `ASR endpoint`→`sentence 0 TTS ok` 时间差 |
+| 打断响应（开口到旧声停止） | <150ms 体感 | ＿＿＿s | 体感即可，无需精确计时 |
+| 连续 3 轮对话无异常 | 稳定 | ＿＿ | 记录异常现象 |
+
+---
+
+## §4 测试记录表（留痕，逐条填写）
+
+| 编号 | 结果（✅/❌/⚠️） | 现象/偏差描述 | 日志证据（时间点/关键词） | 备注 |
+|---|---|---|---|---|
+| L1 | | | | |
+| L2 | | | | |
+| L3 | | | | |
+| L4 | | | | |
+| L5 | | | | |
+| L6 | | | | |
+| R1 | | | | |
+| D1 | | | | |
+| D2 | | | | |
+| D3 | | | | |
+
+**汇总**：通过 ＿＿/10　失败 ＿＿　⚠️ ＿＿
+
+---
+
+## §5 回传方式
+
+- 测试记录表填好后，发我（可直接贴文本，或存 `doc/acceptance/live-ca-acceptance-2026-08-12.md` 评论区）；
+- 失败/⚠️ 项附：操作步骤复述 + 日志时间段（`webui.err.log` 里的起止时间），我据此定位修复。
