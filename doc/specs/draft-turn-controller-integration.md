@@ -1,9 +1,9 @@
 # Spec Draft：Turn Controller 接入设计（Integration）
 
-> 生命周期: **草稿**（2026-08-12）——正式落地第一步，供用户审阅；走 草稿→沙箱验证→替换 流程
+> 生命周期: **草稿 v2**（2026-08-12）——Phase A/B 已实现并通过 QA（commit 95c3df6/5136e74 等），状态同步见 §2；走 草稿→沙箱验证→替换 流程
 > 上游: `draft-unified-turn-controller.md`（v2 状态机）+ `turn_controller.py` 原型（64 测试绿）+ jarvis_mode.py 现状
 > 原则: 渐进接入、绝不破坏现有行为、可回滚；原型已隔离验证，接入分阶段
-> 状态: 设计草稿（未改代码）
+> 状态: 设计草稿（Phase A ✅ 影子 / Phase B ✅ 收敛委托 / Phase C ⏳ 待做）
 
 ---
 
@@ -12,6 +12,8 @@
 - **目标**：把统一 TurnController（原型）渐进接入现有 webui 路径，先服务 jarvis（回归验证），再开 live（新能力），最终验证"直播=核心、jarvis=配置"的全局观。
 - **范围**：webui 的 jarvis_mode.py / 相关 handler；**不动** webinfer decision token（核心 IP）、不动 ASR/KWS/TTS 引擎。
 - **不做**：一次性替换 jarvis 状态机（风险高）；不改 decision token 语义；不引入新依赖。
+- **已完成**：Phase A（影子，100% 真机对齐，commit 95c3df6）；Phase B（DIALOG_ACTIVE 委托，legacy 逐字保留 + env 闸门默认关，commit 5136e74/7afcf08）；B1（KWS 静音误唤醒 P0 修复，commit f7645d1/502bccb）。
+- **待办**：Phase C（live 接入）；打断延迟优化（见 `doc/research/bargein-latency-analysis-2026-08-12.md`，P0 前端先行停 TTS）；B2 EXIT_WORDS 加"再见"；B3 退出语义（用户待定）。
 
 ## §2 接入策略（三阶段，每阶段可独立验收/回滚）
 
