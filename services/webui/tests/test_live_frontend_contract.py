@@ -73,11 +73,16 @@ def test_live_mode_stop_calls_api():
 
 
 def test_live_mode_click_handler_toggles():
+    """The live button is wired to the radio selector, which toggles start/stop
+    (and stops the jarvis mode first — mutual exclusion lives in selectLiveMode)."""
     html = _index_html()
     idx = html.index("liveModeBtn.addEventListener('click'")
     snippet = html[idx : idx + 400]
-    assert "startLiveMode()" in snippet
-    assert "stopLiveMode()" in snippet
+    assert "selectLiveMode" in snippet
+    body = _function_body(html, "selectLiveMode")
+    assert "startLiveMode()" in body
+    assert "stopLiveMode()" in body
+    assert "stopBtListening()" in body  # radio-group: jarvis stopped first
 
 
 def test_live_replies_reuse_tts_sentence_queue_and_p1_guard():

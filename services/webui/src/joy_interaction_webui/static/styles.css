@@ -2319,6 +2319,30 @@
             display: none;
         }
 
+        /* Mode selection is a radio group: Jarvis 唤醒 / Live 常驻 are
+           mutually exclusive. Labels are shown (desktop) so the two modes are
+           distinguishable; the active radio keeps its .listening highlight
+           plus an outline ring. Mobile media queries below re-hide labels. */
+        .mode-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mode-group .listen-label,
+        .mode-group .live-label {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .mode-group .chat-prompt-action[aria-checked="true"] {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 1px;
+        }
+
         .speech-label {
             display: none;
             font-size: 14px;
@@ -3455,6 +3479,11 @@
             .chat-prompt-action {
                 width: 50px;
                 height: 50px;
+            }
+
+            .mode-group .listen-label,
+            .mode-group .live-label {
+                display: none;
             }
 
             .chat-prompt-action .lucide {

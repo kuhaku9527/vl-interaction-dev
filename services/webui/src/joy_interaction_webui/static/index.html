@@ -754,14 +754,16 @@ limitations under the License.
                             </button>
                         </div>
                         <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="输入文字，或点麦克风语音识别后发送给 BT-7274"></textarea>
-                        <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" aria-pressed="false" aria-label="监听 BT 唤醒词">
-                            <i data-lucide="radio"></i>
-                            <span class="listen-label">监听</span>
-                        </button>
-                        <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" aria-pressed="false" aria-label="进入 Live 常驻模式">
-                            <i data-lucide="radio-tower"></i>
-                            <span class="live-label">Live</span>
-                        </button>
+                        <div class="mode-group" role="radiogroup" aria-label="交互模式（Jarvis 唤醒 / Live 常驻，单选互斥）">
+                            <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
+                                <i data-lucide="radio"></i>
+                                <span class="listen-label">Jarvis 唤醒</span>
+                            </button>
+                            <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="Live 常驻模式（持续聆听）">
+                                <i data-lucide="radio-tower"></i>
+                                <span class="live-label">Live 常驻</span>
+                            </button>
+                        </div>
                         <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
                             <i class="mic-icon" data-lucide="mic"></i>
                             <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
@@ -4314,8 +4316,8 @@ limitations under the License.
             liveModeActive = Boolean(active);
             if (!liveModeBtn) return;
             liveModeBtn.classList.toggle('listening', liveModeActive);
-            liveModeBtn.setAttribute('aria-pressed', liveModeActive ? 'true' : 'false');
-            liveModeBtn.title = liveModeActive ? '退出 Live 常驻模式' : '进入 Live 常驻模式';
+            liveModeBtn.setAttribute('aria-checked', liveModeActive ? 'true' : 'false');
+            liveModeBtn.title = liveModeActive ? '退出 Live 常驻模式（点击可切换回 Jarvis 唤醒）' : '进入 Live 常驻模式';
             liveModeBtn.disabled = Boolean(liveModeStarting && !liveModeActive);
             lucide.createIcons();
         }
@@ -4418,8 +4420,8 @@ limitations under the License.
             btListening = Boolean(active);
             if (!btListenBtn) return;
             btListenBtn.classList.toggle('listening', btListening);
-            btListenBtn.setAttribute('aria-pressed', btListening ? 'true' : 'false');
-            btListenBtn.title = btListening ? '停止监听 BT 唤醒词' : '监听 BT 唤醒词';
+            btListenBtn.setAttribute('aria-checked', btListening ? 'true' : 'false');
+            btListenBtn.title = btListening ? '停止监听 BT 唤醒词（点击可切换回 Live 常驻）' : '监听 BT 唤醒词';
             btListenBtn.disabled = Boolean(btListeningStarting && !btListening);
             lucide.createIcons();
         }
@@ -5238,20 +5240,37 @@ limitations under the License.
             });
         }
 
-        btListenBtn.addEventListener('click', async () => {
+        // -------------------------------------------------------------------
+        // Mode selection is a RADIO GROUP: "Jarvis 唤醒" and "Live 常驻" are
+        // mutually exclusive. The ONLY way to switch is an explicit user click
+        // on the other mode button — clicking one mode stops the other first.
+        // There is deliberately NO automatic switch path (no timer, state
+        // watcher, or status callback ever toggles a mode on its own).
+        // -------------------------------------------------------------------
+        async function selectBtListenMode() {
             if (btListening || btListeningStarting) {
                 await stopBtListening();
-            } else {
-                await startBtListening();
+                return;
             }
-        });
-        liveModeBtn.addEventListener('click', async () => {
             if (liveModeActive || liveModeStarting) {
                 await stopLiveMode();
-            } else {
-                await startLiveMode();
             }
-        });
+            await startBtListening();
+        }
+
+        async function selectLiveMode() {
+            if (liveModeActive || liveModeStarting) {
+                await stopLiveMode();
+                return;
+            }
+            if (btListening || btListeningStarting) {
+                await stopBtListening();
+            }
+            await startLiveMode();
+        }
+
+        btListenBtn.addEventListener('click', selectBtListenMode);
+        liveModeBtn.addEventListener('click', selectLiveMode);
         promptSendBtn.addEventListener('click', () => {
             sendBtPrompt();
         });
