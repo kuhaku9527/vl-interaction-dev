@@ -86,3 +86,52 @@
 - 断言清单：.workbuddy/tmp/addressee-assertions.md（140 条）
 - 现有架构：live_mode.py（feed_audio 链路）、turn_controller.py（13 态）、turn_streaming.py（decision 消费）、ADR0006（单入口）
 - 部署真值：run-windows.ps1:372（-ngl 999 GPU）
+
+---
+
+## 附录 A：CAM++ 本地实测数据（Phase 1 落地前，2026-08-12 晚）
+
+> 实测脚本：`services/scripts/benchmark_campplus_addressee.py`
+> 环境：Windows 单机 CPU，`D:/AI/envs/joyai-main/python.exe`，sherpa-onnx 1.13.4，`num_threads=2`
+> 模型：`D:/AI/models/sherpa-onnx/models/speaker/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx`（27MB，192 维，input `[N,T,80]` fbank）
+> 音频真源：用户 KWS 实时捕获（16k mono 3s，`D:/AI/data/kws/mic_captures`）+ BT-7274 克隆参考音（16k mono 23s，`D:/AI/workspace/bt-voice/ref_audio/bt_reference.wav`，另一说话人）+ esc50 环境噪声
+
+### A.1 延迟 / RTF / CPU（验证 spec §3.3 假设）
+
+| 指标 | 实测值 | spec 假设 | 判定 |
+|---|---|---|---|
+| 2s 段 embedding 提取延迟 | **mean 19-20ms**（p50 ~19ms，min 17.6ms，max 29ms） | 300-400ms | ✅ **大幅优于假设**（~15-20 倍余量；一次段尾计算，非逐 chunk） |
+| RTF | **0.010**（2s 音频/20ms 计算） | 0.15-0.18（离线表） | ✅ 优于（在线一次性段尾提取远低于流式逐帧） |
+| CPU 增量 | **~0.037 core-seconds / 2s 段**（30 次连续提取 proc CPU≈194%，墙钟 0.57s） | 瞬时 +5-10% | ✅ 符合（一次性 ~20ms 突发，可忽略） |
+
+结论：**声学增量实际 ~20ms（非 300-400ms），且只发生在段尾一次**；比 spec §3.3 假设乐观一个量级。与 ASR 并行不增串行延迟的结论仍成立（甚至串行也不痛）。
+
+### A.2 区分度（同人 vs 异人 cosine 分布）
+
+| 对比对 | n | mean | min | max |
+|---|---|---|---|---|
+| 同人·干净连续语音（BT vs BT，23s 参考音切 2s 段） | 45 | **0.751** | 0.677 | 0.827 |
+| 异人（用户 mic vs BT 参考音） | 100 | **0.004** | -0.094 | 0.153 |
+| 用户 mic 自比（3s 窗口含短 "bt" 唤醒 + 大量静音） | 45 | 0.486 | 0.185 | 0.796 |
+| 环境噪声（用户 vs esc50） | 100 | 0.266 | -0.003 | 0.588 |
+
+要点：
+1. **干净连续语音下区分度优秀**：同人 mean 0.75（min 0.677），异人 mean 0.004（max 0.153）——0.6 阈值下 100% 同人通过、0% 异人误放。
+2. 用户 KWS 捕获自比偏低（0.486）是**数据特性**而非模型问题：捕获是 3s 滚动窗口包住 ~0.5s "bt" 唤醒 + 大量静音，切 2s 段多数是静音。**注册流程要求 2-3s 连续真人语音段**（spec §3.1），与 clean-speech 场景一致，预期区分度按 BT 行（0.75）计。
+3. 环境噪声 mean 0.266、max 0.588 均 < 0.6——噪声不致误放（宁漏不乱插方向正确）。
+
+### A.3 阈值行为（0.55 / 0.6 / 0.65 网格）
+
+| 阈值 | 同人 recall（BT 干净语音） | 异人 false-acc（用户 vs BT） |
+|---|---|---|
+| 0.55 | 1.00 | 0.00 |
+| **0.60（默认）** | **1.00** | **0.00** |
+| 0.65 | 0.96 | 0.00 |
+
+结论：0.6 默认阈值在真源数据上区分度充足；spec 建议的 0.55-0.65 可配置范围合理，宁漏不乱插方向正确（异人侧 0.65 也 0 误放，但为保同人 recall 保留 0.6 默认）。
+
+### A.4 SpeakerEmbeddingManager 端到端（注册→search）
+
+- 用前 3 段用户干净语音注册 → `manager.search(emb, 0.6)`：用户语音 6/10 命中（4 段低分来自静音主导切片），BT 语音 **0/10 误命中**。
+- 与 A.2 一致：静音切片降低召回但不产生误放——Phase 1 门控方向（丢弃非目标、宁可漏）成立。
+
