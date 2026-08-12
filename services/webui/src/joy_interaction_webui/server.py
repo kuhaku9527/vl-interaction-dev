@@ -26,6 +26,12 @@ if not _access_logger.handlers:
         "..",
         "logs",
     )
+    # Health/heartbeat polling paths (status pills polled every 1-5s, liveness
+    # probes) are logged at DEBUG instead of INFO so normal runs show only real
+    # events. Set JOYAI_LOG_LEVEL=DEBUG to restore them for troubleshooting.
+    _access_log_level = getattr(
+        logging, _os_for_accesslog.environ.get("JOYAI_LOG_LEVEL", "INFO").upper(), logging.INFO
+    )
     try:
         _os_for_accesslog.makedirs(_log_dir, exist_ok=True)
         _ts = _os_for_accesslog.path.join(
@@ -38,10 +44,47 @@ if not _access_logger.handlers:
         )
         _fh = logging.FileHandler(_ts, encoding="utf-8")
         _fh.setFormatter(logging.Formatter("%(message)s"))
+        # The handler gates what lands on disk: INFO by default, DEBUG when
+        # JOYAI_LOG_LEVEL=DEBUG (heartbeat traffic becomes visible).
+        _fh.setLevel(_access_log_level)
         _access_logger.addHandler(_fh)
-        _access_logger.setLevel(logging.INFO)
+        # The logger itself must pass DEBUG so the access middleware can route
+        # heartbeat polls to debug(); the FileHandler level is the real gate.
+        _access_logger.setLevel(logging.DEBUG)
     except OSError:
         pass  # access log is best-effort; do not break the webui if logs/ is unwritable
+
+
+#: Exact heartbeat/health endpoints (browser status pills, liveness probes).
+_HEARTBEAT_EXACT_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/v1/models",
+    }
+)
+
+
+def _is_heartbeat_path(path: str) -> bool:
+    """True when ``path`` is a health/status polling endpoint (heartbeat).
+
+    Heartbeat traffic (status pills polled every 1-5s, liveness probes) is
+    routed to DEBUG instead of INFO so ``webui.err.log`` shows real events.
+    Failures (status >= 400) are still logged at INFO so errors stay visible
+    without enabling DEBUG.
+    """
+    base = path.split("?", 1)[0]
+    if base in _HEARTBEAT_EXACT_PATHS:
+        return True
+    if base.startswith("/api/") and (
+        base.endswith("/status")
+        or base.endswith("/extended-status")
+        or base.endswith("/health")
+        or base.endswith("/models")
+    ):
+        return True
+    return False
+
+
 import datetime  # noqa: E402
 import os  # noqa: E402
 import subprocess  # noqa: E402
@@ -92,7 +135,8 @@ def _spawn_bg(coro):
 
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=getattr(logging, os.environ.get("JOYAI_LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -2071,7 +2115,12 @@ def main():
                     },
                     ensure_ascii=False,
                 )
-                _access_logger.info(line)
+                if _is_heartbeat_path(request.path) and status < 400:
+                    # Heartbeat poll succeeded: DEBUG only (visible with
+                    # JOYAI_LOG_LEVEL=DEBUG), so INFO logs show real events.
+                    _access_logger.debug(line)
+                else:
+                    _access_logger.info(line)
             except Exception:  # noqa: S110
                 pass  # never let logging fail a request
 
