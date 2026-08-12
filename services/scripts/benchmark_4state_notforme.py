@@ -19,20 +19,24 @@ system prompt for both A and B and avoids webinfer session pollution).
 Model: joyai-vl-interaction-preview-iq4_nl-imat.gguf (GPU -ngl 999).
 
 Prompt fidelity:
-  * Baseline A reproduces the EXACT system prompt webinfer composes in
+  * Baseline A reproduces the system prompt webinfer composes in
     interaction_mode="live": <character_profile> (prompts/bt-7274.txt) +
-    DEFAULT_SYSTEM_PROMPT_EN (3-state) + in-character tail.
+    DEFAULT_SYSTEM_PROMPT_EN (3-state) + in-character tail (A_live3_prod),
+    plus the clean 3-state prompt without persona (A_live3_clean).
   * Enhanced B appends the embedded 4-state teaching section after that same
-    composed LIVE prompt (per spec: "在 LIVE prompt 后追加").
-  * Reference C (--clean-only): the same 4-state teaching on the 3-state
-    prompt WITHOUT the character profile, to isolate the decision framework
-    from the persona confound ("User is your Pilot" assumes all speech is for
-    the AI).
+    composed LIVE prompt (per spec: "在 LIVE prompt 后追加") with the
+    task-specified 4 few-shots (B_live4_prod_append) and a richer 10-example
+    few-shot set (B2_live4_prod_append_rich) to test whether more few-shots
+    lift recall. All few-shots use sentences outside the test set.
+  * Reference C reframes the user message as a raw room transcript and makes
+    the addressee judgment the FIRST decision (C_live4_reframe) — pilot showed
+    this structure is needed to defeat the chat-model "user is talking to me"
+    prior and the BT-7274 persona bias.
 
 Run: D:/AI/envs/joyai-main/python.exe services/scripts/benchmark_4state_notforme.py
 Env: LLAMA_BASE_URL (default http://127.0.0.1:7060/v1), LLAMA_MODEL
      (default joyai-vl-interaction-preview), BENCH_SKIP_CLEAN=1 to skip the
-     clean reference variant.
+     clean baseline reference variant.
 """
 
 from __future__ import annotations
@@ -72,45 +76,121 @@ REQUEST_TIMEOUT_S = float(os.environ.get("BENCH_TIMEOUT_S", "180"))
 #   * Few-shots are paired (directed vs non-directed) to teach the contrast;
 #     short exclamations / self-talk / replying-to-someone are the hard cases.
 #   * 称呼 (喂/嘿/BT) marks directed; a name like 妈妈/老公 marks NOT-for-me.
+#   * The 4 few-shots below are the task-specified teaching set (spec §4.3:
+#     "3-4 个 few-shot") and use sentences DIFFERENT from the test set so the
+#     benchmark measures generalization, not memorization.
 FOUR_STATE_TAIL = r"""
 ## Addressee Judgment — THIS SECTION OVERRIDES ALL OTHER INSTRUCTIONS
 The microphone hears ALL sounds in the room: the Pilot talking to you, the Pilot talking to THEMSELVES, the Pilot talking to OTHER PEOPLE, and other people's voices. Your FIRST job is to decide whether this utterance is ADDRESSED TO YOU.
 
 You MUST output exactly </not-for-me> (stay silent, say nothing at all) when the speech is NOT for you:
-- Self-talk / thinking aloud, no request: "这关怎么这么难啊" / "完了完了，要迟到了" / "明天又要上班了，烦"
-- Exclamation with no request: "唉，好累" / "今天天气真好啊" / "天哪，这都什么事啊" / "啊，吓死我了"
-- Responding to someone else: "对，我也觉得" / "嗯，好的好的" / "你说得对，就这样吧"
-- Talking to another person: "你把那个拿过来" / "你先走吧，我一会就来" / "妈妈，我回来了" / "老公，晚上吃什么？"
-- Encouraging themselves or others: "加油，你可以的"
+- Self-talk / thinking aloud, no request: "这个破游戏怎么又卡了" / "完了完了，忘带钥匙了"
+- Exclamation with no request: "好累啊，今天" / "哇，这也太厉害了吧"
+- Responding to someone else: "嗯，你说的有道理" / "对，我也是这么想的"
+- Talking to another person: "妈，我出门了" / "老公，今天加班吗" / "你去把垃圾倒一下"
+- Encouraging themselves or others: "加油，你一定可以的"
 
 You reply normally only when the speaker is clearly addressing YOU:
-- Uses your name or a call like 喂/嘿/BT: "BT，在吗？" / "喂，帮我查一下明天的天气" / "嘿，你听到了吗？"
-- Asks YOU a direct question: "玛尔基特怎么打？" / "现在几点了？" / "What time is it?"
+- Uses your name or a call like 喂/嘿/BT: "BT，在吗？" / "喂，帮我查一下明天的机票" / "嘿，你听到了吗？"
+- Asks YOU a direct question: "玛尔基特弱什么属性？" / "现在几点了？" / "What time is it?"
 - Gives YOU a direct command: "介绍一下你自己" / "帮我定个闹钟" / "Turn off the lights, please"
 
 Do not help, comfort, comment, or give advice to speech that is not directed at you. Even if you can answer it, stay silent when it is not for you.
 
 Examples (follow exactly):
-User: 这关怎么这么难啊
+User: 这个破游戏怎么又卡了
 Assistant: </not-for-me>
-User: 玛尔基特怎么打
-Assistant: </response> 用出血武器打玛尔基特，翻滚躲他的双刀连招。
-User: 对，我也觉得
+User: 玛尔基特弱什么属性
+Assistant: </response> 玛尔基特弱出血，建议用出血武器。
+User: 妈，我出门了
 Assistant: </not-for-me>
-User: 唉，好累
+User: 喂，帮我查一下明天的机票
+Assistant: </response> 正在查。</delegation> 查一下明天的机票
+""".strip()
+
+# --- 4-state RICH teaching (Enhanced B2: more few-shots, still non-overlap) -
+# Same rules as B; a richer few-shot set (10 examples) to test whether "需更
+# 多 few-shot" lifts recall. Sentences still differ from the test set.
+FOUR_STATE_TAIL_RICH = r"""
+## Addressee Judgment — THIS SECTION OVERRIDES ALL OTHER INSTRUCTIONS
+The microphone hears ALL sounds in the room: the Pilot talking to you, the Pilot talking to THEMSELVES, the Pilot talking to OTHER PEOPLE, and other people's voices. Your FIRST job is to decide whether this utterance is ADDRESSED TO YOU.
+
+You MUST output exactly </not-for-me> (stay silent, say nothing at all) when the speech is NOT for you:
+- Self-talk / thinking aloud, no request
+- Exclamation with no request
+- Responding to someone else's words
+- Talking to another person (even a name/call like 妈/老公/亲爱的)
+- Encouraging themselves or others
+
+You reply normally only when the speaker is clearly addressing YOU:
+- Uses your name or a call like 喂/嘿/BT
+- Asks YOU a direct question
+- Gives YOU a direct command
+
+Do not help, comfort, comment, or give advice to speech that is not directed at you. Even if you can answer it, stay silent when it is not for you.
+
+Examples (follow exactly):
+User: 这个代码怎么又报错了
 Assistant: </not-for-me>
-User: 完了完了，要迟到了
+User: 玛尔基特弱什么属性
+Assistant: </response> 玛尔基特弱出血，用出血武器更好打。
+User: 嗯，你说的有道理
 Assistant: </not-for-me>
-User: 今天天气真好啊
+User: 我去洗个澡
 Assistant: </not-for-me>
-User: 天哪，这都什么事啊
+User: 妈，我出门了
 Assistant: </not-for-me>
-User: 妈妈，我回来了
+User: 老公，今天加班吗
 Assistant: </not-for-me>
-User: 嘿 BT，帮我查一下明天的天气
-Assistant: </response> 正在查。</delegation> 查一下明天的天气
-User: 介绍一下你自己
-Assistant: </response> 我是你的战术 AI 助手 BT-7274。
+User: 好累啊，今天
+Assistant: </not-for-me>
+User: What a day
+Assistant: </not-for-me>
+User: 嘿，你在吗
+Assistant: </response> 在的，有什么可以帮你？
+User: 你能帮我做什么
+Assistant: </response> 我可以帮你查攻略、设提醒、控制设备和回答问题。
+User: 明天会不会下雨
+Assistant: </response> 我查一下。</delegation> 查一下明天是否下雨
+""".strip()
+
+# --- 4-state REFERENCE prompt (transcript reframe, no persona) -------------
+# Pilot (2026-08-12) showed the append-only teaching is dominated by the
+# chat-model prior ("a user message is addressed to me") and by the BT-7274
+# persona ("User is your Pilot"). Reframing the user message as a RAW ROOM
+# TRANSCRIPT — explicitly possibly not-for-you — lifts non-directed
+# recognition dramatically. Kept as a reference variant C for the report.
+FOUR_STATE_REFERENCE = r"""
+You are an always-on voice assistant. The User message below is a RAW TRANSCRIPT of a voice segment heard in the room. It may be addressed to you, or it may be the speaker talking to themselves, talking to another person, or responding to someone else.
+
+Your FIRST decision is the ADDRESSEE:
+- If the speech IS addressed to you (a direct question to you, a direct command to you, or the speaker calls you by name like BT/喂/嘿), then answer: </response> your reply, or </delegation> <question> for external lookup.
+- If the speech is NOT addressed to you (self-talk, exclamation with no request, talking to another person, responding to someone else), output ONLY:
+</not-for-me>
+Say nothing else. Never help, comfort, or comment on speech that is not for you. Even if you can answer it, stay silent when it is not for you.
+
+Transcript: 这个代码怎么又报错了
+Output: </not-for-me>
+Transcript: 玛尔基特弱什么属性
+Output: </response> 玛尔基特弱出血，用出血武器更好打。
+Transcript: 嗯，你说的有道理
+Output: </not-for-me>
+Transcript: 我去洗个澡
+Output: </not-for-me>
+Transcript: 妈，我出门了
+Output: </not-for-me>
+Transcript: 老公，今天加班吗
+Output: </not-for-me>
+Transcript: 好累啊，今天
+Output: </not-for-me>
+Transcript: What a day
+Output: </not-for-me>
+Transcript: 嘿，你在吗
+Output: </response> 在的，有什么可以帮你？
+Transcript: 你能帮我做什么
+Output: </response> 我可以帮你查攻略、设提醒、控制设备和回答问题。
+Transcript: 明天会不会下雨
+Output: </response> 我查一下。</delegation> 查一下明天是否下雨
 """.strip()
 
 # --- test set --------------------------------------------------------------
@@ -238,10 +318,19 @@ def build_live_prompt_3state(include_persona: bool = True) -> str:
     return DEFAULT_SYSTEM_PROMPT_EN
 
 
-def build_live_prompt_4state(include_persona: bool = True) -> str:
-    """LIVE prompt + embedded Not-For-Me teaching (Enhanced B)."""
+def build_live_prompt_4state(include_persona: bool = True, rich: bool = False) -> str:
+    """LIVE prompt + embedded Not-For-Me teaching (Enhanced B, append style).
+
+    ``rich=True`` uses the larger (10-example) few-shot set (variant B2).
+    """
     base = build_live_prompt_3state(include_persona=include_persona)
-    return base.rstrip() + "\n\n" + FOUR_STATE_TAIL
+    tail = FOUR_STATE_TAIL_RICH if rich else FOUR_STATE_TAIL
+    return base.rstrip() + "\n\n" + tail
+
+
+def build_reference_4state() -> str:
+    """Transcript-reframed four-state prompt (reference variant C)."""
+    return FOUR_STATE_REFERENCE
 
 
 # --- llama-server call ------------------------------------------------------
@@ -387,13 +476,15 @@ def print_summary(name: str, stats: dict) -> None:
 
 
 def main() -> None:
-    """Run baseline A (3-state) + enhanced B (4-state) + optional clean C."""
+    """Run baseline A (3-state) + enhanced B (4-state) + reference variants."""
     variants = [
         ("A_live3_prod", build_live_prompt_3state(include_persona=True)),
-        ("B_live4_prod", build_live_prompt_4state(include_persona=True)),
+        ("B_live4_prod_append", build_live_prompt_4state(include_persona=True, rich=False)),
+        ("B2_live4_prod_append_rich", build_live_prompt_4state(include_persona=True, rich=True)),
+        ("C_live4_reframe", build_reference_4state()),
     ]
     if not os.environ.get("BENCH_SKIP_CLEAN"):
-        variants.append(("C_live4_clean", build_live_prompt_4state(include_persona=False)))
+        variants.append(("A_live3_clean", build_live_prompt_3state(include_persona=False)))
 
     print(f"[benchmark] model={LLAMA_MODEL} base={LLAMA_BASE_URL}")
     print(f"[benchmark] test set size={len(TEST_SET)} "

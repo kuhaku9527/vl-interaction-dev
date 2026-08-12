@@ -141,6 +141,101 @@
 
 ---
 
+## 附录 B：本地 llama.cpp 四态 not-for-me 准确率实测（Phase 2 必测 ②，2026-08-12 晚）
+
+> 实测脚本：`services/scripts/benchmark_4state_notforme.py`（可复用；测试集内嵌；增强 B 四态 prompt 脚本内嵌，**未改任何仓库 prompt/解析文件**）
+> 环境：llama-server 直调 OpenAI 兼容 `/v1/chat/completions`（127.0.0.1:7060，GPU -ngl 999）
+> 模型：`joyai-vl-interaction-preview-iq4_nl-imat.gguf`（IQ4_NL，n_ctx 16384）
+> 生成参数：temperature 0.8 / top_p 0.9 / top_k 40 / max_tokens 1024（与 webinfer live 默认一致）
+> 原始逐句数据：`doc/research/data/benchmark_4state_notforme_results.json`（含每句 raw 输出与延迟）
+
+### B.1 测试集（50 句，中英混合，内嵌脚本）
+
+| 类别 | 句数 | 示例 | 期望 |
+|---|---|---|---|
+| 面向 AI · 提问 | 12 | 玛尔基特怎么打？/ 现在几点了？/ What time is it? | response/delegation |
+| 面向 AI · 指令 | 9 | 介绍一下你自己 / 帮我定个闹钟 / Turn off the lights | response |
+| 面向 AI · 带称呼 | 4 | 喂，帮我查一下明天的天气 / BT，在吗？/ Hey, what's the weather? | response/delegation |
+| 非面向 · 自言自语 | 9 | 这关怎么这么难啊 / 完了完了，要迟到了 / Oh no, I forgot my keys | not-for-me |
+| 非面向 · 回应旁人 | 4 | 对，我也觉得 / 嗯，好的好的 / Yeah, I think so too | not-for-me |
+| 非面向 · 感叹 | 7 | 唉，好累 / 天哪，这都什么事啊 / Wow, that's amazing! | not-for-me |
+| 非面向 · 与他人对话 | 5 | 你把那个拿过来* / 妈妈，我回来了 / Honey, did you see my glasses? | not-for-me |
+
+> *「你把那个拿过来」与 spec §4.1「明确指令且未指定其他对象 → 默认对 AI 说」存在规则冲突，任务分类列为非面向，实测中多数变体判 response——**落地时此类句子的 ground truth 需在 spec 中明确**（建议：单数祈使句无称呼时按上下文判定，融合层用声学分数兜底）。
+
+### B.2 测量变体与结果（50 句 × 5 变体 + 1 参考，errors=0，无超时/失败静默）
+
+| 变体 | 系统 prompt 结构 | 非面向→response（误响应） | not-for-me 精确率 | not-for-me 召回率 | 面向句漏判率（→not-for-me） |
+|---|---|---|---|---|---|
+| **A_live3_prod（基线 A：现网 live 三态）** | persona(BT-7274)+三态+角色尾 | **84.0%**（21/25） | — | — | — |
+| A_live3_clean（三态无 persona） | 三态 DEFAULT_SYSTEM_PROMPT | 76.0%（19/25） | — | — | — |
+| **B_live4_prod_append（增强 B：LIVE+四态教学，4 few-shot）** | persona+三态+追加 Not-For-Me 教学 | 52.0%（13/25） | **100%**（2/2） | 8.0%（2/25） | **0.0%** |
+| B2_live4_prod_append_rich（更多 few-shot，11 个） | persona+三态+追加丰富教学 | 56.0%（14/25） | 100%（2/2） | 8.0%（2/25） | 0.0% |
+| **C_live4_reframe（推荐结构：transcript 重构，无 persona）** | 房间语音转写判定 + 四态 + 11 few-shot | 52.0%（13/25） | **100%**（9/9） | **36.0%**（9/25） | **0.0%** |
+| D_reframe+persona（参考，persona 在 C 前） | persona+transcript 重构 | 52.0%（13/25） | —（0 次预测） | **0.0%** | 0.0% |
+
+补充口径（非面向句"不开口"率 = silence + not-for-me，即实际不触发 TTS 的比例）：
+A_prod 8% → A_clean 24% → B 44% / B2 40% / C 44%。四态相对现网基线把"不误开口"从 8% 提到 40-44%，但**仍有约 52-56% 非面向句会被 response**。
+
+### B.3 混淆分析
+
+- **漏判率全为 0**：25 个面向句在全部四态变体（B/B2/C/D，共 100 句次）中**无一被误判 not-for-me**——「宁漏不乱插」核心性质稳健（8B 模型对 not-for-me 输出极其保守，只在确非面向时给出）。
+- **not-for-me 精确率 100%**：所有被预测为 not-for-me 的句子（B: N04/N16，C: N01/N02/N03/N11/N12/N13/N16/N21/N25 等）经人工复核全部确属非面向 → 精确率 ≥80% 判据**通过**（小样本 n=2/2/9，谨慎解读：95% 单侧下限约 72%，但 0 漏判跨 100 句次独立复现）。
+- **召回不足是主要短板**：C（无 persona 重构）召回 36%，主要漏网类型：
+  - 感叹/自言自语被"助人本能"覆盖：N05 今天天气真好啊、N06 完了完了要迟到了、N18 明天又要上班了烦、N20 Oh no I forgot my keys、N22 This game is so hard → 模型选择安慰/帮忙；
+  - 回应旁人被当成对自己的指令：N09 嗯好的好的、N04 你把那个拿过来（歧义句）、N23 Honey did you see my glasses（模型直接回答眼镜位置）；
+  - 带非 AI 称呼（妈妈/老公）仍有部分漏：N14 妈妈我回来了（C 中漏）、N15 老公晚上吃什么（C 中漏）。
+- **persona 是主阻塞（关键发现）**：BT-7274 persona 含 "User is your Pilot" 假设，使模型把**所有**用户语音都当作铁驭对其说话 → D 变体（persona+重构）not-for-me 召回 **0%**（0 次预测）。B/B2 的 8% 召回也主要是 persona 压制的结果。
+
+### B.4 few-shot 有效性
+
+- **数量不是主杠杆**：B（任务规定的 4 个 few-shot，非重叠句）与 B2（11 个 few-shot）召回同为 8%——更多 few-shot 对 append 结构无效。
+- **结构才是主杠杆**：同样的 11 个 few-shot，从"追加在 LIVE prompt 后"改成"房间语音转写（Transcript）框架 + addressee 判定前置 + 无 persona"（C），召回 8% → 36%（4.5 倍）。
+- 判定顺序：addressee 判定必须**在**视频助手三态行为之前，否则模型的 "something worth reporting" 输出偏差吞掉 addressee 规则。
+
+### B.5 结论（对照判据）
+
+1. **判据通过**：not-for-me 精确率 100% ≥ 80%，面向句漏判率 0%——四态改造**可行**（语义安全性质成立）。
+2. **但召回不足，四态不能单独消灭误响应**：最佳变体 C 召回仅 36%，非面向句仍有 ~52% 被 response → **必须与 Phase 1 声学预筛（异人丢弃）+ 融合层（S=0.4×声学+0.6×语义）配合**，语义 not-for-me 作为"目标说话人自言自语"的补充拦截。
+3. **生产实现需调整 persona 或接受其代价**："User is your Pilot" 假设与 not-for-me 冲突（D 变体召回 0%）——落地时建议弱化该句（改为 "User is the primary speaker; you may also overhear non-directed speech"），或在 live prompt 中把 addressee 判定置于 persona 规则之前。
+4. **推荐实现结构**：C 的 transcript 重构（无需改用户消息格式，仅系统 prompt 重构）+ 11 个非重叠 few-shot（见 B.6）。
+5. **非"需更多 few-shot"**：数据不支持"更多 few-shot 即可达标"（B≈B2）；需要的是结构重构 + persona 调整。
+
+### B.6 推荐 few-shot 示例（C 变体，11 个，全部与测试集不重叠）
+
+```
+Transcript: 这个代码怎么又报错了
+Output: </not-for-me>
+Transcript: 玛尔基特弱什么属性
+Output: </response> 玛尔基特弱出血，用出血武器更好打。
+Transcript: 嗯，你说的有道理
+Output: </not-for-me>
+Transcript: 我去洗个澡
+Output: </not-for-me>
+Transcript: 妈，我出门了
+Output: </not-for-me>
+Transcript: 老公，今天加班吗
+Output: </not-for-me>
+Transcript: 好累啊，今天
+Output: </not-for-me>
+Transcript: What a day
+Output: </not-for-me>
+Transcript: 嘿，你在吗
+Output: </response> 在的，有什么可以帮你？
+Transcript: 你能帮我做什么
+Output: </response> 我可以帮你查攻略、设提醒、控制设备和回答问题。
+Transcript: 明天会不会下雨
+Output: </response> 我查一下。</delegation> 查一下明天是否下雨
+```
+
+### B.7 局限性
+
+- temperature 0.8 下逐句有随机性：两轮完整复跑 A_prod 误响应 96%/84%、C 召回 32%/36%——方向结论稳定，具体数值为快照。
+- not-for-me 精确率分母小（n=2-9），100% 是小样本结果；0 漏判跨 100 句次复现是更可靠的定性证据。
+- 未测真实语音（ASR 错误/环境噪声场景），未测连续对话上下文中的 addressee（本轮为单句孤立判定，与 spec §4.3 一致）。
+
+---
+
 ## 附录 B：本地 llama.cpp 四态 decision token 实测（必测②，2026-08-12 晚）
 
 > 实测目的：spec §4.3 必测②——本地模型对"非面向语句"的现有判定能力（基线 A）+ 临时四态教学后的能力提升（增强 B），决定四态改造是否值得做 + few-shot 怎么调。
