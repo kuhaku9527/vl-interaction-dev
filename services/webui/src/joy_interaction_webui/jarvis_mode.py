@@ -211,6 +211,14 @@ class JarvisConfig:
     kws_capture_min_interval_s: float = 4.0
     kws_capture_peak_threshold: float = 0.035
     """Save rolling mic windows above this peak so missed BT samples can retrain KWS."""
+    kws_probe_min_peak: float = 0.005
+    """Fresh-window KWS probe energy gate (B1 P0 silent false-wake fix).
+
+    A probe over a buffer whose peak is below this value is pure silence —
+    skip it so silent input can never escalate into a direct wake. Real
+    wake speech always carries energy well above 0.005 (report recommends
+    0.005-0.01; ~1/3..1/7 of ``kws_capture_peak_threshold``), so this gate
+    does not risk killing real wakes (08-11 SOFTGATE 75% miss lesson)."""
     kws_fresh_window_probe_enabled: bool = True
     """On live KWS miss, re-run KWS over a clean rolling PCM window."""
     kws_fresh_window_probe_interval_s: float = 0.5
@@ -262,6 +270,7 @@ class JarvisConfig:
           JARVIS_KWS_CAPTURE_WINDOW_S  (float)
           JARVIS_KWS_CAPTURE_INTERVAL_S(float)
           JARVIS_KWS_CAPTURE_PEAK      (float)
+          JARVIS_KWS_PROBE_MIN_PEAK    (float)  default 0.005 (fresh-window probe energy gate)
           JARVIS_KWS_FRESH_PROBE       (bool)
           JARVIS_KWS_FRESH_PROBE_INTERVAL_S (float)
           JARVIS_KWS_FRESH_PROBE_MIN_S (float)
@@ -348,6 +357,7 @@ class JarvisConfig:
             kws_capture_peak_threshold=_get_float(
                 "JARVIS_KWS_CAPTURE_PEAK", cls.kws_capture_peak_threshold
             ),
+            kws_probe_min_peak=_get_float("JARVIS_KWS_PROBE_MIN_PEAK", cls.kws_probe_min_peak),
             kws_fresh_window_probe_enabled=_get_bool(
                 "JARVIS_KWS_FRESH_PROBE", cls.kws_fresh_window_probe_enabled
             ),
@@ -964,6 +974,21 @@ class JarvisStateMachine:
             return False
         self._last_kws_fresh_probe_at = now
         pcm = b"".join(self._kws_capture_chunks)
+        # B1 P0 energy gate: probe only buffers with real acoustic content.
+        # Recompute energy from the exact window we would probe (authoritative —
+        # the passed peak/rms are the CURRENT chunk's stats, which can be ~0 for
+        # a wake that settled during trailing blanks while the buffer holds the
+        # actual speech). A pure-silence buffer is skipped so it can never
+        # escalate into a direct wake.
+        buf_peak, buf_rms = self._pcm_stats(pcm)
+        if buf_peak < max(0.0, self.config.kws_probe_min_peak):
+            logger.info(
+                "Fresh-window KWS probe skipped: silent window "
+                "(peak=%.4f < kws_probe_min_peak=%.4f)",
+                buf_peak,
+                max(0.0, self.config.kws_probe_min_peak),
+            )
+            return False
         try:
             hit = bool(self._kws.detect_in_pcm(pcm))
         except Exception as exc:
@@ -974,8 +999,8 @@ class JarvisStateMachine:
         logger.info(
             "Wake word detected by fresh-window KWS probe (%.2fs peak=%.3f rms=%.3f)",
             len(pcm) / (self.config.sample_rate * 2),
-            peak,
-            rms,
+            buf_peak,
+            buf_rms,
         )
         if not getattr(self.config, "kws_fresh_window_direct_wake", True):
             return False
@@ -1113,12 +1138,14 @@ class JarvisStateMachine:
         # Recovery probe: fresh-stream KWS over captured audio.
         # Use peak/rms captured at wake time (more accurate) and bypass
         # the 1s min_s gate since we already have a trusted live KWS hit.
+        # B1 P0: do NOT synthesize a fake peak for silent wakes (the old
+        # ``peak <= 0 -> 0.5`` fallback let a pure-silence false trigger
+        # escalate into a direct wake). Pass the wake-chunk energy as-is;
+        # the probe's own buffer-energy gate (kws_probe_min_peak) decides
+        # whether there is real acoustic content to recover. A silent wake
+        # falls through to _reset_to_kws() below instead of direct-waking.
         peak = getattr(self, "_last_wake_peak", 0.0)
         rms = getattr(self, "_last_wake_rms", 0.0)
-        if peak <= 0:
-            byte_count = sum(len(c) for c in getattr(self, "_kws_capture_chunks", []))
-            peak = 0.5 if byte_count > 0 else 0.0
-            rms = peak
         if await self._probe_kws_fresh_window(peak=peak, rms=rms, bypass_min_s=True):
             logger.info(
                 "WAIT_ASR_CONFIRM recovered via fresh-window KWS probe; "
