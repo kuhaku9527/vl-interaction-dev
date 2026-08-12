@@ -141,7 +141,9 @@
 
 ---
 
-## 附录 B：本地 llama.cpp 四态 not-for-me 准确率实测（Phase 2 必测 ②，2026-08-12 晚）
+> **并发实测说明（2026-08-12 晚，QA 协调）**：必测② 由两位工程师并发独立执行，落盘两份附录 B（本文 B-1 为 50 句 llama-server 直测快照，B-2 为 42 句 llama-server 直测快照）。**两轮独立实验的共同结论（更可靠）**：① 现有三态 live prompt 对非面向句误响应严重（76-100%）；② not-for-me 精确率 100% ≥ 80% 判据通过、面向句漏判率 0%（宁漏不乱插成立）；③ not-for-me token 召回不足（4-36%），落地需将 "silence ∪ not-for-me" 同为"不播报"，并与 Phase1 声学预筛 + 融合层配合。**分歧点（需落地时裁决）**：B-1 认为 BT-7274 persona（"User is your Pilot"）压制 not-for-me token（persona+重构召回 0%）；B-2 认为保留 persona 更优（去人设使 not-for-me 归零、误响应上升），推荐 B2 式 chat-turn few-shot。两轮均未改仓库 prompt/解析文件；原始数据分别在 `doc/research/data/benchmark_4state_notforme_results.json`（B-1）与 `.workbuddy/tmp/addressee-bench-results/`（B-2）。
+
+## 附录 B-1：本地 llama.cpp 四态 not-for-me 准确率实测（50 句 llama-server 直测，必测②快照）
 
 > 实测脚本：`services/scripts/benchmark_4state_notforme.py`（可复用；测试集内嵌；增强 B 四态 prompt 脚本内嵌，**未改任何仓库 prompt/解析文件**）
 > 环境：llama-server 直调 OpenAI 兼容 `/v1/chat/completions`（127.0.0.1:7060，GPU -ngl 999）
@@ -236,7 +238,7 @@ Output: </response> 我查一下。</delegation> 查一下明天是否下雨
 
 ---
 
-## 附录 B：本地 llama.cpp 四态 decision token 实测（必测②，2026-08-12 晚）
+## 附录 B-2：本地 llama.cpp 四态 decision token 实测（42 句 llama-server 直测，必测②快照）
 
 > 实测目的：spec §4.3 必测②——本地模型对"非面向语句"的现有判定能力（基线 A）+ 临时四态教学后的能力提升（增强 B），决定四态改造是否值得做 + few-shot 怎么调。
 > 实测脚本：`.workbuddy/tmp/benchmark_addressee_4state.py`（**不改任何仓库文件**；prompt 增强为脚本内嵌）
