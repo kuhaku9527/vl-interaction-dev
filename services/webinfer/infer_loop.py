@@ -4,6 +4,14 @@ Defines :class:`InferLoopMixin`, which carries the primary推理 loop:
 ``handle_text_chat`` / ``handle_chat_completions`` / ``_handle_chat_payload``
 (including its five cohesive ``_chat_payload_*`` sub-steps), ``_handle_text_payload``,
 frame reference parsing, and the main-model call previously on ``StreamingInferAdapter``.
+
+Batch-2 decoupling (zero behaviour change): the frame parsing / image-reference
+logic lives in :mod:`frame_parsing`, the NDJSON streaming frame protocol lives in
+:mod:`stream_protocol`, and the chat-payload pure data assembly lives in
+:mod:`chat_payload`. This module keeps the orchestration (which depends on
+``self`` / ``state`` / ``config``) and re-exports the moved symbols so the
+historical import surface (``from infer_loop import _parse_live_frames`` etc.)
+stays intact.
 """
 
 from __future__ import annotations
@@ -20,9 +28,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import frame_parsing
 from adapter_types import SessionState
 from aiohttp import web
-from io_utils import normalize_image_b64
+from frame_parsing import (
+    _LIVE_FRAMES_MAX,  # noqa: F401  (re-export: tests import from infer_loop)
+    _normalize_interaction_mode,
+    _parse_live_frames,
+)
 from openai import AsyncOpenAI
 from prompt_assembly import compose_live_visual_messages
 from prompt_building import (
@@ -60,87 +73,6 @@ from time_ranges import (
 from config import reset_chunk_state
 
 LOGGER = logging.getLogger("streaming_infer_adapter")
-
-# Interaction modes isolate the decision-token framework (issues #44/#45).
-#   live   (default): full silence/speak/delegate framework + forced silence
-#                     before a user query is pending (original behaviour).
-#   call   (voice-to-text direct chat): NO decision tokens, forced silence off.
-#   jarvis (wake-word driven): decision tokens KEPT (jarvis consumes the
-#                     `decision` field), but forced silence off (jarvis drives
-#                     its own turn flow).
-_VALID_INTERACTION_MODES = frozenset({"live", "call", "jarvis"})
-
-# --- live visual path (spec draft-live-visual-cb.md §3 层 1) ----------------
-# An optional top-level ``frames`` field on ``POST /v1/text/chat`` with
-# ``interaction_mode="live"`` routes the round through the multimodal path
-# (streaming for user rounds, non-streaming for proactive rounds). No
-# ``frames`` field -> the existing text path runs byte-for-byte unchanged
-# (pure-text live zero-regression rule).
-_LIVE_FRAMES_MAX: int = 6
-
-
-def _parse_live_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Validate and normalize the optional top-level ``frames`` payload field.
-
-    Contract (约法三章 — invalid frames are an explicit 400, never silently
-    swallowed):
-
-      * ``frames`` must be a list of dicts when present;
-      * at most ``_LIVE_FRAMES_MAX`` frames;
-      * each frame must carry a non-empty, base64-decodable ``image_b64``;
-      * ``ts_ms`` (optional) must be a number when present.
-
-    Returns a normalized ``[{"image_b64": str, "ts_ms": int|float|None}]``
-    list. A missing ``frames`` field returns ``[]`` (callers treat that as
-    "no frames" and keep the pure-text path).
-    """
-    raw = payload.get("frames")
-    if raw is None:
-        return []
-    if not isinstance(raw, list):
-        raise web.HTTPBadRequest(text="frames must be a list")
-    if len(raw) > _LIVE_FRAMES_MAX:
-        raise web.HTTPBadRequest(text=f"frames exceeds limit: {len(raw)} > {_LIVE_FRAMES_MAX}")
-    frames: list[dict[str, Any]] = []
-    for index, item in enumerate(raw):
-        if not isinstance(item, dict):
-            raise web.HTTPBadRequest(text=f"frames[{index}] must be an object")
-        image_b64 = item.get("image_b64")
-        if not isinstance(image_b64, str) or not image_b64.strip():
-            raise web.HTTPBadRequest(
-                text=f"frames[{index}].image_b64 must be a non-empty base64 string"
-            )
-        # Shared normalization (io_utils.normalize_image_b64): tolerate a full
-        # data URI (``data:image/<fmt>;base64,<b64>``) by stripping the prefix
-        # and validate the payload decodes. The normalized output is always
-        # raw base64 so the downstream visual message builder re-prepends its
-        # own ``data:image/jpeg;base64,`` prefix exactly once.
-        try:
-            image_b64 = normalize_image_b64(image_b64)
-        except ValueError as exc:
-            raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 {exc}") from exc
-        ts_ms = item.get("ts_ms")
-        if ts_ms is not None and not isinstance(ts_ms, (int, float)):
-            raise web.HTTPBadRequest(text=f"frames[{index}].ts_ms must be a number")
-        frames.append({"image_b64": image_b64, "ts_ms": ts_ms})
-    return frames
-
-
-def _normalize_interaction_mode(mode: str | None) -> str:
-    """Resolve an inbound ``interaction_mode`` to a known mode.
-
-    Missing / empty / unrecognized values fall back to ``"live"``. An
-    unknown value is logged (not silently swallowed) so a misconfigured
-    caller cannot arm an unexpected code path.
-    """
-    if not mode:
-        return "live"
-    normalized = mode.strip().lower()
-    if normalized in _VALID_INTERACTION_MODES:
-        return normalized
-    LOGGER.warning("unknown interaction_mode %r; falling back to 'live'", mode)
-    return "live"
-
 
 # --- P0-A TTS-streaming: NDJSON frame protocol for /v1/text/chat stream=true ----
 #
@@ -1374,52 +1306,28 @@ class InferLoopMixin:
         )
 
     def _time_range_for_frame(self, frame_index: int) -> str:
-        start = frame_index * self.config.frame_seconds
-        return f"{start:.1f} seconds"
+        # Implementation lives in frame_parsing (batch-2 split, zero behaviour change).
+        return frame_parsing._time_range_for_frame(frame_index, self.config.frame_seconds)
 
     def _resolve_frame_ref(
         self,
         image_ref: dict[str, str],
         state: SessionState,
     ) -> str:
-        if image_ref.get("kind") == "path":
-            return str(self._validate_local_image_path(image_ref.get("value", "")))
-        if image_ref.get("kind") == "data_url":
-            return self._save_base64_frame(image_ref.get("value", ""), state)
-        raise web.HTTPBadRequest(text="unsupported image reference kind")
+        # Implementation lives in frame_parsing (batch-2 split, zero behaviour change).
+        return frame_parsing._resolve_frame_ref(
+            image_ref, state, self.config.allowed_local_image_roots
+        )
 
     def _save_base64_frame(self, data_url: str, state: SessionState) -> str:
-        # Shared normalization (io_utils.normalize_image_b64) validates that
-        # the payload is a decodable base64 image (bare or data-URI prefixed);
-        # the original value is returned unchanged so memory / output records
-        # keep the exact data URL the caller supplied.
-        try:
-            normalize_image_b64(data_url)
-        except ValueError as exc:
-            raise web.HTTPBadRequest(text="invalid data URL format") from exc
-        state.session_frame_counter += 1
-        return data_url
+        # Implementation lives in frame_parsing (batch-2 split, zero behaviour change).
+        return frame_parsing._save_base64_frame(data_url, state)
 
     def _validate_local_image_path(self, raw_path: str) -> Path:
-        if not self.config.allowed_local_image_roots:
-            raise web.HTTPBadRequest(text="local image paths are disabled")
-
-        path = Path(raw_path).expanduser().resolve()
-        if not path.is_file():
-            raise web.HTTPBadRequest(text=f"local image path does not exist: {path}")
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
-            raise web.HTTPBadRequest(text=f"unsupported local image extension: {path.suffix}")
-
-        for root in self.config.allowed_local_image_roots:
-            root_path = Path(root).expanduser().resolve()
-            try:
-                path.relative_to(root_path)
-                return path
-            except ValueError:
-                continue
-
-        allowed = ", ".join(self.config.allowed_local_image_roots)
-        raise web.HTTPBadRequest(text=f"local image path is outside allowed roots: {allowed}")
+        # Implementation lives in frame_parsing (batch-2 split, zero behaviour change).
+        return frame_parsing._validate_local_image_path(
+            raw_path, self.config.allowed_local_image_roots
+        )
 
     def _update_query_state(
         self,
