@@ -111,6 +111,20 @@ def _parse_live_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 text=f"frames[{index}].image_b64 must be a non-empty base64 string"
             )
         image_b64 = image_b64.strip()
+        # Tolerate a full data URI (``data:image/<fmt>;base64,<b64>``): the
+        # contract stays raw base64, but a caller that passes a complete data
+        # URL is accepted (prefix stripped) instead of 400ing. The normalized
+        # output is always raw base64 so the downstream visual message builder
+        # re-prepends its own ``data:image/jpeg;base64,`` prefix exactly once.
+        if image_b64.startswith("data:"):
+            comma = image_b64.find(",")
+            if comma == -1 or "base64" not in image_b64[:comma]:
+                raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 data URL must be base64")
+            image_b64 = image_b64[comma + 1 :].strip()
+            if not image_b64:
+                raise web.HTTPBadRequest(
+                    text=f"frames[{index}].image_b64 data URL has no base64 payload"
+                )
         # Accept both padded and unpadded base64 (some frontends strip '=');
         # anything that cannot decode is an explicit 400.
         padded = image_b64 + "=" * (-len(image_b64) % 4)

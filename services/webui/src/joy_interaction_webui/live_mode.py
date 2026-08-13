@@ -1048,13 +1048,22 @@ class LiveStateMachine:
             (response or "")[:80],
         )
         if decision != "response" or not (response or "").strip():
+            # silence / not-for-me / empty: nothing worth saying; the
+            # controller stays LISTENING untouched — wait for the next
+            # interval. No controller feed happens here (silence is the
+            # normal, high-frequency path and must not produce warnings).
             logger.info("[live-proactive] staying quiet (decision=%s)", decision)
-            # Controller: THINKING -> SPEAKING -> LISTENING (nothing spoken).
-            try:
-                self._ctrl.on_tts_started()
-                self._ctrl.on_tts_finished()
-            except Exception as exc:
-                logger.warning("[live-proactive] controller quiet feed failed: %s", exc)
+            return
+
+        # P2 race guard (QA regression): the user may have started speaking
+        # while the VLM call was in flight. If the controller is no longer
+        # LISTENING at decision time, stay silent — proactive work must never
+        # speak over the user dialog (spec §2.4). Fail-open: skip, no TTS.
+        if self.turn_state != TurnState.LISTENING:
+            logger.info(
+                "[live-proactive] controller no longer LISTENING (state=%s); skip proactive speech",
+                self.turn_state.name,
+            )
             return
 
         # Proactive speak: agent-initiated turn (LISTENING -> THINKING ->

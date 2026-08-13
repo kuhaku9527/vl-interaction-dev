@@ -124,6 +124,29 @@ def test_parse_frames_unpadded_base64_accepted():
     assert frames[0]["image_b64"] == raw
 
 
+def test_parse_frames_data_uri_prefix_stripped():
+    """A full ``data:image/jpeg;base64,<b64>`` value is accepted and normalized
+    to raw base64 (QA hardening; the contract stays raw base64)."""
+    raw = base64.b64encode(b"jpeg-bytes").decode("ascii")
+    frames = _parse_live_frames(
+        {"frames": [{"image_b64": f"data:image/jpeg;base64,{raw}", "ts_ms": 1}]}
+    )
+    assert frames[0]["image_b64"] == raw
+
+
+def test_parse_frames_data_uri_non_base64_rejected():
+    """A data URI without a base64 payload marker is an explicit 400."""
+    with pytest.raises(Exception) as exc_info:
+        _parse_live_frames({"frames": [{"image_b64": "data:image/jpeg;plain,abc", "ts_ms": 1}]})
+    assert exc_info.value.status_code == 400
+
+
+def test_parse_frames_data_uri_empty_payload_rejected():
+    with pytest.raises(Exception) as exc_info:
+        _parse_live_frames({"frames": [{"image_b64": "data:image/jpeg;base64,", "ts_ms": 1}]})
+    assert exc_info.value.status_code == 400
+
+
 def test_parse_frames_bad_ts_rejected():
     with pytest.raises(Exception) as exc_info:
         _parse_live_frames({"frames": [{"image_b64": _b64(), "ts_ms": "soon"}]})
