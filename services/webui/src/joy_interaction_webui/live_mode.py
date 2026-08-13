@@ -59,6 +59,14 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any
 
+from services.asr.jarvis.asr_provider import (
+    ASR_SPEECH_PEAK_THRESHOLD as ASR_SPEECH_PEAK_THRESHOLD,
+)
+from services.asr.jarvis.asr_provider import (
+    allow_local_failover as allow_local_failover,
+)
+
+from .jarvis_kws import pcm_stats
 from .jarvis_mode import _is_garbage_text
 from .live_enroll import (
     enroll_detector_available,
@@ -182,6 +190,11 @@ class LiveStateMachine:
         # ASR accumulation (same staleness rule as jarvis).
         self._current_asr_text: str = ""
         self._last_speech_time: float = 0.0
+        # Cloud batch ASR (JARVIS_ASR_PROVIDER=cloud): no partials, so speech
+        # onset + the 2s endpoint are driven by PCM audio energy. This tracks
+        # the rising edge so ``on_speech_started`` fires once per burst (only
+        # used when the VAD is unavailable).
+        self._cloud_prev_speech: bool = False
 
         # Conversation history (bounded FIFO, same as jarvis).
         self._conv_history: deque[tuple[str, str]] = deque(maxlen=20)
@@ -362,9 +375,9 @@ class LiveStateMachine:
     def _init_asr(self) -> None:
         if self._asr is not None:
             return
-        from services.asr.jarvis.asr import JarvisASR
+        from services.asr.jarvis.asr_provider import create_asr_provider
 
-        self._asr = JarvisASR(
+        self._asr = create_asr_provider(
             model_dir=self._config.asr_model_dir,
             num_threads=self._config.asr_num_threads,
         )
@@ -646,7 +659,23 @@ class LiveStateMachine:
 
         # 3. Endpoint detection: ASR holds the last partial on silence; after
         #    the 2s stall the utterance ends (identical rule to jarvis).
-        if (
+        if getattr(self._asr, "streaming", True) is False:
+            # Cloud batch ASR: no partials, so the 2s endpoint is driven by
+            # the audio-energy activity stamps in _feed_asr_chunk; finalize
+            # the accumulated segment (one upstream round trip) then feed the
+            # controller stop (commit / barge-in release).
+            if (
+                self._last_speech_time
+                and (now - self._last_speech_time) >= self._endpoint_timeout_s
+                and self._ctrl.state
+                in (
+                    TurnState.USER_SPEAKING,
+                    TurnState.HARD_INTERRUPTED,
+                    TurnState.SOFT_INTERRUPTED,
+                )
+            ):
+                await self._handle_cloud_endpoint_commit(now)
+        elif (
             self._current_asr_text
             and (now - self._last_speech_time) >= self._endpoint_timeout_s
             and self._ctrl.state
@@ -689,7 +718,8 @@ class LiveStateMachine:
         """Feed one PCM chunk into the streaming ASR and push partials.
 
         Shared by the streaming path and the addressee-gated release path.
-        Returns the current ASR text ("" on failure, fail-open).
+        Returns the current ASR text ("" on failure, fail-open). For cloud
+        batch ASR (no partials) the 2s endpoint is driven by audio energy.
         """
         if self._asr is None:
             try:
@@ -712,7 +742,94 @@ class LiveStateMachine:
             self._feed_speech_started()
             self._feed_partial_transcript(text, is_final=False)
             self._push_asr_partial(text, is_final=False)
+        elif not text and getattr(self._asr, "streaming", True) is False:
+            # Cloud batch ASR: no partials. Stamp speech activity from PCM
+            # energy so the 2s endpoint still fires after the user stops
+            # talking (spec §3 accumulate strategy). When no VAD is
+            # available, energy is also the speech-onset signal.
+            speech = self._pcm_is_speech(pcm)
+            if speech:
+                self._last_speech_time = now
+                # No VAD -> energy is also the speech-onset signal (rising
+                # edge only, so on_speech_started fires once per burst).
+                if (
+                    not (self._vad is not None and self._vad.available)
+                    and not self._cloud_prev_speech
+                ):
+                    self._feed_speech_started()
+            self._cloud_prev_speech = speech
         return text
+
+    def _pcm_is_speech(self, pcm: bytes) -> bool:
+        """True when a PCM chunk carries speech-level energy (cloud path)."""
+        if not pcm:
+            return False
+        try:
+            peak, _rms = pcm_stats(pcm)
+            return peak >= ASR_SPEECH_PEAK_THRESHOLD
+        except Exception as exc:
+            logger.debug("[live-mode] PCM energy check failed (%s)", exc)
+            return False
+
+    async def _handle_cloud_endpoint_commit(self, now: float) -> None:
+        """Cloud batch endpoint: finalize the segment, then feed controller stop.
+
+        Mirrors the local endpoint: after ``on_speech_stopped`` the controller
+        fires ``on_turn_commit`` (drained by ``_drain_pending`` →
+        ``_handle_commit`` reads the final text). D-080: an unreachable
+        upstream is an explicit error, never a silent local degradation unless
+        ``JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1``.
+        """
+        provider = self._asr
+        if provider is None:
+            self._last_speech_time = 0.0
+            return
+        final_text = ""
+        try:
+            final_text = (await provider.finalize()) or ""
+        except Exception as exc:
+            logger.error("[asr] cloud provider unreachable: %s", exc)
+            self._last_speech_time = 0.0
+            if allow_local_failover():
+                logger.error(
+                    "[asr] degrading to local streaming provider "
+                    "(JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1)"
+                )
+                try:
+                    from services.asr.jarvis.asr_provider import LocalStreamingProvider
+
+                    self._asr = LocalStreamingProvider(
+                        model_dir=self._config.asr_model_dir,
+                        num_threads=self._config.asr_num_threads,
+                    )
+                    self._asr.start()
+                except Exception as inner:
+                    logger.error("[asr] local failover init failed: %s", inner)
+                return
+            try:
+                provider.start()
+            except Exception as inner:
+                logger.warning("[asr] cloud reset failed: %s", inner)
+            return
+        silence_ms = int((now - self._last_speech_time) * 1000)
+        self._last_speech_time = 0.0
+        if not final_text:
+            logger.info("[asr] cloud segment empty; staying in dialog")
+            try:
+                provider.start()
+            except Exception as exc:
+                logger.warning("[asr] cloud reset failed: %s", exc)
+            return
+        self._current_asr_text = final_text
+        logger.info("[live-mode] cloud ASR final: %r (silence=%dms)", final_text, silence_ms)
+        try:
+            self._ctrl.on_speech_stopped(silence_ms)
+        except TurnStateError as exc:
+            logger.info("[live-mode] on_speech_stopped rejected: %s", exc)
+        except Exception as exc:
+            logger.error("[live-mode] on_speech_stopped failed: %s", exc)
+        if self._ctrl.state == TurnState.COOLDOWN:
+            self._reset_asr()
 
     def _feed_addressee_vad(self, vad_speech: bool, pcm: bytes, now: float) -> bool:
         """Buffer a VAD speech segment; classify it at the falling edge.

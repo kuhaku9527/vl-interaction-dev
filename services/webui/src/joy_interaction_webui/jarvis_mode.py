@@ -24,6 +24,14 @@ import wave
 from collections import deque
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+from services.asr.jarvis.asr_provider import (
+    ASR_SPEECH_PEAK_THRESHOLD as ASR_SPEECH_PEAK_THRESHOLD,
+)
+from services.asr.jarvis.asr_provider import (
+    allow_local_failover as allow_local_failover,
+)
 
 from . import jarvis_dialog, jarvis_kws, jarvis_llm
 
@@ -295,9 +303,9 @@ class JarvisStateMachine:
     def _init_asr(self):
         if self._asr is not None:
             return
-        from services.asr.jarvis.asr import JarvisASR
+        from services.asr.jarvis.asr_provider import create_asr_provider
 
-        self._asr = JarvisASR(
+        self._asr = create_asr_provider(
             model_dir=self.config.asr_model_dir,
             num_threads=self.config.asr_num_threads,
         )
@@ -487,6 +495,25 @@ class JarvisStateMachine:
         self._last_kws_hit_at = time.time()
         await self._transition_to(JarvisState.WAIT_ASR_CONFIRM)
         self._init_asr()
+        if getattr(self._asr, "streaming", True) is False:
+            # Cloud batch ASR (JARVIS_ASR_PROVIDER=cloud) emits no partials, so
+            # the WAIT_ASR_CONFIRM pattern-match can never succeed. Promote
+            # directly on the local KWS hit — the local sherpa KWS still fires;
+            # only the dialog recognizer is cloud (spec §3). Semantic
+            # difference vs local (which requires the ASR confirm window).
+            await self._transition_to(JarvisState.WAKE_DETECTED)
+            await self._play_wake_wav()
+            await self._drain_pending_audio(reason="post-wake-wav-cloud")
+            self._asr.start()
+            self._asr_stream_active = True
+            self._current_asr_text = ""
+            # 0.0 (not time.time()) so the cloud endpoint only fires after real
+            # audio activity is stamped by _cloud_endpoint_maybe.
+            self._last_speech_time = 0.0
+            await self._transition_to(JarvisState.DIALOG_ACTIVE)
+            if self.on_wake:
+                self.on_wake()
+            return
         self._asr.start()
         # Tap: feed the wake chunk to ASR *before* the queue consumer runs,
         # so ASR has the trailing syllable of the wake phrase to work with
@@ -859,6 +886,14 @@ class JarvisStateMachine:
             return
         now = time.time()
 
+        # Cloud batch ASR: no partials. The 2s endpoint is driven by PCM
+        # audio-energy activity stamps; on silence the accumulated segment
+        # is finalized (one upstream round trip) and committed.
+        if getattr(self._asr, "streaming", True) is False and await self._cloud_endpoint_maybe(
+            pcm, now
+        ):
+            return
+
         if text and text != self._current_asr_text:
             # New speech (partial grew) — update accumulator and timer.
             # Log every change so an operator can see ASR's current
@@ -921,6 +956,13 @@ class JarvisStateMachine:
             logger.exception("ASR feed_chunk failed: %s", e)
             return
         now = time.time()
+
+        if getattr(self._asr, "streaming", True) is False:
+            # Cloud batch ASR + turn-controller delegate: no partials, so the
+            # 2s endpoint is driven by audio energy and the final text comes
+            # from one upstream round trip (spec §3).
+            await self._handle_dialog_delegated_cloud(delegate, pcm, now)
+            return
 
         if text and text != self._current_asr_text:
             # New speech (partial grew) — update accumulator and timer, then
@@ -1059,6 +1101,168 @@ class JarvisStateMachine:
             self._tts_task = None
         await self._transition_to(JarvisState.DIALOG_ACTIVE)
         return "sent"
+
+    # ------------------------------------------------------------------
+    # Cloud batch ASR (JARVIS_ASR_PROVIDER=cloud, spec §3)
+    # ------------------------------------------------------------------
+
+    async def _cloud_endpoint_maybe(self, pcm: bytes, now: float) -> bool:
+        """Cloud batch endpoint: stamp speech activity, finalize on 2s silence.
+
+        Cloud providers emit no partials, so the 2s endpoint timer (identical
+        rule to the local stale-partial rule) is driven by PCM audio energy.
+
+        Returns
+        -------
+        bool
+            True when the cloud endpoint fired (segment finalized and either
+            committed or dropped); False when dialog processing continues
+            (local streaming, or cloud still accumulating).
+        """
+        provider = self._asr
+        if provider is None or getattr(provider, "streaming", True):
+            return False
+        peak, _rms = self._pcm_stats(pcm)
+        if peak >= ASR_SPEECH_PEAK_THRESHOLD:
+            self._last_speech_time = now
+        if not self._last_speech_time or (now - self._last_speech_time) <= 2.0:
+            return False
+        await self._handle_dialog_cloud_endpoint()
+        return True
+
+    async def _handle_dialog_cloud_endpoint(self) -> None:
+        """Cloud batch ASR: finalize the accumulated segment and commit.
+
+        Exit words are checked on the final text (no partials in cloud mode —
+        recorded semantic difference vs local, spec §3). D-080: an
+        unreachable upstream is an explicit error, never a silent local
+        degradation unless ``JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1``.
+        """
+        provider = self._asr
+        if provider is None:
+            self._last_speech_time = 0.0
+            return
+        final_text = ""
+        try:
+            final_text = (await provider.finalize()) or ""
+        except Exception as exc:
+            await self._handle_cloud_asr_failure(exc)
+            return
+        self._last_speech_time = 0.0
+        if not final_text:
+            logger.info("[asr] cloud segment empty; staying in dialog")
+            try:
+                provider.start()
+            except Exception as exc:
+                logger.warning("[asr] cloud reset failed: %s", exc)
+            return
+        if jarvis_dialog.exit_word_detected(final_text):
+            logger.info("Exit word detected (cloud final): %s", final_text)
+            await self._transition_to(JarvisState.EXIT_DETECTED)
+            await self._stop_tts()
+            await self._play_goodbye_wav()
+            await self._reset_to_kws()
+            return
+        self._current_asr_text = final_text
+        logger.info("Cloud ASR final: %r", final_text)
+        await self._handle_dialog_commit()
+
+    async def _handle_dialog_delegated_cloud(self, delegate: Any, pcm: bytes, now: float) -> None:
+        """Cloud batch ASR + turn-controller delegate (jarvis preset).
+
+        Mirrors :meth:`_handle_dialog_cloud_endpoint` while feeding the
+        controller's speech signals so the delegated turn rhythm (barge-in
+        arbitration, commit) is preserved.
+        """
+        provider = self._asr
+        if provider is None:
+            self._last_speech_time = 0.0
+            return
+        peak, _rms = self._pcm_stats(pcm)
+        if peak >= ASR_SPEECH_PEAK_THRESHOLD:
+            self._last_speech_time = now
+            try:
+                delegate.on_speech_started(conf=0.9)
+            except Exception as exc:
+                logger.debug("[turn-delegate] cloud on_speech_started failed: %s", exc)
+        if not self._last_speech_time or (now - self._last_speech_time) <= 2.0:
+            return
+        silence_ms = int((now - self._last_speech_time) * 1000)
+        final_text = ""
+        try:
+            final_text = (await provider.finalize()) or ""
+        except Exception as exc:
+            await self._handle_cloud_asr_failure(exc)
+            return
+        self._last_speech_time = 0.0
+        if not final_text:
+            try:
+                provider.start()
+            except Exception as exc:
+                logger.warning("[asr] cloud reset failed: %s", exc)
+            return
+        if jarvis_dialog.exit_word_detected(final_text):
+            logger.info("Exit word detected (cloud final): %s", final_text)
+            await self._transition_to(JarvisState.EXIT_DETECTED)
+            await self._stop_tts()
+            await self._play_goodbye_wav()
+            await self._reset_to_kws()
+            return
+        self._current_asr_text = final_text
+        try:
+            delegate.on_partial_transcript(final_text, is_final=True)
+        except Exception as exc:
+            logger.debug("[turn-delegate] cloud on_partial_transcript failed: %s", exc)
+        try:
+            delegate.on_speech_stopped(silence_ms)
+        except Exception as exc:
+            logger.debug("[turn-delegate] cloud on_speech_stopped failed: %s", exc)
+        if delegate.take_commit():
+            outcome = await self._handle_dialog_commit()
+            if outcome != "sent":
+                # The controller committed but jarvis declined the turn
+                # (garbage / smart-turn defer): realign the controller.
+                delegate.on_llm_response_token("")
+                delegate.on_tts_started()
+                delegate.on_tts_finished()
+        elif self.state == JarvisState.TTS_PAUSED:
+            # Post-barge-in commit: jarvis keeps the legacy commit for the
+            # barge-in utterance, then realigns to LISTENING.
+            delegate.on_cooldown_elapsed()
+            await self._handle_dialog_commit()
+
+    async def _handle_cloud_asr_failure(self, exc: Exception) -> None:
+        """D-080: cloud upstream unreachable -> explicit error, opt-in failover.
+
+        Logs an explicit error (never a silent local degradation) and either
+        swaps to a local streaming provider when
+        ``JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1``, or resets the cloud buffer so
+        the next utterance retries with visible errors.
+        """
+        logger.error("[asr] cloud provider unreachable: %s", exc)
+        self._last_speech_time = 0.0
+        if allow_local_failover():
+            logger.error(
+                "[asr] degrading to local streaming provider (JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1)"
+            )
+            try:
+                from services.asr.jarvis.asr_provider import LocalStreamingProvider
+
+                local = LocalStreamingProvider(
+                    model_dir=self.config.asr_model_dir,
+                    num_threads=self.config.asr_num_threads,
+                )
+                local.start()
+                self._asr = local
+                self._asr_stream_active = True
+            except Exception as inner:
+                logger.error("[asr] local failover init failed: %s", inner)
+                self._asr_stream_active = False
+            return
+        try:
+            self._asr.start()
+        except Exception as inner:
+            logger.warning("[asr] cloud reset failed: %s", inner)
 
     # ------------------------------------------------------------------
     # Transition helpers
