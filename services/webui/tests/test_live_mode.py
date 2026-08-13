@@ -627,6 +627,76 @@ async def test_live_status_endpoint():
         assert data2["turn_state"] == "idle"
 
 
+async def test_live_proactive_endpoint_enable_disable(monkeypatch):
+    """POST /api/live/proactive toggles the real session's loop task."""
+    from joy_interaction_webui.jarvis_session import LiveSession
+
+    monkeypatch.setenv("LIVE_PROACTIVE_ENABLED", "true")
+    monkeypatch.setenv("LIVE_PROACTIVE_INTERVAL_S", "0.01")
+    sm, _vad, _asr = build_live()
+    session = LiveSession(session_id="s1", state_machine=sm)
+    manager = SimpleNamespace(get_live_session=lambda sid: session if sid == "s1" else None)
+    async with TestServer(_live_app(manager)) as srv, TestClient(srv) as client:
+        resp = await client.post("/api/live/proactive", json={"session_id": "s1", "enabled": True})
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["enabled"] is True
+        assert data["applied"] is True
+        assert data["supported"] is True
+        assert sm._proactive_task is not None
+
+        # Idempotent: repeated enable keeps the same task.
+        task_before = sm._proactive_task
+        resp2 = await client.post("/api/live/proactive", json={"session_id": "s1", "enabled": True})
+        data2 = await resp2.json()
+        assert data2["applied"] is True
+        assert sm._proactive_task is task_before
+
+        resp3 = await client.post(
+            "/api/live/proactive", json={"session_id": "s1", "enabled": False}
+        )
+        data3 = await resp3.json()
+        assert data3["enabled"] is False
+        assert data3["applied"] is True
+        assert sm._proactive_task is None
+    await sm.stop()
+
+
+async def test_live_proactive_endpoint_env_off_rejected(monkeypatch):
+    """Env gate off -> endpoint reports applied=false, supported=false."""
+    from joy_interaction_webui.jarvis_session import LiveSession
+
+    monkeypatch.delenv("LIVE_PROACTIVE_ENABLED", raising=False)
+    sm, _vad, _asr = build_live()
+    session = LiveSession(session_id="s1", state_machine=sm)
+    manager = SimpleNamespace(get_live_session=lambda sid: session if sid == "s1" else None)
+    async with TestServer(_live_app(manager)) as srv, TestClient(srv) as client:
+        resp = await client.post("/api/live/proactive", json={"session_id": "s1", "enabled": True})
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["applied"] is False
+        assert data["supported"] is False
+        assert sm._proactive_task is None
+
+
+async def test_live_proactive_endpoint_session_not_found_404():
+    manager = SimpleNamespace(get_live_session=lambda sid: None)
+    async with TestServer(_live_app(manager)) as srv, TestClient(srv) as client:
+        resp = await client.post(
+            "/api/live/proactive", json={"session_id": "ghost", "enabled": True}
+        )
+        assert resp.status == 404
+        data = await resp.json()
+        assert "live session not found" in data["error"]
+
+
+async def test_live_proactive_endpoint_missing_session_id_400():
+    manager = SimpleNamespace(get_live_session=lambda sid: None)
+    async with TestServer(_live_app(manager)) as srv, TestClient(srv) as client:
+        resp = await client.post("/api/live/proactive", json={"enabled": True})
+        assert resp.status == 400
+
+
 # ---------------------------------------------------------------------------
 # 8. Addressee Detection Phase 1 — env gate / gating / enroll
 # ---------------------------------------------------------------------------

@@ -181,6 +181,14 @@ class LiveSession:
         """
         self.state_machine.handle_frame(image_b64, ts_ms)
 
+    def set_proactive(self, enabled: bool) -> bool:
+        """Runtime toggle for the proactive speak loop (C.B layer 3).
+
+        Delegates to ``LiveStateMachine.set_proactive`` — idempotent, and the
+        ``LIVE_PROACTIVE_ENABLED`` env gate stays the final fallback.
+        """
+        return self.state_machine.set_proactive(enabled)
+
     def start_enroll(self) -> bool:
         """Delegate enrollment start to the live state machine."""
         return self.state_machine.start_enroll()

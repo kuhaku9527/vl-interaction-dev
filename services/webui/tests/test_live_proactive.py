@@ -511,3 +511,102 @@ def test_live_session_handle_frame_passthrough():
     session = LiveSession(session_id="s1", state_machine=sm)
     session.handle_frame(B64, 1234.0)
     assert sm.recent_frames == [(B64, 1234.0)]
+
+
+# ---------------------------------------------------------------------------
+# 8. set_proactive runtime switch (C.B layer 3)
+# ---------------------------------------------------------------------------
+
+
+def test_set_proactive_env_off_rejected(monkeypatch):
+    """Env gate LIVE_PROACTIVE_ENABLED off -> runtime enable is rejected."""
+    monkeypatch.delenv("LIVE_PROACTIVE_ENABLED", raising=False)
+    sm, _vad, _asr = build_live()
+    assert sm._proactive_enabled is False
+
+    async def _try_enable():
+        return sm.set_proactive(True)
+
+    ok = asyncio.run(_try_enable())
+    assert ok is False
+    assert sm._proactive_task is None
+
+
+@pytest.mark.asyncio
+async def test_set_proactive_idempotent_enable(monkeypatch):
+    """Repeated True never creates a second loop task."""
+    monkeypatch.setenv("LIVE_PROACTIVE_ENABLED", "true")
+    monkeypatch.setenv("LIVE_PROACTIVE_INTERVAL_S", "0.01")
+    sm, _vad, _asr = build_live()
+    assert sm._proactive_task is None
+
+    ok1 = sm.set_proactive(True)
+    await asyncio.sleep(0)  # let the loop task actually start
+    task1 = sm._proactive_task
+    ok2 = sm.set_proactive(True)
+    await asyncio.sleep(0)
+    assert ok1 is True
+    assert ok2 is True
+    assert task1 is not None
+    assert task1 is sm._proactive_task  # idempotent: same task, no double-create
+    await sm.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_proactive_idempotent_disable(monkeypatch):
+    """Repeated False never double-cancels; state ends off."""
+    monkeypatch.setenv("LIVE_PROACTIVE_ENABLED", "true")
+    monkeypatch.setenv("LIVE_PROACTIVE_INTERVAL_S", "0.01")
+    sm, _vad, _asr = build_live()
+
+    assert sm.set_proactive(True) is True
+    await asyncio.sleep(0)  # let the loop task start (no never-awaited warning)
+    assert sm._proactive_task is not None
+
+    assert sm.set_proactive(False) is True
+    await asyncio.sleep(0)
+    assert sm._proactive_task is None
+
+    assert sm.set_proactive(False) is True
+    await asyncio.sleep(0)
+    assert sm._proactive_task is None
+    await sm.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_proactive_enable_runs_loop(monkeypatch):
+    """Runtime enable actually starts the proactive loop."""
+    monkeypatch.setenv("LIVE_PROACTIVE_ENABLED", "true")
+    monkeypatch.setenv("LIVE_PROACTIVE_INTERVAL_S", "0.01")
+    sm, _vad, _asr = build_live()
+    sm.handle_frame(B64, 1000.0)
+    calls: list = []
+
+    async def fake_proactive(*, frames):
+        calls.append(frames)
+
+    monkeypatch.setattr(sm, "_send_proactive_prompt", fake_proactive)
+    assert sm.set_proactive(True) is True
+    await asyncio.sleep(0.05)
+    assert len(calls) >= 1  # loop is really running
+    await sm.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_proactive_state_reported_for_browser(monkeypatch):
+    """get_state_for_browser exposes proactive_supported / proactive_enabled."""
+    monkeypatch.setenv("LIVE_PROACTIVE_ENABLED", "true")
+    sm, _vad, _asr = build_live()
+    state = sm.get_state_for_browser()
+    assert state["proactive_supported"] is True
+    assert state["proactive_enabled"] is False
+
+    assert sm.set_proactive(True) is True
+    await asyncio.sleep(0)
+    state2 = sm.get_state_for_browser()
+    assert state2["proactive_supported"] is True
+    assert state2["proactive_enabled"] is True
+
+    await sm.stop()
+    state3 = sm.get_state_for_browser()
+    assert state3["proactive_enabled"] is False

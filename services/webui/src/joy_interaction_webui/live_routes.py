@@ -7,10 +7,14 @@ invoked from ``server.py``'s offer handler:
 * ``POST /api/live/start``   — create/restart the live session (prewarms ASR);
 * ``POST /api/live/stop``    — tear down the live session;
 * ``GET  /api/live/status``  — live turn-state snapshot (listening / speaking
-  / replying / interrupted);
+  / replying / interrupted; also carries the C.B proactive supported/enabled
+  flags);
 * ``POST /api/live/enroll``  — Addressee Detection Phase 1 enrollment
   (start / pcm / finish / cancel sub-actions; guarded by the
-  ``JARVIS_ADDRESSEE_DETECTOR_ENABLED`` env gate, fail-open when disabled).
+  ``JARVIS_ADDRESSEE_DETECTOR_ENABLED`` env gate, fail-open when disabled);
+* ``POST /api/live/proactive`` — C.B layer 3 runtime toggle for the proactive
+  speak loop ``{session_id, enabled}`` (idempotent; ``LIVE_PROACTIVE_ENABLED``
+  env gate remains the final fallback).
 
 The mic audio chain reuses jarvis's WebRTC link: the browser pushes 16 kHz
 mono PCM via ``feed_audio`` (same entry point); live sessions are tracked in
@@ -36,6 +40,7 @@ def setup_live_routes(app: web.Application) -> None:
     app.router.add_post("/api/live/stop", live_stop)
     app.router.add_get("/api/live/status", live_status)
     app.router.add_post("/api/live/enroll", live_enroll)
+    app.router.add_post("/api/live/proactive", live_proactive)
 
 
 # ============================================================================
@@ -180,6 +185,51 @@ async def live_enroll(request: web.Request) -> web.Response:
         return web.json_response({"error": f"enroll failed: {exc}"}, status=500)
 
     return web.json_response({"error": f"unknown action: {action}"}, status=400)
+
+
+async def live_proactive(request: web.Request) -> web.Response:
+    """Runtime toggle for the proactive speak loop (C.B layer 3).
+
+    ``{session_id, enabled: bool}`` starts/stops the proactive loop task on
+    the live session (``LiveStateMachine.set_proactive``, idempotent). The
+    ``LIVE_PROACTIVE_ENABLED`` env gate remains the final fallback: when it is
+    OFF the loop cannot be started at runtime and the response carries
+    ``supported: false`` so the frontend can surface the env hint.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    session_id = (data.get("session_id") or "").strip()
+    if not session_id:
+        return web.json_response({"error": "missing session_id"}, status=400)
+    raw = data.get("enabled")
+    if isinstance(raw, str):
+        enabled = raw.strip().lower() in {"1", "true", "yes", "on"}
+    else:
+        enabled = bool(raw)
+
+    manager: JarvisSessionManager = request.app["jarvis_manager"]
+    session = manager.get_live_session(session_id)
+    if session is None:
+        return web.json_response(
+            {"error": "live session not found; start live mode first"}, status=404
+        )
+    try:
+        applied = session.set_proactive(enabled)
+    except Exception as exc:  # fail-open: never 500 the loop
+        logger.error("[live] proactive switch failed: %s", exc)
+        return web.json_response({"error": f"proactive switch failed: {exc}"}, status=500)
+    state_machine = getattr(session, "state_machine", None)
+    supported = bool(getattr(state_machine, "_proactive_enabled", False))
+    return web.json_response(
+        {
+            "session_id": session_id,
+            "enabled": enabled,
+            "applied": bool(applied),
+            "supported": supported,
+        }
+    )
 
 
 async def bind_live_audio_for_peer(pc, session_id: str, manager: JarvisSessionManager) -> dict:

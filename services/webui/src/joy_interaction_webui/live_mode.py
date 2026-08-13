@@ -299,6 +299,14 @@ class LiveStateMachine:
             "enroll_phase": self._enroll_phase,
             "enroll_segment_count": self.enroll_segment_count,
             "addressee_enrolled": self.addressee_enrolled,
+            # C.B live visual (layer 3): proactive runtime state. The
+            # frontend switch is enabled only when ``proactive_supported``
+            # (env gate ``LIVE_PROACTIVE_ENABLED``) is true; the checkbox
+            # mirrors ``proactive_enabled`` so it stays in sync across the 1s
+            # status polls even when the loop was started at prewarm.
+            "proactive_supported": self._proactive_enabled,
+            "proactive_enabled": self._proactive_task is not None
+            and not self._proactive_task.done(),
         }
 
     def is_active(self) -> bool:
@@ -363,6 +371,50 @@ class LiveStateMachine:
                 self._proactive_interval_s,
                 self._frame_window,
             )
+
+    def set_proactive(self, enabled: bool) -> bool:
+        """Runtime toggle for the proactive speak loop (C.B layer 3).
+
+        Idempotent: repeated ``True`` does not create a second loop task;
+        repeated ``False`` does not double-cancel. The
+        ``LIVE_PROACTIVE_ENABLED`` env gate remains the final fallback — when
+        it is OFF, enabling at runtime is rejected (logged) and the caller
+        should surface the env hint to the user.
+
+        Returns True when the requested state is active afterwards (or was
+        already), False when it could not be reached (env gate off / loop
+        start failure).
+        """
+        enabled = bool(enabled)
+        if enabled:
+            if not self._proactive_enabled:
+                logger.error(
+                    "[live-proactive] runtime switch rejected: env gate "
+                    "LIVE_PROACTIVE_ENABLED is off"
+                )
+                return False
+            if self._proactive_task is not None and not self._proactive_task.done():
+                logger.info("[live-proactive] runtime switch enabled (already running)")
+                return True
+            try:
+                self._proactive_task = asyncio.create_task(self._proactive_loop())
+            except Exception as exc:
+                logger.error("[live-proactive] runtime switch failed to start loop: %s", exc)
+                self._proactive_task = None
+                return False
+            logger.info(
+                "[live-proactive] runtime switch enabled (loop task started, interval=%.1fs)",
+                self._proactive_interval_s,
+            )
+            return True
+
+        if self._proactive_task is not None and not self._proactive_task.done():
+            self._proactive_task.cancel()
+            self._proactive_task = None
+            logger.info("[live-proactive] runtime switch disabled (loop task cancelled)")
+        else:
+            logger.info("[live-proactive] runtime switch disabled (already off)")
+        return True
 
     # ------------------------------------------------------------------
     # Live visual context (spec draft-live-visual-cb.md §2.2)

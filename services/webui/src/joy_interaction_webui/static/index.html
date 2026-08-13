@@ -771,6 +771,22 @@ limitations under the License.
                             </button>
                             <span class="live-enroll-hint" id="liveEnrollHint" role="status" aria-live="polite"></span>
                         </div>
+                        <div class="live-video-row" id="liveVideoRow">
+                            <button class="chat-prompt-action live-video" id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled>
+                                <i data-lucide="video"></i>
+                                <span class="live-video-label">开画面</span>
+                            </button>
+                            <select class="live-video-source" id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled>
+                                <option value="screen" data-i18n>屏幕</option>
+                                <option value="camera" data-i18n>摄像头</option>
+                            </select>
+                            <label class="live-proactive-toggle" title="主动搭话：无用户语音时周期性看画面，有值得说的就开口">
+                                <input type="checkbox" id="liveProactiveToggle" aria-label="主动搭话" disabled>
+                                <span class="live-proactive-label">主动搭话</span>
+                            </label>
+                            <span class="live-video-hint" id="liveVideoHint" role="status" aria-live="polite"></span>
+                            <span class="live-proactive-hint" id="liveProactiveHint" role="status" aria-live="polite"></span>
+                        </div>
                         <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
                             <i class="mic-icon" data-lucide="mic"></i>
                             <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
@@ -836,6 +852,11 @@ limitations under the License.
         const liveModeBtn = document.getElementById('liveModeBtn');
         const liveEnrollBtn = document.getElementById('liveEnrollBtn');
         const liveEnrollHint = document.getElementById('liveEnrollHint');
+        const liveVideoBtn = document.getElementById('liveVideoBtn');
+        const liveVideoSourceEl = document.getElementById('liveVideoSource');
+        const liveProactiveToggle = document.getElementById('liveProactiveToggle');
+        const liveVideoHint = document.getElementById('liveVideoHint');
+        const liveProactiveHint = document.getElementById('liveProactiveHint');
         const speechBtn = document.getElementById('speechBtn');
         const speechButtons = [speechBtn].filter(Boolean);
         const promptSendBtn = document.getElementById('promptSendBtn');
@@ -877,6 +898,18 @@ limitations under the License.
         let liveEnrollActive = false;
         let liveEnrollTimer = null;
         let liveEnrollCompleted = false;
+        // C.B live visual (spec draft-live-visual-cb.md §3 层 3): the live
+        // panel owns a 1fps visual feed (screen via screen_capture.js OR
+        // camera via an inline getUserMedia -> WS frame sender; single-select,
+        // never both). Frames travel over the SAME main WS as jarvis/live
+        // audio — server.py forwards `frame` to the live session ring buffer.
+        let liveVideoActive = false;
+        let liveVideoOwned = false;      // did the live panel start the capture?
+        let liveCameraInterval = null;   // 1fps camera-frame sender
+        let liveCameraStream = null;     // getUserMedia camera stream (live panel)
+        let liveCameraFrameSeq = 0;      // monotonic frame_seq for camera frames
+        // Proactive speak runtime state (from /api/live/status).
+        let liveProactiveSupported = false;  // env gate LIVE_PROACTIVE_ENABLED
         let btMicLevelAudioContext = null;
         let btListenGainNode = null;
         let btMicGainAudioContext = null;
@@ -4325,6 +4358,209 @@ limitations under the License.
                 setBtMicLevel('n/a', shortLabel);
             }
         }
+        // -------------------------------------------------------------------
+        // C.B live visual + proactive speak (spec draft-live-visual-cb.md §3
+        // 层 3). The live panel can open a 1fps visual feed (screen capture
+        // via screen_capture.js OR camera via an inline getUserMedia sender —
+        // single select, never both) that ships WS `frame` messages over the
+        // SAME main websocket; server.py forwards them to the live session
+        // ring buffer when a live session is active. The proactive switch
+        // calls POST /api/live/proactive at runtime (env gate is the final
+        // fallback).
+        // -------------------------------------------------------------------
+        function setLiveVideoHint(text) {
+            if (liveVideoHint) liveVideoHint.textContent = text || '';
+        }
+
+        function setLiveProactiveHint(text) {
+            if (liveProactiveHint) liveProactiveHint.textContent = text || '';
+        }
+
+        function setLiveVideoActive(active) {
+            liveVideoActive = Boolean(active);
+            if (!liveVideoBtn) return;
+            liveVideoBtn.classList.toggle('listening', liveVideoActive);
+            const label = liveVideoBtn.querySelector('.live-video-label');
+            if (label) label.textContent = liveVideoActive ? '关画面' : '开画面';
+            liveVideoBtn.title = liveVideoActive
+                ? '关闭画面（停止帧推送）'
+                : '打开画面（屏幕/摄像头，1fps 帧推送）';
+            if (liveVideoSourceEl) liveVideoSourceEl.disabled = !liveModeActive || liveVideoActive;
+            lucide.createIcons();
+        }
+
+        function setLiveProactiveUiState() {
+            // The switch is usable only while live is active AND the env gate
+            // (LIVE_PROACTIVE_ENABLED) is on; otherwise it stays disabled with
+            // an env hint so the operator knows how to turn the feature on.
+            if (!liveProactiveToggle) return;
+            const usable = liveModeActive && liveProactiveSupported;
+            liveProactiveToggle.disabled = !usable;
+            if (!usable) {
+                liveProactiveToggle.checked = false;
+                if (liveModeActive) {
+                    setLiveProactiveHint('需在 run-windows.env 开启 LIVE_PROACTIVE_ENABLED=true');
+                }
+            }
+        }
+
+        function stopLiveCameraCapture() {
+            const streamRef = liveCameraStream;
+            if (liveCameraInterval) {
+                clearInterval(liveCameraInterval);
+                liveCameraInterval = null;
+            }
+            if (streamRef) {
+                streamRef.getTracks().forEach(track => track.stop());
+            }
+            liveCameraStream = null;
+            liveCameraFrameSeq = 0;
+            if (typeof videoElement !== 'undefined' && videoElement && videoElement.srcObject === streamRef) {
+                videoElement.srcObject = null;
+            }
+        }
+
+        async function startLiveCameraCapture() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('当前浏览器不支持摄像头采集');
+            }
+            const constraints = { width: { ideal: 960 }, height: { ideal: 540 } };
+            const sel = document.getElementById('cameraSelect');
+            if (sel && sel.value) constraints.deviceId = { exact: sel.value };
+            liveCameraStream = await navigator.mediaDevices.getUserMedia({
+                video: constraints,
+                audio: false
+            });
+            const track = liveCameraStream.getVideoTracks()[0];
+            if (track) {
+                track.addEventListener('ended', () => stopLiveVideoCapture());
+            }
+            if (typeof videoElement !== 'undefined' && videoElement) {
+                videoElement.classList.remove('mirrored');
+                videoElement.srcObject = liveCameraStream;
+            }
+            liveCameraFrameSeq = 0;
+            liveCameraInterval = setInterval(() => {
+                if (!window.websocket || window.websocket.readyState !== WebSocket.OPEN) return;
+                if (typeof videoElement === 'undefined' || !videoElement
+                    || videoElement.readyState < 2 || videoElement.videoWidth <= 0) {
+                    return;
+                }
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoElement.videoWidth;
+                    canvas.height = videoElement.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                    const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                    const base64 = jpegDataUrl.split(',')[1];
+                    liveCameraFrameSeq += 1;
+                    window.websocket.send(JSON.stringify({
+                        type: 'frame',
+                        format: 'jpeg',
+                        width: canvas.width,
+                        height: canvas.height,
+                        data: base64,
+                        timestamp: Date.now(),
+                        source: 'camera',
+                        frame_seq: liveCameraFrameSeq
+                    }));
+                } catch (err) {
+                    console.error('Live camera frame error:', err);
+                }
+            }, 1000);
+        }
+
+        async function startLiveVideo() {
+            if (!liveModeActive || liveVideoActive) return;
+            setLiveVideoHint('');
+            try {
+                if (!window.websocket || window.websocket.readyState !== WebSocket.OPEN) {
+                    if (typeof connectWebSocket === 'function') connectWebSocket();
+                }
+                const source = liveVideoSourceEl ? liveVideoSourceEl.value : 'screen';
+                if (source === 'camera') {
+                    await startLiveCameraCapture();
+                    liveVideoOwned = true;
+                    setLiveVideoHint('摄像头画面已开启（1fps 帧推送）');
+                } else {
+                    // Reuse the existing screen_capture.js pipeline (1fps JPEG
+                    // -> WS `frame` over the live session's WS). If the main
+                    // video panel already runs a capture we adopt it without
+                    // owning it, so leaving live mode never kills a capture the
+                    // operator started elsewhere.
+                    if (window.isScreenCapturing && window.isScreenCapturing()) {
+                        liveVideoOwned = false;
+                    } else {
+                        await window.startScreenCapture(window.websocket, { fps: 1 });
+                        liveVideoOwned = true;
+                    }
+                    const previewStream = window.getScreenCaptureStream && window.getScreenCaptureStream();
+                    if (previewStream && typeof videoElement !== 'undefined' && videoElement) {
+                        videoElement.classList.remove('mirrored');
+                        videoElement.srcObject = previewStream;
+                    }
+                    setLiveVideoHint('屏幕画面已开启（1fps 帧推送）');
+                }
+                setLiveVideoActive(true);
+            } catch (err) {
+                console.error('startLiveVideo:', err);
+                stopLiveCameraCapture();
+                liveVideoOwned = false;
+                setLiveVideoActive(false);
+                setLiveVideoHint('画面开启失败：' + (err && err.message ? err.message : err));
+            }
+        }
+
+        function stopLiveVideoCapture() {
+            if (liveVideoOwned) {
+                if (window.isScreenCapturing && window.isScreenCapturing()) {
+                    const screenStream = window.getScreenCaptureStream && window.getScreenCaptureStream();
+                    if (typeof window.stopScreenCapture === 'function') window.stopScreenCapture();
+                    if (screenStream && typeof videoElement !== 'undefined' && videoElement
+                        && videoElement.srcObject === screenStream) {
+                        videoElement.srcObject = null;
+                    }
+                }
+            }
+            stopLiveCameraCapture();
+            liveVideoOwned = false;
+            setLiveVideoActive(false);
+            setLiveVideoHint('');
+        }
+
+        async function toggleLiveProactive() {
+            if (!liveModeActive || !liveProactiveToggle) return;
+            const enabled = liveProactiveToggle.checked;
+            try {
+                const resp = await fetch('/api/live/proactive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, enabled })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || data.applied === false) {
+                    liveProactiveToggle.checked = false;
+                    setLiveProactiveHint((data.error || '主动搭话切换失败（需 LIVE_PROACTIVE_ENABLED=true）'));
+                    return;
+                }
+                if (data.supported === false) {
+                    liveProactiveSupported = false;
+                    setLiveProactiveUiState();
+                    setLiveProactiveHint('需在 run-windows.env 开启 LIVE_PROACTIVE_ENABLED=true');
+                    return;
+                }
+                liveProactiveSupported = true;
+                setLiveProactiveHint(enabled
+                    ? '主动搭话已开启（画面变化时 AI 可能主动开口）'
+                    : '主动搭话已关闭');
+            } catch (err) {
+                console.error('toggleLiveProactive failed:', err);
+                liveProactiveToggle.checked = !enabled;
+                setLiveProactiveHint('主动搭话切换失败');
+            }
+        }
+
         function setLiveModeActive(active) {
             liveModeActive = Boolean(active);
             if (!liveModeBtn) return;
@@ -4336,6 +4572,21 @@ limitations under the License.
                 // 注册声音 only makes sense while the live session is active.
                 liveEnrollBtn.disabled = !liveModeActive || liveEnrollActive;
             }
+            if (liveVideoBtn) {
+                liveVideoBtn.disabled = !liveModeActive;
+            }
+            if (liveVideoSourceEl) {
+                liveVideoSourceEl.disabled = !liveModeActive;
+            }
+            if (!liveModeActive) {
+                // Leaving live mode: stop any live visual capture (screen or
+                // camera) and reset the proactive switch. Idempotent — also
+                // reached from the startLiveMode failure path.
+                stopLiveVideoCapture();
+                if (liveProactiveToggle) liveProactiveToggle.checked = false;
+                setLiveProactiveHint('');
+            }
+            setLiveProactiveUiState();
             lucide.createIcons();
         }
 
@@ -4456,6 +4707,10 @@ limitations under the License.
                 if (!startResp.ok) {
                     const err = await startResp.json().catch(() => ({}));
                     throw new Error(err.error || ('Live 启动失败：HTTP ' + startResp.status));
+                }
+                const startData = await startResp.json().catch(() => ({}));
+                if (typeof startData.proactive_supported === 'boolean') {
+                    liveProactiveSupported = startData.proactive_supported;
                 }
                 if (!websocket || websocket.readyState !== WebSocket.OPEN) {
                     connectWebSocket();
@@ -5409,6 +5664,29 @@ limitations under the License.
         liveModeBtn.addEventListener('click', selectLiveMode);
         if (liveEnrollBtn) {
             liveEnrollBtn.addEventListener('click', startLiveEnroll);
+        }
+        if (liveVideoBtn) {
+            liveVideoBtn.addEventListener('click', () => {
+                if (liveVideoActive) {
+                    stopLiveVideoCapture();
+                } else {
+                    startLiveVideo();
+                }
+            });
+        }
+        if (liveVideoSourceEl) {
+            liveVideoSourceEl.addEventListener('change', () => {
+                // Single-select (spec §4 边界): a source change while capturing
+                // is ignored — the operator must close the current feed first.
+                if (liveVideoActive) {
+                    setLiveVideoHint('请先关闭当前画面再切换来源');
+                } else {
+                    setLiveVideoHint('');
+                }
+            });
+        }
+        if (liveProactiveToggle) {
+            liveProactiveToggle.addEventListener('change', toggleLiveProactive);
         }
         promptSendBtn.addEventListener('click', () => {
             sendBtPrompt();
@@ -6507,6 +6785,15 @@ limitations under the License.
                 { emoji: '⚪', text: payload.turn_state, cls: 'live-unknown' };
             el.textContent = info.emoji + ' ' + info.text;
             el.className = 'status-badge ' + info.cls;
+            // C.B layer 3: keep the proactive switch in sync with the runtime
+            // state reported by the backend (env gate + actual loop task).
+            if (typeof payload.proactive_supported === 'boolean') {
+                liveProactiveSupported = payload.proactive_supported;
+                if (liveProactiveToggle) {
+                    liveProactiveToggle.checked = Boolean(payload.proactive_enabled);
+                }
+                setLiveProactiveUiState();
+            }
         }
 
         async function pollLiveStatus() {
