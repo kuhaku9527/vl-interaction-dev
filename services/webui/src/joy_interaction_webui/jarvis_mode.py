@@ -18,14 +18,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
-import math
 import os
 import time
 import wave
-from array import array
 from collections import deque
 from collections.abc import Callable
 from pathlib import Path
+
+from . import jarvis_kws
 
 # Facade re-exports (batch 6: jarvis_config / jarvis_state split): the
 # configuration + state declarations moved to their own modules; this module
@@ -511,19 +511,11 @@ class JarvisStateMachine:
             await self._promote_from_confirm(matched_pattern=tap_text)
 
     def _pcm_stats(self, pcm: bytes) -> tuple[float, float]:
-        """Return (peak, rms) for int16 mono PCM in the 0..1 range."""
-        if not pcm:
-            return 0.0, 0.0
-        if len(pcm) % 2:
-            pcm = pcm[:-1]
-        samples = array("h")
-        samples.frombytes(pcm)
-        if not samples:
-            return 0.0, 0.0
-        peak = max(abs(s) for s in samples) / 32768.0
-        square_sum = sum(float(s) * float(s) for s in samples)
-        rms = math.sqrt(square_sum / len(samples)) / 32768.0
-        return min(1.0, peak), min(1.0, rms)
+        """Return (peak, rms) for int16 mono PCM in the 0..1 range.
+
+        Delegates to ``jarvis_kws.pcm_stats`` (extracted batch 6).
+        """
+        return jarvis_kws.pcm_stats(pcm)
 
     def _ensure_kws_diagnostic_state(self) -> None:
         """Initialize diagnostic fields for tests that construct via __new__."""
@@ -612,50 +604,25 @@ class JarvisStateMachine:
         Real logs showed a rolling 3s capture could wake offline while the
         long-running live stream missed. This probe keeps the primary stream
         untouched and gives short wake words a clean stream boundary.
+
+        Delegates to ``jarvis_kws.probe_fresh_window`` (extracted batch 6);
+        the updated probe timestamp is written back to ``_last_kws_fresh_probe_at``.
         """
-        if not getattr(self.config, "kws_fresh_window_probe_enabled", True):
-            return False
-        now = time.time()
-        interval = max(0.0, self.config.kws_fresh_window_probe_interval_s)
-        if interval and (now - self._last_kws_fresh_probe_at) < interval:
-            return False
-        min_s = 0.1 if bypass_min_s else max(0.1, self.config.kws_fresh_window_min_s)
-        if self._kws_capture_bytes < int(min_s * self.config.sample_rate * 2):
-            return False
-        self._last_kws_fresh_probe_at = now
-        pcm = b"".join(self._kws_capture_chunks)
-        # B1 P0 energy gate: probe only buffers with real acoustic content.
-        # Recompute energy from the exact window we would probe (authoritative —
-        # the passed peak/rms are the CURRENT chunk's stats, which can be ~0 for
-        # a wake that settled during trailing blanks while the buffer holds the
-        # actual speech). A pure-silence buffer is skipped so it can never
-        # escalate into a direct wake.
-        buf_peak, buf_rms = self._pcm_stats(pcm)
-        if buf_peak < max(0.0, self.config.kws_probe_min_peak):
-            logger.info(
-                "Fresh-window KWS probe skipped: silent window "
-                "(peak=%.4f < kws_probe_min_peak=%.4f)",
-                buf_peak,
-                max(0.0, self.config.kws_probe_min_peak),
-            )
-            return False
-        try:
-            hit = bool(self._kws.detect_in_pcm(pcm))
-        except Exception as exc:
-            logger.warning("Fresh-window KWS probe failed: %s", exc)
-            return False
-        if not hit:
-            return False
-        logger.info(
-            "Wake word detected by fresh-window KWS probe (%.2fs peak=%.3f rms=%.3f)",
-            len(pcm) / (self.config.sample_rate * 2),
-            buf_peak,
-            buf_rms,
+        hit, last_probe_at = await jarvis_kws.probe_fresh_window(
+            config=self.config,
+            last_probe_at=self._last_kws_fresh_probe_at,
+            capture_bytes=self._kws_capture_bytes,
+            capture_chunks=self._kws_capture_chunks,
+            pcm_stats_fn=self._pcm_stats,
+            kws=self._kws,
+            direct_wake=self._direct_wake_from_kws,
+            peak=peak,
+            rms=rms,
+            bypass_min_s=bypass_min_s,
+            logger=logger,
         )
-        if not getattr(self.config, "kws_fresh_window_direct_wake", True):
-            return False
-        await self._direct_wake_from_kws(source="fresh-window-kws")
-        return True
+        self._last_kws_fresh_probe_at = last_probe_at
+        return hit
 
     async def _direct_wake_from_kws(self, *, source: str, respect_fresh_gate: bool = True) -> None:
         """Promote a trusted KWS hit (or local ASR promotion) without ASR confirm.
@@ -779,35 +746,20 @@ class JarvisStateMachine:
         bypasses ASR confirm (which the streaming-paraformer model often fails
         on the two-syllable "bt" wake phrase). This recovers the wake when
         the live KWS fired but ASR partials never spelled "bt" within 1.2s.
+
+        Delegates to ``jarvis_kws.wait_asr_confirm_timeout`` (extracted
+        batch 6); the probe/reset callbacks keep the instance monkeypatch
+        seams (``_probe_kws_fresh_window`` / ``_reset_to_kws``) intact.
         """
-        try:
-            await asyncio.sleep(self.config.asr_confirm_timeout_s)
-        except asyncio.CancelledError:
-            return
-        if self.state != JarvisState.WAIT_ASR_CONFIRM:
-            return  # already promoted or otherwise moved on
-        # Recovery probe: fresh-stream KWS over captured audio.
-        # Use peak/rms captured at wake time (more accurate) and bypass
-        # the 1s min_s gate since we already have a trusted live KWS hit.
-        # B1 P0: do NOT synthesize a fake peak for silent wakes (the old
-        # ``peak <= 0 -> 0.5`` fallback let a pure-silence false trigger
-        # escalate into a direct wake). Pass the wake-chunk energy as-is;
-        # the probe's own buffer-energy gate (kws_probe_min_peak) decides
-        # whether there is real acoustic content to recover. A silent wake
-        # falls through to _reset_to_kws() below instead of direct-waking.
-        peak = getattr(self, "_last_wake_peak", 0.0)
-        rms = getattr(self, "_last_wake_rms", 0.0)
-        if await self._probe_kws_fresh_window(peak=peak, rms=rms, bypass_min_s=True):
-            logger.info(
-                "WAIT_ASR_CONFIRM recovered via fresh-window KWS probe; "
-                "direct wake without ASR confirm"
-            )
-            return
-        logger.info(
-            "WAIT_ASR_CONFIRM timeout (%.2fs) without ASR match; returning to KWS_LISTENING",
-            self.config.asr_confirm_timeout_s,
+        await jarvis_kws.wait_asr_confirm_timeout(
+            asr_confirm_timeout_s=self.config.asr_confirm_timeout_s,
+            state=self.state,
+            last_wake_peak=getattr(self, "_last_wake_peak", 0.0),
+            last_wake_rms=getattr(self, "_last_wake_rms", 0.0),
+            probe=self._probe_kws_fresh_window,
+            reset_to_kws=self._reset_to_kws,
+            logger=logger,
         )
-        await self._reset_to_kws()
 
     async def _promote_from_confirm(self, matched_pattern: str) -> None:
         """WAIT_ASR_CONFIRM -> WAKE_DETECTED -> DIALOG_ACTIVE after ASR match."""
@@ -839,22 +791,10 @@ class JarvisStateMachine:
            joined token ``bt`` or adjacent tokens ``b`` followed by ``t``.
            This catches paraformer outputs that segment the two-syllable
            wake word with whitespace or punctuation.
+
+        Delegates to ``jarvis_kws.asr_confirm_match`` (extracted batch 6).
         """
-        if not text:
-            return False
-        lowered = text.lower()
-
-        # (1) explicit operator-provided patterns (override mode)
-        patterns = getattr(getattr(self, "config", None), "asr_confirm_patterns", None)
-        if patterns:
-            return any(p.lower() in lowered for p in patterns)
-
-        # (2) wide normalised match for segmented "b t" / "bt" forms
-        normalised = " ".join(_ASR_CONFIRM_NON_WORD.split(lowered))
-        if "bt" in normalised:
-            return True
-        tokens = normalised.split()
-        return any(tokens[i] == "b" and tokens[i + 1] == "t" for i in range(len(tokens) - 1))
+        return jarvis_kws.asr_confirm_match(text, getattr(self, "config", None))
 
     async def _handle_wait_asr_confirm(self, pcm: bytes):
         """WAIT_ASR_CONFIRM: feed ASR, check each partial/final for confirm pattern."""
