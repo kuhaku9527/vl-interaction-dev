@@ -31,6 +31,12 @@ from enum import Enum, auto
 from pathlib import Path
 
 from .smart_turn_adapter import SmartTurnAdapter
+from .tts_turn_common import (
+    fetch_tts_pcm,
+    spawn_sentence_tts,
+    synthesize_tts_sentence,
+    wrap_pcm16_wav,
+)
 from .vad_bypass import VadBypass
 
 logger = logging.getLogger("joyai.jarvis")
@@ -1974,20 +1980,18 @@ class JarvisStateMachine:
         while the model generates sentence N+1). The browser plays by seq;
         an epoch bump (barge-in / exit word) cancels every in-flight task and
         the captured epoch makes any task that survives drop its result.
+        Delegates to the shared ``tts_turn_common`` implementation.
         """
         self._ensure_tts_stream_state()
-        epoch = self._tts_sentence_epoch
-        task = asyncio.create_task(
-            self._synthesize_tts_sentence(sentence, seq, reply_session, epoch)
-        )
-        self._tts_sentence_tasks.add(task)
-        task.add_done_callback(self._tts_sentence_tasks.discard)
-        logger.info(
-            "[tts-stream] sentence %d queued (session=%d, %d chars): '%s'",
-            seq,
-            reply_session,
-            len(sentence),
-            sentence[:60],
+        spawn_sentence_tts(
+            logger=logger,
+            sentence=sentence,
+            seq=seq,
+            reply_session=reply_session,
+            epoch=self._tts_sentence_epoch,
+            tasks=self._tts_sentence_tasks,
+            synthesize=self._synthesize_tts_sentence,
+            queued_format="[tts-stream] sentence %d queued (session=%d, %d chars): '%s'",
         )
 
     async def _synthesize_tts_sentence(
@@ -1997,93 +2001,32 @@ class JarvisStateMachine:
 
         Guards with the sentence epoch captured at spawn time so audio
         synthesized after a barge-in / exit word is never pushed to the
-        browser.
+        browser. Delegates to the shared ``tts_turn_common`` implementation.
         """
-        if self._tts_sentence_epoch != epoch:
-            return
-        t0 = time.time()
-        logger.info(
-            "[tts-stream] sentence %d TTS synth start (session=%d, %d chars)",
-            seq,
-            reply_session,
-            len(sentence),
+        await synthesize_tts_sentence(
+            logger=logger,
+            sentence=sentence,
+            seq=seq,
+            reply_session=reply_session,
+            epoch=epoch,
+            current_epoch=lambda: self._tts_sentence_epoch,
+            fetch_pcm=self._fetch_tts_pcm,
+            on_tts_sentence=self.on_tts_sentence,
+            log_prefix="[tts-stream]",
         )
-        try:
-            pcm = await self._fetch_tts_pcm(sentence)
-        except Exception as exc:
-            logger.error(
-                "[tts-stream] sentence %d TTS failed after %.0fms: %s",
-                seq,
-                (time.time() - t0) * 1000,
-                exc,
-            )
-            return
-        if self._tts_sentence_epoch != epoch:
-            logger.debug("[tts-stream] sentence %d stale (epoch bumped); dropping", seq)
-            return
-        logger.info(
-            "[tts-stream] sentence %d TTS ok (%.0fms, %d PCM bytes)",
-            seq,
-            (time.time() - t0) * 1000,
-            len(pcm),
-        )
-        try:
-            wav = self._wrap_pcm16_wav(pcm, sample_rate=24000)
-            audio_b64 = base64.b64encode(wav).decode("ascii")
-        except Exception as exc:
-            logger.error("[tts-stream] sentence %d WAV wrap failed: %s", seq, exc)
-            return
-        if self.on_tts_sentence:
-            try:
-                self.on_tts_sentence(sentence, seq, audio_b64, reply_session)
-                logger.info(
-                    "[tts-stream] sentence %d pushed (session=%d, total %.0fms)",
-                    seq,
-                    reply_session,
-                    (time.time() - t0) * 1000,
-                )
-            except Exception as exc:
-                logger.warning("[tts-stream] tts_sentence callback failed: %s", exc)
 
     async def _fetch_tts_pcm(self, text: str) -> bytes:
         """POST ``text`` to voice_clone_api :8985 and return PCM16 bytes."""
-        import httpx
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                self.config.tts_api_url,
-                json={
-                    "text": text,
-                    "voice_id": self.config.tts_voice_id,
-                    "streaming": False,
-                    "sample_rate": 24000,
-                },
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-            audio_b64 = payload.get("pcm16_base64") or payload.get("audio")
-            if not audio_b64:
-                raise ValueError(f"TTS response missing audio: {payload}")
-            return base64.b64decode(audio_b64)
+        return await fetch_tts_pcm(
+            tts_api_url=self.config.tts_api_url,
+            tts_voice_id=self.config.tts_voice_id,
+            text=text,
+        )
 
     @staticmethod
     def _wrap_pcm16_wav(pcm: bytes, sample_rate: int = 24000) -> bytes:
         """Wrap 24kHz mono PCM16 into a RIFF/WAVE container for <audio>."""
-        n_channels = 1
-        bits_per_sample = 16
-        byte_rate = sample_rate * n_channels * bits_per_sample // 8
-        block_align = n_channels * bits_per_sample // 8
-        data_size = len(pcm)
-        header = b"RIFF" + (36 + data_size).to_bytes(4, "little") + b"WAVE"
-        header += b"fmt " + (16).to_bytes(4, "little")
-        header += (1).to_bytes(2, "little")  # PCM
-        header += n_channels.to_bytes(2, "little")
-        header += sample_rate.to_bytes(4, "little")
-        header += byte_rate.to_bytes(4, "little")
-        header += block_align.to_bytes(2, "little")
-        header += bits_per_sample.to_bytes(2, "little")
-        header += b"data" + data_size.to_bytes(4, "little")
-        return header + pcm
+        return wrap_pcm16_wav(pcm, sample_rate=sample_rate)
 
     async def _finish_llm_turn(
         self,

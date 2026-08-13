@@ -44,7 +44,6 @@ This module is independent from ``jarvis_mode.py``: jarvis is untouched.
 from __future__ import annotations
 
 import asyncio
-import base64
 import logging
 import os
 import time
@@ -53,6 +52,12 @@ from collections.abc import Callable
 from typing import Any
 
 from .jarvis_mode import _is_garbage_text
+from .tts_turn_common import (
+    fetch_tts_pcm,
+    spawn_sentence_tts,
+    synthesize_tts_sentence,
+    wrap_pcm16_wav,
+)
 from .turn_controller import TurnConfig, TurnController, TurnState, TurnStateError
 from .turn_streaming import StreamingTurnConsumer
 from .vad_bypass import VadBypass
@@ -1293,112 +1298,49 @@ class LiveStateMachine:
 
         The task runs concurrently with LLM streaming; an epoch bump
         (barge-in / stop) cancels every in-flight task and the captured epoch
-        makes any survivor drop its result.
+        makes any survivor drop its result. Delegates to the shared
+        ``tts_turn_common`` implementation.
         """
         self._sentence_spawned_this_turn = True
-        epoch = self._tts_sentence_epoch
-        task = asyncio.create_task(
-            self._synthesize_tts_sentence(sentence, seq, reply_session, epoch)
-        )
-        self._tts_sentence_tasks.add(task)
-        task.add_done_callback(self._tts_sentence_tasks.discard)
-        logger.info(
-            "[live-mode] sentence %d queued (session=%d, %d chars): %r",
-            seq,
-            reply_session,
-            len(sentence),
-            sentence[:60],
+        spawn_sentence_tts(
+            logger=logger,
+            sentence=sentence,
+            seq=seq,
+            reply_session=reply_session,
+            epoch=self._tts_sentence_epoch,
+            tasks=self._tts_sentence_tasks,
+            synthesize=self._synthesize_tts_sentence,
+            queued_format="[live-mode] sentence %d queued (session=%d, %d chars): %r",
         )
 
     async def _synthesize_tts_sentence(
         self, sentence: str, seq: int, reply_session: int, epoch: int
     ) -> None:
         """Fetch PCM16 for one sentence, wrap as WAV, push ``tts_sentence``."""
-        if self._tts_sentence_epoch != epoch:
-            return
-        t0 = time.time()
-        logger.info(
-            "[live-mode] sentence %d TTS synth start (session=%d, %d chars)",
-            seq,
-            reply_session,
-            len(sentence),
+        await synthesize_tts_sentence(
+            logger=logger,
+            sentence=sentence,
+            seq=seq,
+            reply_session=reply_session,
+            epoch=epoch,
+            current_epoch=lambda: self._tts_sentence_epoch,
+            fetch_pcm=self._fetch_tts_pcm,
+            on_tts_sentence=self.on_tts_sentence,
+            log_prefix="[live-mode]",
         )
-        try:
-            pcm = await self._fetch_tts_pcm(sentence)
-        except Exception as exc:
-            logger.error(
-                "[live-mode] sentence %d TTS failed after %.0fms: %s",
-                seq,
-                (time.time() - t0) * 1000,
-                exc,
-            )
-            return
-        if self._tts_sentence_epoch != epoch:
-            logger.debug("[live-mode] sentence %d stale (epoch bumped); dropping", seq)
-            return
-        logger.info(
-            "[live-mode] sentence %d TTS ok (%.0fms, %d PCM bytes)",
-            seq,
-            (time.time() - t0) * 1000,
-            len(pcm),
-        )
-        try:
-            wav = self._wrap_pcm16_wav(pcm, sample_rate=24000)
-            audio_b64 = base64.b64encode(wav).decode("ascii")
-        except Exception as exc:
-            logger.error("[live-mode] sentence %d WAV wrap failed: %s", seq, exc)
-            return
-        if self.on_tts_sentence:
-            try:
-                self.on_tts_sentence(sentence, seq, audio_b64, reply_session)
-                logger.info(
-                    "[live-mode] sentence %d pushed (session=%d, total %.0fms)",
-                    seq,
-                    reply_session,
-                    (time.time() - t0) * 1000,
-                )
-            except Exception as exc:
-                logger.warning("[live-mode] tts_sentence callback failed: %s", exc)
 
     async def _fetch_tts_pcm(self, text: str) -> bytes:
         """POST ``text`` to voice_clone_api and return PCM16 bytes."""
-        import httpx
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                self._config.tts_api_url,
-                json={
-                    "text": text,
-                    "voice_id": self._config.tts_voice_id,
-                    "streaming": False,
-                    "sample_rate": 24000,
-                },
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-            audio_b64 = payload.get("pcm16_base64") or payload.get("audio")
-            if not audio_b64:
-                raise ValueError(f"TTS response missing audio: {payload}")
-            return base64.b64decode(audio_b64)
+        return await fetch_tts_pcm(
+            tts_api_url=self._config.tts_api_url,
+            tts_voice_id=self._config.tts_voice_id,
+            text=text,
+        )
 
     @staticmethod
     def _wrap_pcm16_wav(pcm: bytes, sample_rate: int = 24000) -> bytes:
         """Wrap 24kHz mono PCM16 into a RIFF/WAVE container for <audio>."""
-        n_channels = 1
-        bits_per_sample = 16
-        byte_rate = sample_rate * n_channels * bits_per_sample // 8
-        block_align = n_channels * bits_per_sample // 8
-        data_size = len(pcm)
-        header = b"RIFF" + (36 + data_size).to_bytes(4, "little") + b"WAVE"
-        header += b"fmt " + (16).to_bytes(4, "little")
-        header += (1).to_bytes(2, "little")  # PCM
-        header += n_channels.to_bytes(2, "little")
-        header += sample_rate.to_bytes(4, "little")
-        header += byte_rate.to_bytes(4, "little")
-        header += block_align.to_bytes(2, "little")
-        header += bits_per_sample.to_bytes(2, "little")
-        header += b"data" + data_size.to_bytes(4, "little")
-        return header + pcm
+        return wrap_pcm16_wav(pcm, sample_rate=sample_rate)
 
     # ------------------------------------------------------------------
     # Barge-in / stop
