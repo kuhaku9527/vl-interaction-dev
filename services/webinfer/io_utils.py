@@ -173,6 +173,32 @@ def _resize_data_url_if_needed(data_url: str, max_pixels: int = 0) -> str:
         return data_url
 
 
+def _resize_frame_image_b64(image_b64: str, max_pixels: int = 0) -> str:
+    """Resize a raw base64 live-frame payload to at most ``max_pixels`` pixels.
+
+    The live visual path carries frames as raw base64 (``_parse_live_frames``
+    strips any ``data:`` prefix). This helper re-applies the same
+    ``max_pixels`` budget the video path enforces via
+    ``_file_to_data_url(..., max_pixels=...)`` so a screen-capture frame can
+    no longer reach the main model at full resolution (audit P1-4).
+
+    Fail-open (mirroring the video path): an undecodable image, a decode /
+    resize error, or an already-small image returns the original payload
+    unchanged — a bad frame never blocks the live visual round.
+    """
+    image_b64 = (image_b64 or "").strip()
+    if max_pixels <= 0 or not image_b64:
+        return image_b64
+    data_url = f"data:image/jpeg;base64,{image_b64}"
+    resized = _resize_data_url_if_needed(data_url, max_pixels)
+    if resized == data_url or not resized.startswith("data:image/"):
+        return image_b64
+    comma = resized.find(",")
+    if comma == -1:
+        return image_b64
+    return resized[comma + 1 :].strip()
+
+
 def _resize_image_if_needed(image: Image.Image, max_pixels: int) -> Image.Image | None:
     width, height = image.size
     if max_pixels <= 0 or width * height <= max_pixels:

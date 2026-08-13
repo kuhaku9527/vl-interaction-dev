@@ -52,8 +52,11 @@ def test_estimate_chars_handles_list_content_with_text_and_image():
             ],
         },
     ]
-    # "ctx" (3) + text (200) + image placeholder (1024) + 2 * 16 framing
-    assert la._estimate_messages_chars(msgs) == 3 + 200 + 1024 + 32
+    # "ctx" (3) + text (200) + image_url counted by actual URL length (8) +
+    # 2 * 16 framing. image_url is the form that carries the full base64
+    # payload, so counting its length keeps the prompt guard honest about
+    # real multimodal request size (audit P1-4).
+    assert la._estimate_messages_chars(msgs) == 3 + 200 + len("data:...") + 32
 
 
 def test_estimate_chars_handles_missing_or_invalid_messages():

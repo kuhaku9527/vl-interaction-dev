@@ -12,7 +12,11 @@ import logging
 from typing import Any
 
 from adapter_types import SessionState
-from io_utils import _extract_extra_body, _internal_message_to_openai
+from io_utils import (
+    _extract_extra_body,
+    _internal_message_to_openai,
+    _resize_frame_image_b64,
+)
 from prompt_building import (
     _build_system_prompt,
     _estimate_messages_chars,
@@ -47,6 +51,8 @@ LIVE_VISUAL_OBSERVATION_SEGMENT = (
 def _build_live_visual_user_message(
     user_text: str,
     frames: list[dict[str, Any]],
+    *,
+    max_pixels: int = 0,
 ) -> dict[str, Any]:
     """Build the user message for one live visual round (text + frames).
 
@@ -57,17 +63,24 @@ def _build_live_visual_user_message(
     — JPEG is the format the frontend screen-capture pipeline produces.
     Frames never enter conversation history (spec §2.6): they ride only on the
     current round's request.
+
+    ``max_pixels`` forwards the global image budget: every frame is resized
+    through the same helper as the video path (``io_utils._resize_frame_image_b64``)
+    so live visual frames can no longer bypass ``max_pixels`` (audit P1-4).
+    The resize is fail-open: an undecodable / already-small frame is sent
+    unchanged, matching the video path's behaviour.
     """
     content: list[dict[str, Any]] = []
     text = (user_text or "").strip()
     if text:
         content.append({"type": "text", "text": text})
     for frame in frames:
+        image_b64 = _resize_frame_image_b64(frame.get("image_b64") or "", max_pixels)
         content.append(
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/jpeg;base64,{(frame.get('image_b64') or '').strip()}"
+                    "url": f"data:image/jpeg;base64,{image_b64}"
                 },
             }
         )
@@ -80,15 +93,17 @@ def _build_live_visual_messages(
     frames: list[dict[str, Any]],
     *,
     history_messages: list[dict[str, Any]] | None = None,
+    max_pixels: int = 0,
 ) -> list[dict[str, Any]]:
     """Compose the OpenAI-style message list for a live visual round.
 
     System = the caller-supplied composed live prompt (four-state
     ``LIVE_SYSTEM_PROMPT_EN`` plus memory blocks) with the visual-observation
     segment appended; user = the current utterance text (empty for proactive
-    rounds) + the image frames as ``image_url`` data URIs. Text-only history
-    turns (when provided) are inserted between the system and the visual user
-    message so conversation continuity is preserved without persisting frames.
+    rounds) + the image frames as ``image_url`` data URIs (resized to
+    ``max_pixels`` when positive). Text-only history turns (when provided) are
+    inserted between the system and the visual user message so conversation
+    continuity is preserved without persisting frames.
     """
     visual_system = (
         (system_prompt or "").rstrip() + "\n\n" + LIVE_VISUAL_OBSERVATION_SEGMENT.strip()
@@ -96,7 +111,7 @@ def _build_live_visual_messages(
     messages: list[dict[str, Any]] = [{"role": "system", "content": visual_system}]
     for message in history_messages or []:
         messages.append(dict(message))
-    messages.append(_build_live_visual_user_message(user_text, frames))
+    messages.append(_build_live_visual_user_message(user_text, frames, max_pixels=max_pixels))
     return messages
 
 
@@ -106,6 +121,7 @@ def compose_live_visual_messages(
     last_user_text: str,
     frames: list[dict[str, Any]],
     caller_messages: list[dict[str, Any]],
+    max_pixels: int = 0,
 ) -> list[dict[str, Any]]:
     """Assemble the OpenAI-style message list for a live visual round.
 
@@ -120,6 +136,10 @@ def compose_live_visual_messages(
     (audit P1-1). If the trailing user message carries text that was NOT
     extracted (e.g. a list-content shape the old str-only extractor missed),
     it is kept so no caller text is silently lost.
+
+    ``max_pixels`` is forwarded to the visual user message builder so the
+    frames honour the global image budget (audit P1-4); 0 keeps frames
+    unchanged (direct-helper test callers).
     """
     history_messages = list(caller_messages)
     if history_messages and history_messages[-1].get("role") == "user":
@@ -131,6 +151,7 @@ def compose_live_visual_messages(
         last_user_text,
         frames,
         history_messages=history_messages,
+        max_pixels=max_pixels,
     )
 
 

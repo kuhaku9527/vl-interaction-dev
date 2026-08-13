@@ -351,11 +351,15 @@ class InferLoopMixin:
             # Live visual round (spec draft-live-visual-cb.md): the final user
             # turn carries the current utterance + the image frames; history
             # turns stay text-only (frames never enter persistent history).
+            # max_pixels is forwarded so the frames honour the global image
+            # budget instead of reaching the main model at full resolution
+            # (audit P1-4).
             http_messages = compose_live_visual_messages(
                 composed_system=composed_system,
                 last_user_text=last_user_text,
                 frames=frames,
                 caller_messages=caller_messages,
+                max_pixels=self.config.max_pixels,
             )
         elif composed_system:
             http_messages = [{"role": "system", "content": composed_system}, *caller_messages]
@@ -537,11 +541,15 @@ class InferLoopMixin:
             # Live visual round (spec draft-live-visual-cb.md): the final user
             # turn carries the current utterance + the image frames; history
             # turns stay text-only (frames never enter persistent history).
+            # max_pixels is forwarded so the frames honour the global image
+            # budget instead of reaching the main model at full resolution
+            # (audit P1-4).
             http_messages = compose_live_visual_messages(
                 composed_system=composed_system,
                 last_user_text=last_user_text,
                 frames=frames,
                 caller_messages=caller_messages,
+                max_pixels=self.config.max_pixels,
             )
         elif composed_system:
             http_messages = [{"role": "system", "content": composed_system}, *caller_messages]

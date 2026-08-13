@@ -47,9 +47,10 @@ def _get_i18n(language: str = "en") -> dict[str, str]:
 def _estimate_messages_chars(messages):
     # Estimate total character count of an OpenAI messages list.
     # Uses a cheap linear scan over the content field. Image content
-    # parts contribute a fixed 1 KB placeholder so a multimodal request
-    # is not severely under-counted (a real JPEG base64 is 100-300 KB
-    # which would dominate the budget on its own).
+    # parts are counted by their actual data-URL length when available
+    # (a real JPEG base64 is 100 KB-10 MB and would otherwise be severely
+    # under-counted — audit P1-4); internal ``image`` path refs and
+    # URL-less parts keep a fixed 1 KB placeholder.
     total = 0
     for message in messages or ():
         content = message.get("content") if isinstance(message, dict) else None
@@ -63,10 +64,30 @@ def _estimate_messages_chars(messages):
                     text_value = part.get("text")
                     if isinstance(text_value, str):
                         total += len(text_value)
-                elif part.get("type") in ("image", "image_url"):
+                elif part.get("type") == "image_url":
+                    total += _image_url_chars(part.get("image_url"))
+                elif part.get("type") == "image":
                     total += 1024
         total += 16  # role + json framing overhead
     return total
+
+
+def _image_url_chars(image_url) -> int:
+    """Return the estimated character footprint of one ``image_url`` part.
+
+    OpenAI multimodal image parts carry the full data URL
+    (``data:image/...;base64,<payload>``), so the URL's own length is the
+    most accurate estimate of the prompt-guard budget it consumes. Accepts
+    both the dict form (``{"url": ...}``) and the legacy bare-string form.
+    """
+    if isinstance(image_url, dict):
+        url_value = image_url.get("url")
+        if isinstance(url_value, str) and url_value:
+            return len(url_value)
+        return 1024
+    if isinstance(image_url, str) and image_url:
+        return len(image_url)
+    return 1024
 
 
 def _trim_messages_to_ctx(messages, max_total_chars, min_recent=_PROMPT_GUARD_MIN_RECENT):
