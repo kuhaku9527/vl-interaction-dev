@@ -19,7 +19,8 @@
 
 1. **帧管线复用前端现有 WS `frame` 通道**：`screen_capture.js` 已推 1fps JPEG（frameSeq/interval 已实现）——live 会话内新增后端 `frame` 消息接收（server.py 或 live_routes），**不新建传输**；前端 live 模式启动时复用 startScreenCapture（或摄像头 capture），视频预览走既有 videoElement。
 2. **`recent_frames` 环形缓冲（live_mode.py）**：保存最近 N 帧（默认 6，约 6 秒窗口）+ 时间戳；用户说话轮 → 全部注入；proactive 轮 → 只取最新 1-2 帧。
-3. **webinfer 新增 live 视觉路径**（不破坏纯文本）：payload 增 `frames: [{image_b64, ts_ms}]`（可选）——有 frames 且 interaction_mode="live" → 走 `/v1/chat/completions` 多模态（image 列表 + 文本 + 视觉 prompt 段落）；无 frames → 现路径不变。四态 decision + 流式 content 复用现有协议。
+3. **webinfer 新增 live 视觉路径**（不破坏纯文本）：payload 增 `frames: [{image_b64, ts_ms}]`（可选）——有 frames 且 interaction_mode="live" → 在 **`/v1/text/chat` 内组装多模态 payload**（image 列表 + 文本 + [Visual Context] 视觉提示段；`/v1/text/chat` 的 live 流式 NDJSON 四态协议保持不变）；无 frames → 现路径不变。四态 decision + 流式 content 复用现有协议。
+   - **实现路径说明（2026-08-13 评估裁定，方案 B）**：不走 `/v1/chat/completions`——现有 chat/completions 多模态路径缺 4 项 live 所需能力（① 无 stream NDJSON 四态协议；② forced-silence 短路使 proactive 空文本轮永不推理；③ 图像会写入 chunk 历史每轮重发（违反帧不进历史语义）；④ 无 [Visual Context] 观察段），且触碰 D-029 守护的视频 QA 路径回归风险大。frames 协议保留，与现有路径的共享实现去重（base64 归一化 / 消息组装 helper）列入巨石解耦专项。
 4. **proactive 循环（live_mode.py）**：LISTENING 态 + `proactive_speak_enabled=True` 时，每 `PROACTIVE_INTERVAL_S`（默认 5s）抽最新帧 → 调 webinfer 视觉判定（轻量：max_tokens 小、仅帧+简短 system 提示、无用户文本）→ decision=response → 主动 TTS（走现有 tts_sentence 链路）；silence/not-for-me → 等下一周期。打断复用现有 barge-in（HARD_INTERRUPTED → COOLDOWN）。**默认关闭**（env `LIVE_PROACTIVE_ENABLED`，防乱开口，真机验证后开）。
 5. **addressee 门控前置**：proactive 判定前先过声学门控（无需，因 proactive 与用户语音无关——不适用，仅用户语音轮过门控）。
 6. **视觉历史不膨胀对话**：recent_frames 只注入当前轮（不进 history 持久化）；每轮帧随该轮请求发送，history 只存文本——控制 llama context 增长。
