@@ -219,7 +219,10 @@ async def test_streaming_delegation_routes_to_background_and_skips_tts():
     from joy_interaction_webui import server
 
     bg = SimpleNamespace(enabled=True, _closed=False, handle_foreground_response=Mock())
-    server.sessions["stream-delegation"] = {"background_service": bg, "vlm_service": SimpleNamespace()}
+    server.sessions["stream-delegation"] = {
+        "background_service": bg,
+        "vlm_service": SimpleNamespace(),
+    }
     try:
         sm = _build_sm()
         sm._background_service = bg
@@ -276,9 +279,7 @@ async def test_streaming_corrected_delegation_taught_format():
         sm = _build_sm()
         sm._background_service = bg
         sentences: list = []
-        sm.on_tts_sentence = lambda text, seq, audio_b64, session: sentences.append(
-            (seq, text)
-        )
+        sm.on_tts_sentence = lambda text, seq, audio_b64, session: sentences.append((seq, text))
         with patch.object(sm, "_fetch_tts_pcm", new=AsyncMock(return_value=b"\x00\x00" * 100)):
             lines = [
                 _frame(type="decision", decision="response", delegation_question=None),
@@ -345,17 +346,13 @@ async def test_streaming_mid_stream_failure_flushes_remainder():
     """Stream breaks after a decision + partial content -> remainder is spoken."""
     sm = _build_sm()
     sentences: list = []
-    sm.on_tts_sentence = lambda text, seq, audio_b64, session: sentences.append(
-        (seq, text.strip())
-    )
+    sm.on_tts_sentence = lambda text, seq, audio_b64, session: sentences.append((seq, text.strip()))
     with patch.object(sm, "_fetch_tts_pcm", new=AsyncMock(return_value=b"\x00\x00" * 100)):
         lines = [
             _frame(type="decision", decision="response", delegation_question=None),
             _frame(type="content", token="Hello there"),
         ]
-        client = FakeAsyncClient(
-            stream_response=FakeStreamResponse(lines, fail_after=2)
-        )
+        client = FakeAsyncClient(stream_response=FakeStreamResponse(lines, fail_after=2))
         with patch("httpx.AsyncClient", return_value=client):
             await sm._send_to_llm_streaming("hello")
         await asyncio.gather(*list(sm._tts_sentence_tasks), return_exceptions=True)
@@ -465,9 +462,7 @@ async def test_dispatcher_call_mode_stays_non_streaming():
     """interaction_mode='call' (paper-plane) must keep the non-streaming path."""
     sm = _build_sm(llm_streaming_enabled=True)
     post_resp = FakeJsonResponse(content="call reply", decision="response")
-    client = FakeAsyncClient(
-        stream_response=FakeStreamResponse([]), post_response=post_resp
-    )
+    client = FakeAsyncClient(stream_response=FakeStreamResponse([]), post_response=post_resp)
     with patch("httpx.AsyncClient", return_value=client):
         await sm._send_to_llm("hi", stream_tts=False, interaction_mode="call")
     assert len(client.stream_calls) == 0
@@ -520,8 +515,9 @@ async def test_cloud_provider_dialog_final_reaches_streaming_llm(monkeypatch):
         ),
     ]
     client = FakeAsyncClient(stream_response=FakeStreamResponse(lines))
-    with patch("httpx.AsyncClient", return_value=client), patch.object(
-        sm, "_fetch_tts_pcm", new=AsyncMock(return_value=b"\x00\x00" * 200)
+    with (
+        patch("httpx.AsyncClient", return_value=client),
+        patch.object(sm, "_fetch_tts_pcm", new=AsyncMock(return_value=b"\x00\x00" * 200)),
     ):
         await sm._handle_dialog_legacy(b"\x00\x10" * 40)  # speech activity
         assert sm._current_asr_text == ""  # no partials in cloud mode
@@ -530,9 +526,6 @@ async def test_cloud_provider_dialog_final_reaches_streaming_llm(monkeypatch):
         await asyncio.gather(*list(sm._tts_sentence_tasks), return_exceptions=True)
 
     # The cloud final was committed through the streaming consumer.
-    assert any(
-        "Hello cloud" in str(call)
-        for call in client.stream_calls
-    )
+    assert any("Hello cloud" in str(call) for call in client.stream_calls)
     assert sm._conv_history[-1] == ("assistant", "Hello cloud, Pilot.")
     assert sm._current_asr_text == ""

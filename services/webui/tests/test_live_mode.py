@@ -1027,9 +1027,7 @@ async def test_cloud_provider_commit_via_finalize(monkeypatch):
             return True
 
     clock = FakeClock(1000.0)
-    sm, _vad, _asr = build_live(
-        controller=_live_controller(clock), vad=_UnavailableVAD()
-    )
+    sm, _vad, _asr = build_live(controller=_live_controller(clock), vad=_UnavailableVAD())
     monkeypatch.setattr(live_module, "time", clock)
 
     provider = CloudBatchProvider(upstream_url="http://upstream/v1/audio/transcriptions")
@@ -1075,9 +1073,7 @@ async def test_cloud_provider_unreachable_live_explicit_error(monkeypatch, caplo
 
     monkeypatch.delenv("JARVIS_ASR_ALLOW_LOCAL_FAILOVER", raising=False)
     clock = FakeClock(1000.0)
-    sm, _vad, _asr = build_live(
-        controller=_live_controller(clock), vad=_UnavailableVAD()
-    )
+    sm, _vad, _asr = build_live(controller=_live_controller(clock), vad=_UnavailableVAD())
     monkeypatch.setattr(live_module, "time", clock)
 
     provider = CloudBatchProvider(upstream_url="http://upstream/v1/audio/transcriptions")
