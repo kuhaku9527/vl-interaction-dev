@@ -205,6 +205,19 @@ def build_model_input_record(
     return record
 
 
+def _trim_qa_history_to_window(qa_history: list[dict[str, Any]], window: int) -> None:
+    """Cap ``qa_history`` to the most recent ``window`` entries (in place).
+
+    ``window <= 0`` disables trimming (historical unbounded behaviour).
+    Shared by the text path (``MemoryIOMixin._update_text_qa_history``) and
+    the multimodal path (``archive_chunk_response_records``) so long sessions
+    never grow the system-prompt QA history without bound (upstream PR #25
+    root cause 1 — the multimodal path previously only appended, audit P1-2).
+    """
+    if window > 0 and len(qa_history) > window:
+        del qa_history[: len(qa_history) - window]
+
+
 def archive_chunk_response_records(
     current_chunk: dict[str, Any],
     memory_state: dict[str, Any],
@@ -212,8 +225,15 @@ def archive_chunk_response_records(
     query_start_time: str | None,
     chunk_index: int = 0,
     before_time_sec: float = float("inf"),
+    qa_history_window: int = 0,
 ) -> None:
-    """Archive valid response records into the session QA history."""
+    """Archive valid response records into the session QA history.
+
+    After appending/extending the archived entry the history is trimmed to
+    ``qa_history_window`` recent entries (``<= 0`` disables trimming), the
+    same bound the text path applies — so the multimodal path cannot grow
+    ``qa_history`` without bound (audit P1-2).
+    """
     if not current_chunk["response_records"] or not current_query_text:
         return
 
@@ -247,6 +267,7 @@ def archive_chunk_response_records(
                 "archived_in_chunk": chunk_index,
             }
         )
+    _trim_qa_history_to_window(memory_state["qa_history"], qa_history_window)
 
 
 def _chat_completion_response(

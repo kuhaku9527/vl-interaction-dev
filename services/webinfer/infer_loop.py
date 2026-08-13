@@ -835,6 +835,7 @@ class InferLoopMixin:
                     state.query_start_time,
                     chunk_index=state.chunk_index,
                     before_time_sec=qa_cutoff,
+                    qa_history_window=int(self.config.qa_history_window or 0),
                 )
             await self._flush_chunk(state, use_async_summary=self._async_summary_enabled())
             if self._async_summary_enabled() and state.async_summary_segment["turn_count"] > 0:

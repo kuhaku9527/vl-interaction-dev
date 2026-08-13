@@ -17,7 +17,10 @@ from typing import Any
 
 from adapter_types import SessionState
 from request_parsing import _extract_last_user_text
-from response_format import archive_chunk_response_records
+from response_format import (
+    _trim_qa_history_to_window,
+    archive_chunk_response_records,
+)
 
 # --- ADR-0014 JSONL event emission (services/common/event_json.py) ----------
 try:
@@ -422,10 +425,10 @@ class MemoryIOMixin:
 
         # Bound qa_history the same way long_term_history is bounded (upstream PR #25
         # root cause 1): without this, every session eventually overflows the main
-        # model context window regardless of max_model_len.
+        # model context window regardless of max_model_len. Shared helper also
+        # bounds the multimodal path (response_format.archive_chunk_response_records).
         window = int(self.config.qa_history_window or 0)
-        if window > 0 and len(qa_history) > window:
-            del qa_history[: len(qa_history) - window]
+        _trim_qa_history_to_window(qa_history, window)
 
     def _execute_pending_qa_archive(self, state: SessionState) -> None:
         if state._pending_qa_archive is None:
@@ -437,6 +440,7 @@ class MemoryIOMixin:
             old_query,
             old_start_time,
             chunk_index=state.chunk_index,
+            qa_history_window=int(self.config.qa_history_window or 0),
         )
         state.current_chunk["response_records"] = []
         state._pending_qa_archive = None
