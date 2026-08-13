@@ -359,11 +359,29 @@ async def session_cleanup(request):
                 await bg_svc.close(cancel_requests=False)
             except Exception as e:
                 logger.warning("[%s] Error closing background service: %s", session_id, e)
+    # P1-3 (audit): tear down the jarvis/live state machines too. Previously
+    # this endpoint only removed the VLM session dict, so JarvisStateMachine /
+    # LiveStateMachine (and their ~200MB KWS/ASR engines, KWS diagnostic
+    # threads, proactive/confirm tasks) leaked until process exit and KWS kept
+    # listening on dead sessions. Both dicts are removed so the 双开 (jarvis +
+    # live) case is fully cleaned; the manager methods are idempotent, so a
+    # repeated cleanup cannot crash.
+    manager = request.app.get("jarvis_manager")
+    jarvis_removed = False
+    live_removed = False
+    if manager is not None:
+        try:
+            jarvis_removed = await manager.remove_session(session_id)
+            live_removed = await manager.remove_live_session(session_id)
+        except Exception as e:
+            logger.warning("[%s] Error removing jarvis/live session: %s", session_id, e)
     logger.info("[%s] Session cleanup complete", session_id)
     return web.json_response(
         {
             "session_id": session_id,
             "removed": bool(session),
+            "jarvis_removed": jarvis_removed,
+            "live_removed": live_removed,
             "websockets_closed": len(session_sockets),
             "peer_connections_closed": len(pcs_for_session),
             "cancelled_vlm_tasks": cancelled_vlm_tasks,

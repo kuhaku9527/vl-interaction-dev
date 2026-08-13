@@ -528,19 +528,31 @@ class JarvisSessionManager:
         """Get an existing live session, or None."""
         return self._live_sessions.get(session_id)
 
-    async def remove_session(self, session_id: str):
-        """Stop and remove a session."""
+    async def remove_session(self, session_id: str) -> bool:
+        """Stop and remove a session.
+
+        Idempotent: removing an unknown session is a no-op. Returns ``True``
+        when a session existed and was stopped, ``False`` otherwise.
+        """
         session = self._sessions.pop(session_id, None)
         if session:
             await session.stop()
             logger.info("Jarvis session removed: %s", session_id)
+            return True
+        return False
 
-    async def remove_live_session(self, session_id: str):
-        """Stop and remove a live session."""
+    async def remove_live_session(self, session_id: str) -> bool:
+        """Stop and remove a live session.
+
+        Idempotent: removing an unknown session is a no-op. Returns ``True``
+        when a session existed and was stopped, ``False`` otherwise.
+        """
         session = self._live_sessions.pop(session_id, None)
         if session:
             await session.stop()
             logger.info("Live session removed: %s", session_id)
+            return True
+        return False
 
 
 # ============================================================================
