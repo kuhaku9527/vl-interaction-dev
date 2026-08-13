@@ -99,13 +99,12 @@ def test_local_provider_delegates_to_wrapped_engine():
     assert engine.start_calls == 2
 
 
-def test_local_provider_async_finalize_returns_last_text():
+def test_local_provider_async_finalize_is_awaitable():
+    import inspect
+
     engine = _FakeEngine()
     provider = ap.LocalStreamingProvider(asr=engine)
-    engine.last_text = "你好"
-    assert provider.finalize().__await__() is not None
-    # finalize delegates to stop(); assert via asyncio.run in the async test
-    # below — this sync path just confirms the method exists and is awaitable.
+    assert inspect.iscoroutinefunction(provider.finalize)  # awaitable exists
 
 
 @pytest.mark.asyncio

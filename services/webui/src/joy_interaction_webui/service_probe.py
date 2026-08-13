@@ -243,8 +243,7 @@ def _probe_asr_cloud(asr_cfg):
     if not upstream_url:
         return {
             "ok": False,
-            "reason": "JARVIS_ASR_PROVIDER=cloud but no upstream configured "
-            "(set ASR_UPSTREAM_URL)",
+            "reason": "JARVIS_ASR_PROVIDER=cloud but no upstream configured (set ASR_UPSTREAM_URL)",
         }
     try:
         with httpx.Client(timeout=2.0) as client:
