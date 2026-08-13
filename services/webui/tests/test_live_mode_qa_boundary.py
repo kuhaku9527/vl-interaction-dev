@@ -744,14 +744,31 @@ def test_offer_live_branch_precedes_jarvis_branch():
 # ---------------------------------------------------------------------------
 
 
+_WEBUI_STATIC = (
+    Path(__file__).resolve().parents[1] / "src" / "joy_interaction_webui" / "static"
+)
+# Batch-3 split: index.html's inline script#2 was extracted into standalone JS
+# files (same dependency order as the <script src> tags). Assertions run against
+# the combined sources so moved code keeps its contract with unchanged semantics.
+_SPLIT_JS = (
+    "vlm_history.js",
+    "llm_reply_ui.js",
+    "ws_dispatcher.js",
+    "vlm_render.js",
+    "background_rich.js",
+    "tts_player.js",
+    "speech_input.js",
+    "live_ui.js",
+    "llm_reply_audio.js",
+    "status_poll.js",
+)
+
+
 def _index_html() -> str:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "joy_interaction_webui"
-        / "static"
-        / "index.html"
-    ).read_text(encoding="utf-8")
+    parts = [(_WEBUI_STATIC / "index.html").read_text(encoding="utf-8")]
+    for name in _SPLIT_JS:
+        parts.append((_WEBUI_STATIC / name).read_text(encoding="utf-8"))
+    return "\n".join(parts)
 
 
 def test_frontend_live_entry_points_exist():
