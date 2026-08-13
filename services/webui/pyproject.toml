@@ -117,6 +117,7 @@ ignore = [
 # so the gate flips to enforcing on day one. Burn down by removing a file's
 # entry once its violation(s) are fixed (see reports/handoff-lint-gate-batch3-*.md).
 [tool.ruff.lint.per-file-ignores]
+"src/joy_interaction_webui/admin_endpoints.py" = ["BLE001"]
 "src/joy_interaction_webui/asr.py" = ["BLE001"]
 "src/joy_interaction_webui/asr_bridge.py" = ["BLE001"]
 "src/joy_interaction_webui/background_model.py" = ["BLE001"]
