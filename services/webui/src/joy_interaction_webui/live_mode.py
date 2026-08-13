@@ -39,6 +39,14 @@ Fail-open: every turn-controller / ASR / TTS / LLM error is logged
 explicitly (约法三章 ③) and the session survives (never crashes the loop).
 
 This module is independent from ``jarvis_mode.py``: jarvis is untouched.
+
+Decoupling (batch 4, ``doc/architecture/codebase-map-2026-08-13.md`` §2.2):
+the frame buffer, addressee enrollment flow, LLM round, and proactive loop
+were moved to ``live_frames.py`` / ``live_enroll.py`` / ``live_llm.py`` /
+``live_proactive.py``.  ``LiveStateMachine`` keeps the core state, the
+``feed_audio`` VAD-gating orchestration, introspection, lifecycle
+(``prewarm_engines`` / ``stop``) and thin facades that delegate to the
+sub-modules — behavior is unchanged.
 """
 
 from __future__ import annotations
@@ -52,6 +60,26 @@ from collections.abc import Callable
 from typing import Any
 
 from .jarvis_mode import _is_garbage_text
+from .live_enroll import (
+    enroll_detector_available,
+    enroll_pcm_verdict,
+    feed_enroll_vad,
+)
+from .live_frames import append_frame, frame_window_from_env, frames_payload
+from .live_llm import (
+    finish_llm_turn,
+    send_to_llm,
+    send_to_llm_non_streaming,
+    wait_tts_turn_done,
+)
+from .live_proactive import (
+    call_proactive_vlm,
+    proactive_enabled_from_env,
+    proactive_interval_from_env,
+    proactive_loop,
+    proactive_switch_action,
+    send_proactive_prompt,
+)
 from .tts_turn_common import (
     fetch_tts_pcm,
     spawn_sentence_tts,
@@ -77,24 +105,13 @@ LIVE_ENDPOINT_TIMEOUT_S: float = 2.0
 #: AddresseeDetector.classify is worth running — shorter blips are dropped.
 _ADDRESSEE_MIN_SEGMENT_BYTES: int = 9600
 
-#: Minimum enrollment segment duration (seconds) accepted from the mic stream.
-_ADDRESSEE_ENROLL_MIN_SEGMENT_S: float = 1.0
-
-#: Max enrollment segments collected (spec §3.1: 2-3 segments).
-_ADDRESSEE_ENROLL_MAX_SEGMENTS: int = 3
-
 # --- live visual context + proactive speak (spec draft-live-visual-cb.md) ---
 # Env gates (all default OFF / conservative so default behavior is unchanged):
 #   * ``LIVE_FRAME_WINDOW``        (int,   default 6)  recent-frame ring size;
 #   * ``LIVE_PROACTIVE_ENABLED``   (bool,  default false) — proactive loop task;
 #   * ``LIVE_PROACTIVE_INTERVAL_S``(float, default 5)  seconds between checks.
-_DEFAULT_FRAME_WINDOW: int = 6
-_DEFAULT_PROACTIVE_INTERVAL_S: float = 5.0
-
-
-def _env_flag(name: str, default: bool = False) -> bool:
-    """Read a boolean env gate (``1/true/yes/on`` are truthy)."""
-    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+# The defaults + env helpers themselves live in the sub-modules
+# (live_frames.frame_window_from_env / live_proactive.*_from_env).
 
 
 class LiveStateMachine:
@@ -243,28 +260,18 @@ class LiveStateMachine:
 
         # Live visual context (spec draft-live-visual-cb.md §2.2): recent-frame
         # ring buffer. Frames feed ONLY the current round — they never enter
-        # conversation history (spec §2.6).
-        self._frame_window: int = int(
-            os.environ.get("LIVE_FRAME_WINDOW", str(_DEFAULT_FRAME_WINDOW)) or _DEFAULT_FRAME_WINDOW
-        )
-        if self._frame_window < 1:
-            self._frame_window = _DEFAULT_FRAME_WINDOW
+        # conversation history (spec §2.6). Env resolution moved to
+        # ``live_frames.frame_window_from_env``.
+        self._frame_window: int = frame_window_from_env()
         self._recent_frames: deque[tuple[str, float]] = deque(maxlen=self._frame_window)
 
         # Proactive speak (spec §2.4): env-gated OFF by default so the default
         # behavior is zero change. When enabled, a background loop samples the
         # latest frame while LISTENING and asks webinfer whether there is
-        # something worth saying.
-        self._proactive_enabled: bool = _env_flag("LIVE_PROACTIVE_ENABLED", default=False)
-        try:
-            self._proactive_interval_s: float = float(
-                os.environ.get("LIVE_PROACTIVE_INTERVAL_S", str(_DEFAULT_PROACTIVE_INTERVAL_S))
-                or _DEFAULT_PROACTIVE_INTERVAL_S
-            )
-        except ValueError:
-            self._proactive_interval_s = _DEFAULT_PROACTIVE_INTERVAL_S
-        if self._proactive_interval_s <= 0:
-            self._proactive_interval_s = _DEFAULT_PROACTIVE_INTERVAL_S
+        # something worth saying. Env resolution moved to
+        # ``live_proactive.proactive_*_from_env``.
+        self._proactive_enabled: bool = proactive_enabled_from_env()
+        self._proactive_interval_s: float = proactive_interval_from_env()
         self._proactive_task: asyncio.Task | None = None
 
         logger.info(
@@ -388,19 +395,24 @@ class LiveStateMachine:
 
         Returns True when the requested state is active afterwards (or was
         already), False when it could not be reached (env gate off / loop
-        start failure).
+        start failure). The branch decision is delegated to
+        ``live_proactive.proactive_switch_action``; this facade owns the
+        asyncio task lifecycle.
         """
-        enabled = bool(enabled)
-        if enabled:
-            if not self._proactive_enabled:
-                logger.error(
-                    "[live-proactive] runtime switch rejected: env gate "
-                    "LIVE_PROACTIVE_ENABLED is off"
-                )
-                return False
-            if self._proactive_task is not None and not self._proactive_task.done():
-                logger.info("[live-proactive] runtime switch enabled (already running)")
-                return True
+        action = proactive_switch_action(
+            enabled=enabled,
+            env_gate=self._proactive_enabled,
+            task_running=self._proactive_task is not None and not self._proactive_task.done(),
+        )
+        if action == "reject":
+            logger.error(
+                "[live-proactive] runtime switch rejected: env gate LIVE_PROACTIVE_ENABLED is off"
+            )
+            return False
+        if action == "already_running":
+            logger.info("[live-proactive] runtime switch enabled (already running)")
+            return True
+        if action == "start":
             try:
                 self._proactive_task = asyncio.create_task(self._proactive_loop())
             except Exception as exc:
@@ -412,13 +424,12 @@ class LiveStateMachine:
                 self._proactive_interval_s,
             )
             return True
-
-        if self._proactive_task is not None and not self._proactive_task.done():
+        if action == "cancel":
             self._proactive_task.cancel()
             self._proactive_task = None
             logger.info("[live-proactive] runtime switch disabled (loop task cancelled)")
-        else:
-            logger.info("[live-proactive] runtime switch disabled (already off)")
+            return True
+        logger.info("[live-proactive] runtime switch disabled (already off)")
         return True
 
     # ------------------------------------------------------------------
@@ -432,16 +443,9 @@ class LiveStateMachine:
         ``LIVE_FRAME_WINDOW`` frames, oldest dropped on overflow). The buffer
         only feeds the CURRENT round — frames never enter conversation history
         (spec §2.6). ``ts_ms`` is a wall-clock millisecond timestamp.
+        Delegates to ``live_frames.append_frame``.
         """
-        self._recent_frames.append((image_b64, ts_ms))
-        window_s = 0.0
-        if len(self._recent_frames) >= 2:
-            window_s = max(0.0, self._recent_frames[-1][1] - self._recent_frames[0][1]) / 1000.0
-        logger.info(
-            "[live-mode] frame captured (n=%d, window=%.1fs)",
-            len(self._recent_frames),
-            window_s,
-        )
+        append_frame(self._recent_frames, image_b64, ts_ms, logger=logger)
 
     @property
     def recent_frames(self) -> list[tuple[str, float]]:
@@ -456,8 +460,9 @@ class LiveStateMachine:
         ``{"image_b64": str, "ts_ms": int|float}`` objects (spec
         draft-live-visual-cb.md §2.1/§3). The ring buffer stores tuples for
         cheap deque rotation; the conversion happens only at the send seam.
+        Delegates to ``live_frames.frames_payload``.
         """
-        return [{"image_b64": b64, "ts_ms": ts} for b64, ts in frames]
+        return frames_payload(frames)
 
     def _reset_asr(self) -> None:
         """Reset the streaming ASR session + accumulated text for a new turn."""
@@ -477,9 +482,10 @@ class LiveStateMachine:
         """Enter the enrollment phase: mic audio buffers segments, no ASR/dialog.
 
         Returns False (with an explicit log) when the detector is unavailable —
-        the caller should surface that to the user.
+        the caller should surface that to the user. Availability check
+        delegated to ``live_enroll.enroll_detector_available``.
         """
-        if self._addressee is None or not self._addressee.available:
+        if not enroll_detector_available(self._addressee):
             logger.error("[addressee] enroll rejected: detector unavailable (fail-open)")
             return False
         self._enroll_phase = True
@@ -494,17 +500,19 @@ class LiveStateMachine:
 
         Used by the ``/api/live/enroll {action: pcm}`` route (frontend pushes
         each recorded utterance). The WebRTC streaming path instead uses
-        ``_feed_enroll_audio`` (VAD-segmented from feed_audio).
+        ``_feed_enroll_audio`` (VAD-segmented from feed_audio). Guard
+        decisions delegated to ``live_enroll.enroll_pcm_verdict``.
         """
-        if not self._enroll_phase:
+        verdict = enroll_pcm_verdict(self._enroll_phase, pcm, len(self._enroll_segments))
+        if verdict == "ignored":
             logger.debug("[addressee] feed_enroll_pcm ignored: not in enroll phase")
             return
-        if not pcm or len(pcm) % 2 != 0:
+        if verdict == "invalid":
             logger.warning(
                 "[addressee] feed_enroll_pcm invalid len=%d; ignored", len(pcm) if pcm else 0
             )
             return
-        if len(self._enroll_segments) >= _ADDRESSEE_ENROLL_MAX_SEGMENTS:
+        if verdict == "full":
             logger.info(
                 "[addressee] enroll already has %d segments; extra ignored",
                 len(self._enroll_segments),
@@ -522,7 +530,8 @@ class LiveStateMachine:
 
         On success the target voice is registered and the phase ends. On
         failure the phase also ends (buffer cleared) with an explicit error —
-        the caller may retry with a fresh ``start_enroll``.
+        the caller may retry with a fresh ``start_enroll``. Availability check
+        delegated to ``live_enroll.enroll_detector_available``.
         """
         if not self._enroll_phase:
             logger.warning("[addressee] finish_enroll called without start_enroll")
@@ -532,7 +541,7 @@ class LiveStateMachine:
         self._enroll_segments = []
         self._enroll_in_seg = False
         self._enroll_cur_segment = bytearray()
-        if self._addressee is None or not self._addressee.available:
+        if not enroll_detector_available(self._addressee):
             logger.error("[addressee] finish_enroll failed: detector unavailable")
             return False
         ok = self._addressee.enroll(segments)
@@ -781,32 +790,26 @@ class LiveStateMachine:
 
         Called from ``feed_audio`` while ``enroll_phase`` is active. Each
         completed speech segment (>=1s) is appended to ``_enroll_segments``
-        (up to 3); silence between utterances is discarded.
+        (up to 3); silence between utterances is discarded. The state machine
+        is delegated to ``live_enroll.feed_enroll_vad`` (moved verbatim).
         """
         if self._vad is None or not self._vad.available or not pcm or len(pcm) % 2 != 0:
             return
         vad_speech = self._vad_speech(pcm)
-        if vad_speech and not self._prev_vad_speech:
-            self._enroll_in_seg = True
-            self._enroll_cur_segment = bytearray(pcm)
-        elif vad_speech and self._enroll_in_seg:
-            self._enroll_cur_segment.extend(pcm)
-        elif not vad_speech and self._enroll_in_seg:
-            self._enroll_in_seg = False
-            segment = bytes(self._enroll_cur_segment)
-            self._enroll_cur_segment = bytearray()
-            duration_s = len(segment) / 32000.0
-            if (
-                duration_s >= _ADDRESSEE_ENROLL_MIN_SEGMENT_S
-                and len(self._enroll_segments) < _ADDRESSEE_ENROLL_MAX_SEGMENTS
-            ):
-                self._enroll_segments.append(segment)
-                logger.info(
-                    "[addressee] enroll segment %d captured (%.2fs)",
-                    len(self._enroll_segments),
-                    duration_s,
-                )
-        self._prev_vad_speech = vad_speech
+        (
+            self._enroll_in_seg,
+            self._enroll_cur_segment,
+            self._enroll_segments,
+            self._prev_vad_speech,
+        ) = feed_enroll_vad(
+            pcm=pcm,
+            vad_speech=vad_speech,
+            prev_vad_speech=self._prev_vad_speech,
+            enroll_in_seg=self._enroll_in_seg,
+            enroll_cur_segment=self._enroll_cur_segment,
+            enroll_segments=self._enroll_segments,
+            logger=logger,
+        )
 
     def _feed_speech_started(self) -> None:
         """Feed VAD/ASR speech onset into the controller (fail-open)."""
@@ -932,57 +935,29 @@ class LiveStateMachine:
         visual path (layer 1). Fail-open: pre-frame stream failure falls back
         to the single-shot call; mid-stream failure keeps the flushed
         sentences (consumer already handled).
-        """
-        self._llm_reply_epoch += 1
-        turn_reply_epoch = self._llm_reply_epoch
-        logger.info("[live-mode] turn-start reply_epoch bumped to %d", turn_reply_epoch)
 
+        The round logic is delegated to ``live_llm.send_to_llm``. The
+        streaming flags are reset here BEFORE the consumer runs so the
+        ``is_cancelled`` callback (which reads the live attribute) reflects
+        the new round.
+        """
         self._llm_stream_cancel = False
         self._sentence_spawned_this_turn = False
-        reply_session = self._tts_reply_seq
-        self._tts_reply_seq += 1
-
-        history_snapshot = list(self._conv_history)[-self._max_history_turns * 2 :]
-        consumer = StreamingTurnConsumer(
-            endpoint_url=f"{self._config.llm_api_url}{self._config.llm_text_path}",
-            model=self._config.llm_model,
-            system_prompt=self._config.llm_system_prompt,
-            history_snapshot=history_snapshot,
-            max_tokens=200,
-            temperature=0.7,
-            timeout_s=30.0,
+        self._llm_reply_epoch, self._tts_reply_seq = await send_to_llm(
+            text=text,
+            interaction_mode=interaction_mode,
+            frames=frames,
+            config=self._config,
+            llm_reply_epoch=self._llm_reply_epoch,
+            tts_reply_seq=self._tts_reply_seq,
+            conv_history=self._conv_history,
+            max_history_turns=self._max_history_turns,
+            consumer_cls=StreamingTurnConsumer,
             on_sentence=self._spawn_sentence_tts,
             is_cancelled=lambda: self._llm_stream_cancel,
-            stream_logger=logger,
-            frames=frames,
-        )
-        result = await consumer.consume(
-            text,
-            interaction_mode=interaction_mode,
-            reply_session=reply_session,
-        )
-
-        if result.needs_non_streaming_retry:
-            logger.info("[live-mode] fail-open -> non-streaming retry")
-            await self._send_to_llm_non_streaming(
-                text,
-                interaction_mode=interaction_mode,
-                reply_epoch=turn_reply_epoch,
-                frames=frames,
-            )
-            return
-        if result.cancelled:
-            # Barge-in: the epoch bump already cancelled every in-flight
-            # sentence task; the partial reply is intentionally not broadcast.
-            logger.info("[live-mode] LLM stream cancelled (barge-in); skipping broadcast")
-            return
-
-        await self._finish_llm_turn(
-            text=text,
-            response=result.full_response,
-            decision=result.decision,
-            delegation_question=result.delegation_question,
-            reply_epoch=turn_reply_epoch,
+            on_finish_turn=self._finish_llm_turn,
+            on_retry_non_streaming=self._send_to_llm_non_streaming,
+            logger=logger,
         )
 
     async def _send_to_llm_non_streaming(
@@ -993,51 +968,64 @@ class LiveStateMachine:
         reply_epoch: int | None = None,
         frames: list | None = None,
     ) -> None:
-        """Single-shot LLM fallback (fail-open, never lose the reply)."""
-        messages: list[dict] = [{"role": "system", "content": self._config.llm_system_prompt}]
-        for role, content in list(self._conv_history)[-self._max_history_turns * 2 :]:
-            messages.append({"role": role, "content": content})
-        messages.append({"role": "user", "content": text})
+        """Single-shot LLM fallback (fail-open, never lose the reply).
 
-        response = ""
-        decision = "silence"
-        delegation_question = None
-        try:
-            import httpx
+        Delegated to ``live_llm.send_to_llm_non_streaming``.
+        """
+        await send_to_llm_non_streaming(
+            text=text,
+            interaction_mode=interaction_mode,
+            reply_epoch=reply_epoch,
+            frames=frames,
+            config=self._config,
+            conv_history=self._conv_history,
+            max_history_turns=self._max_history_turns,
+            on_finish_turn=self._finish_llm_turn,
+            logger=logger,
+        )
 
-            request_body: dict = {
-                "model": self._config.llm_model,
-                "messages": messages,
-                "max_tokens": 200,
-                "temperature": 0.7,
-                "interaction_mode": interaction_mode,
-            }
-            if frames:
-                request_body["frames"] = frames
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{self._config.llm_api_url}{self._config.llm_text_path}",
-                    json=request_body,
-                )
-                resp.raise_for_status()
-                payload = resp.json()
-                choice = (payload.get("choices") or [{}])[0]
-                response = (choice.get("message") or {}).get("content") or ""
-                response = response.strip() if isinstance(response, str) else ""
-                harness = payload.get("streamingharness") or {}
-                decision = harness.get("decision") or ("response" if response else "silence")
-                delegation_question = harness.get("delegation_question")
-        except Exception as exc:
-            logger.error("[live-mode] non-streaming LLM call failed: %s", exc)
-            response = ""
-            decision = "silence"
+    async def _finish_llm_turn(
+        self,
+        *,
+        text: str,
+        response: str,
+        decision: str,
+        delegation_question: str | None,
+        reply_epoch: int | None = None,
+    ) -> None:
+        """Shared post-LLM turn completion (controller, delegation, broadcast).
 
-        await self._finish_llm_turn(
+        Delegated to ``live_llm.finish_llm_turn``; the returned
+        ``current_turn_reply_epoch`` / ``tts_turn_task`` are applied to the
+        local state.
+        """
+        self._current_turn_reply_epoch, self._tts_turn_task = await finish_llm_turn(
             text=text,
             response=response,
             decision=decision,
             delegation_question=delegation_question,
             reply_epoch=reply_epoch,
+            llm_reply_epoch=self._llm_reply_epoch,
+            background_service=self._background_service,
+            conv_history=self._conv_history,
+            sentence_spawned_this_turn=self._sentence_spawned_this_turn,
+            on_llm_response=self.on_llm_response,
+            ctrl=self._ctrl,
+            tts_turn_task=self._tts_turn_task,
+            wait_tts_turn_done=self._wait_tts_turn_done,
+            logger=logger,
+        )
+
+    async def _wait_tts_turn_done(self) -> None:
+        """Wait for all sentence TTS tasks, then return the controller to
+        LISTENING (SPEAKING -> LISTENING).
+
+        Delegated to ``live_llm.wait_tts_turn_done``.
+        """
+        await wait_tts_turn_done(
+            tts_sentence_tasks=self._tts_sentence_tasks,
+            ctrl=self._ctrl,
+            logger=logger,
         )
 
     # ------------------------------------------------------------------
@@ -1050,36 +1038,20 @@ class LiveStateMachine:
         Every ``LIVE_PROACTIVE_INTERVAL_S`` seconds, when the controller is in
         LISTENING and at least one frame is buffered, sample the LATEST frame
         and ask webinfer (non-streaming, no user text) whether there is
-        something worth saying:
+        something worth saying. Exceptions fail open (log + skip the round) so
+        proactive work never disturbs the user dialog (约法三章).
 
-          * decision=response -> proactively speak via the sentence-TTS path
-            and drive the controller into SPEAKING;
-          * silence / not-for-me -> stay quiet and wait for the next interval;
-          * any non-LISTENING state (USER_SPEAKING, SPEAKING, ...) pauses the
-            loop until the controller returns to LISTENING.
-
-        Exceptions fail open (log + skip the round) so proactive work never
-        disturbs the user dialog (约法三章).
+        Delegated to ``live_proactive.proactive_loop``.
         """
-        logger.info(
-            "[live-proactive] loop started (interval=%.1fs, frame_window=%d)",
-            self._proactive_interval_s,
-            self._frame_window,
+        await proactive_loop(
+            interval_s=self._proactive_interval_s,
+            frame_window=self._frame_window,
+            turn_state=lambda: self.turn_state,
+            recent_frames=self._recent_frames,
+            frames_payload=self._frames_payload,
+            send_proactive_prompt=self._send_proactive_prompt,
+            logger=logger,
         )
-        while True:
-            try:
-                await asyncio.sleep(self._proactive_interval_s)
-                if self.turn_state != TurnState.LISTENING:
-                    continue
-                if not self._recent_frames:
-                    continue
-                await self._send_proactive_prompt(
-                    frames=self._frames_payload([self._recent_frames[-1]])
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.error("[live-proactive] loop round failed; fail-open: %s", exc)
 
     async def _send_proactive_prompt(self, *, frames: list) -> None:
         """Ask webinfer whether the latest frame deserves a spoken comment.
@@ -1089,205 +1061,33 @@ class LiveStateMachine:
         controller -> SPEAKING -> LISTENING via ``_wait_tts_turn_done``);
         silence / not-for-me / empty -> stay quiet. Any failure fails open
         (log + skip) and never disturbs the user dialog.
+
+        Delegated to ``live_proactive.send_proactive_prompt``; the returned
+        seq/epoch/task are applied to the local state.
         """
-        reply_session = self._tts_reply_seq
-        self._tts_reply_seq += 1
-        self._llm_reply_epoch += 1
-        logger.info(
-            "[live-proactive] VLM visual check (frames=%d, reply_epoch=%d)",
-            len(frames),
-            self._llm_reply_epoch,
+        self._tts_reply_seq, self._llm_reply_epoch, tts_turn_task = await send_proactive_prompt(
+            frames=frames,
+            tts_reply_seq=self._tts_reply_seq,
+            llm_reply_epoch=self._llm_reply_epoch,
+            turn_state=lambda: self.turn_state,
+            call_proactive_vlm=self._call_proactive_vlm,
+            spawn_sentence_tts=self._spawn_sentence_tts,
+            on_llm_response=self.on_llm_response,
+            ctrl=self._ctrl,
+            wait_tts_turn_done=self._wait_tts_turn_done,
+            logger=logger,
         )
-        decision, response = await self._call_proactive_vlm(frames)
-        logger.info(
-            "[live-proactive] VLM decision=%s response=%r",
-            decision,
-            (response or "")[:80],
-        )
-        if decision != "response" or not (response or "").strip():
-            # silence / not-for-me / empty: nothing worth saying; the
-            # controller stays LISTENING untouched — wait for the next
-            # interval. No controller feed happens here (silence is the
-            # normal, high-frequency path and must not produce warnings).
-            logger.info("[live-proactive] staying quiet (decision=%s)", decision)
-            return
-
-        # P2 race guard (QA regression): the user may have started speaking
-        # while the VLM call was in flight. If the controller is no longer
-        # LISTENING at decision time, stay silent — proactive work must never
-        # speak over the user dialog (spec §2.4). Fail-open: skip, no TTS.
-        if self.turn_state != TurnState.LISTENING:
-            logger.info(
-                "[live-proactive] controller no longer LISTENING (state=%s); skip proactive speech",
-                self.turn_state.name,
-            )
-            return
-
-        # Proactive speak: agent-initiated turn (LISTENING -> THINKING ->
-        # SPEAKING), then synthesize + push the single sentence through the
-        # normal TTS path. Barge-in during playback reuses the existing
-        # HARD_INTERRUPTED path.
-        try:
-            self._ctrl.on_agent_turn_started()
-            self._ctrl.on_tts_started()
-        except Exception as exc:
-            logger.warning("[live-proactive] controller feed failed: %s", exc)
-        self._spawn_sentence_tts(response, 0, reply_session)
-        if self.on_llm_response:
-            try:
-                self.on_llm_response(response, source="live_proactive")
-            except Exception as exc:
-                logger.warning("[live-proactive] on_llm_response failed: %s", exc)
-        self._tts_turn_task = asyncio.create_task(self._wait_tts_turn_done())
+        if tts_turn_task is not None:
+            self._tts_turn_task = tts_turn_task
 
     async def _call_proactive_vlm(self, frames: list) -> tuple[str, str]:
         """POST a lightweight non-streaming VLM visual round to webinfer.
 
         Returns ``(decision, response)``. Fail-open: on any error log and
         return ``("silence", "")`` so a proactive round never disturbs the
-        dialog.
+        dialog. Delegated to ``live_proactive.call_proactive_vlm``.
         """
-        import httpx
-
-        messages: list[dict] = [{"role": "system", "content": self._config.llm_system_prompt}]
-        messages.append({"role": "user", "content": ""})
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{self._config.llm_api_url}{self._config.llm_text_path}",
-                    json={
-                        "model": self._config.llm_model,
-                        "messages": messages,
-                        "max_tokens": 256,
-                        "temperature": 0.7,
-                        "interaction_mode": "live",
-                        "frames": frames,
-                    },
-                )
-                resp.raise_for_status()
-                payload = resp.json()
-                choice = (payload.get("choices") or [{}])[0]
-                response = (choice.get("message") or {}).get("content") or ""
-                response = response.strip() if isinstance(response, str) else ""
-                harness = payload.get("streamingharness") or {}
-                decision = harness.get("decision") or ("response" if response else "silence")
-                return decision, response
-        except Exception as exc:
-            logger.error("[live-proactive] VLM call failed; fail-open: %s", exc)
-            return "silence", ""
-
-    async def _finish_llm_turn(
-        self,
-        *,
-        text: str,
-        response: str,
-        decision: str,
-        delegation_question: str | None,
-        reply_epoch: int | None = None,
-    ) -> None:
-        """Shared post-LLM turn completion (controller, delegation, broadcast)."""
-        logger.info("[live-mode] LLM response (decision=%s): %r", decision, (response or "")[:120])
-
-        # Feed the controller: PROCESSING -> THINKING (even for empty output).
-        try:
-            self._ctrl.on_llm_token(response or "")
-        except Exception as exc:
-            logger.warning("[live-mode] on_llm_token failed: %s", exc)
-
-        # v3.37: webinfer decision="delegation" routes to BackgroundModelService
-        # (same sub-agent as jarvis / video).
-        if decision == "delegation":
-            try:
-                bg = self._background_service
-                if (
-                    bg is not None
-                    and getattr(bg, "enabled", True)
-                    and not getattr(bg, "_closed", False)
-                ):
-                    payload_text = (response or "").strip() or text
-                    if delegation_question:
-                        payload_text = f"{payload_text}\n\n</delegation> {delegation_question}"
-                    bg.handle_foreground_response(
-                        payload_text,
-                        metrics={"user_prompt": text, "delegation_question": delegation_question},
-                    )
-            except Exception as exc:
-                logger.warning("[live-mode] delegation routing failed: %s", exc)
-            # Delegation replies are surfaced by the background agent; nothing
-            # is spoken (foreground line empty).
-            decision = "silence"
-
-        # Addressee-detection Phase 2 (spec draft-addressee-detection.md
-        # §4.1/§4.2.4): decision="not-for-me" means the utterance was NOT
-        # addressed to the AI (self-talk / replying to someone else / talking
-        # to another person). Treat it as a non-target turn: no TTS, back to
-        # LISTENING — same controller path as silence, with a dedicated log
-        # so the semantic gate is distinguishable from plain silence.
-        if decision == "not-for-me":
-            logger.info(
-                "[addressee] semantic not-for-me: utterance=%r not addressed to AI; not broadcasting",
-                (text or "")[:80],
-            )
-
-        self._conv_history.append(("user", text))
-        self._conv_history.append(("assistant", response or ""))
-
-        # P0-A: the streaming path pushed per-sentence audio via tts_sentence,
-        # so the llm_reply transcript must NOT be re-synthesized by the
-        # browser (source tag mirrors jarvis_voice). live_voice is ONLY valid
-        # when sentences were actually spawned (streaming path); the
-        # fail-open non-streaming retry spawns no sentences, so it must tag
-        # live_text and let the browser synthesize audio via /api/tts/synthesize
-        # (BUG-1: previously a silent reply on the retry path).
-        reply_source = (
-            "live_voice"
-            if (decision == "response" and self._sentence_spawned_this_turn)
-            else "live_text"
-        )
-        self._current_turn_reply_epoch = (
-            reply_epoch if reply_epoch is not None else self._llm_reply_epoch
-        )
-        if self.on_llm_response:
-            try:
-                self.on_llm_response(response or "", source=reply_source)
-            except Exception as exc:
-                logger.warning("[live-mode] on_llm_response failed: %s", exc)
-
-        if decision == "response" and self._sentence_spawned_this_turn:
-            # THINKING -> SPEAKING (sentences already synthesizing/playing).
-            try:
-                self._ctrl.on_tts_started()
-            except Exception as exc:
-                logger.warning("[live-mode] on_tts_started failed: %s", exc)
-            self._tts_turn_task = asyncio.create_task(self._wait_tts_turn_done())
-        else:
-            # silence / delegation / not-for-me / empty: THINKING -> SPEAKING
-            # -> LISTENING (nothing is spoken; not-for-me additionally logged
-            # as a semantic non-target above).
-            try:
-                self._ctrl.on_tts_started()
-                self._ctrl.on_tts_finished()
-                logger.info("[live-mode] agent turn finished (no TTS); listening")
-            except Exception as exc:
-                logger.warning("[live-mode] tts lifecycle feed failed: %s", exc)
-
-    async def _wait_tts_turn_done(self) -> None:
-        """Wait for all sentence TTS tasks, then return the controller to
-        LISTENING (SPEAKING -> LISTENING)."""
-        try:
-            while True:
-                pending = [t for t in list(self._tts_sentence_tasks) if not t.done()]
-                if not pending:
-                    break
-                await asyncio.gather(*pending, return_exceptions=True)
-        except asyncio.CancelledError:
-            raise
-        if self._ctrl.state == TurnState.SPEAKING:
-            try:
-                self._ctrl.on_tts_finished()
-                logger.info("[live-mode] agent turn finished; listening")
-            except Exception as exc:
-                logger.warning("[live-mode] on_tts_finished failed: %s", exc)
+        return await call_proactive_vlm(config=self._config, frames=frames, logger=logger)
 
     # ------------------------------------------------------------------
     # P0-A per-sentence TTS (reuses the jarvis synthesis + push pattern)
