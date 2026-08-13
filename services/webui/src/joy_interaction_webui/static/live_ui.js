@@ -539,7 +539,11 @@
                     noiseSuppression: false,
                     autoGainControl: false
                 }, video: false });
-                const audioTrack = btListenStream.getAudioTracks()[0];
+                // P1-2 (audit 2026-08-13): must be `let` — the GAIN boost path
+                // below reassigns it to the boosted track (audioTrack = boostedTrack);
+                // `const` threw TypeError which the catch swallowed, so KWS always
+                // received the raw (un-boosted) track and the GAIN slider had no effect.
+                let audioTrack = btListenStream.getAudioTracks()[0];
                 startBtMicLevelMonitor(btListenStream);
                 // Gain boost must run when a REAL mic track exists, otherwise the
                 // user-selected multiplier (default 1.5x from the GAIN slider) never
