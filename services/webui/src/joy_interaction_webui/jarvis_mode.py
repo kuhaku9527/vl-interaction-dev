@@ -25,7 +25,7 @@ from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 
-from . import jarvis_dialog, jarvis_kws
+from . import jarvis_dialog, jarvis_kws, jarvis_llm
 
 # Facade re-exports (batch 6: jarvis_config / jarvis_state split): the
 # configuration + state declarations moved to their own modules; this module
@@ -62,6 +62,7 @@ from .tts_turn_common import (
     synthesize_tts_sentence,
     wrap_pcm16_wav,
 )
+from .turn_streaming import StreamingTurnConsumer
 from .vad_bypass import VadBypass
 
 logger = logging.getLogger("joyai.jarvis")
@@ -1458,62 +1459,29 @@ class JarvisStateMachine:
 
         ``reply_epoch`` is the P1 turn epoch captured by ``_send_to_llm``;
         it tags the llm_reply broadcast (see ``_finish_llm_turn``).
+
+        Delegates to ``jarvis_llm.send_to_llm_streaming`` (extracted batch 6);
+        the per-stream cancel flag is reset here BEFORE the consumer runs so
+        the ``is_cancelled`` callback (which reads the live attribute)
+        reflects the new round.
         """
-        from .turn_streaming import StreamingTurnConsumer
-
-        # v3.24: prepend bounded conversation history (same as non-streaming).
-        history_snapshot = list(self._conv_history)[-self._max_history_turns * 2 :]
-
-        endpoint_url = f"{self.config.llm_api_url}{self.config.llm_text_path}"
         self._ensure_tts_stream_state()
         self._llm_stream_cancel = False
-        reply_session = self._tts_reply_seq
-        self._tts_reply_seq += 1
-
-        consumer = StreamingTurnConsumer(
-            endpoint_url=endpoint_url,
-            model=self.config.llm_model,
-            system_prompt=self.config.llm_system_prompt,
-            history_snapshot=history_snapshot,
-            max_tokens=200,
-            temperature=0.7,
-            timeout_s=30.0,
+        self._tts_reply_seq = await jarvis_llm.send_to_llm_streaming(
+            text=text,
+            stream_tts=stream_tts,
+            interaction_mode=interaction_mode,
+            reply_epoch=reply_epoch,
+            config=self.config,
+            conv_history=self._conv_history,
+            max_history_turns=self._max_history_turns,
+            tts_reply_seq=self._tts_reply_seq,
+            consumer_cls=StreamingTurnConsumer,
             on_sentence=self._spawn_sentence_tts,
             is_cancelled=lambda: self._llm_stream_cancel,
-            stream_logger=logger,
-        )
-        result = await consumer.consume(
-            text,
-            interaction_mode=interaction_mode,
-            reply_session=reply_session,
-        )
-
-        if result.needs_non_streaming_retry:
-            # No decision was ever delivered (transport failure, HTTP error,
-            # or an error frame BEFORE the decision frame): clean retry
-            # through the non-streaming path so the reply is never lost —
-            # nothing was spoken, so there is no double-play risk.
-            return await self._send_to_llm_non_streaming(
-                text,
-                stream_tts=stream_tts,
-                interaction_mode=interaction_mode,
-                reply_epoch=reply_epoch,
-            )
-
-        if result.cancelled:
-            # Barge-in / exit word: stop everything. The epoch bump already
-            # cancelled every in-flight sentence task; the partial reply is
-            # intentionally not broadcast (the user is talking over it).
-            return
-
-        await self._finish_llm_turn(
-            text=text,
-            response=result.full_response,
-            decision=result.decision,
-            delegation_question=result.delegation_question,
-            stream_tts=stream_tts,
-            force_jarvis_voice=True,
-            reply_epoch=reply_epoch,
+            on_retry_non_streaming=self._send_to_llm_non_streaming,
+            on_finish_turn=self._finish_llm_turn,
+            logger=logger,
         )
 
     def _spawn_sentence_tts(self, sentence: str, seq: int, reply_session: int) -> None:
