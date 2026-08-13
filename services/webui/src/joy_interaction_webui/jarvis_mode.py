@@ -25,7 +25,7 @@ from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 
-from . import jarvis_kws
+from . import jarvis_dialog, jarvis_kws
 
 # Facade re-exports (batch 6: jarvis_config / jarvis_state split): the
 # configuration + state declarations moved to their own modules; this module
@@ -880,8 +880,7 @@ class JarvisStateMachine:
                 self.on_asr_partial(partial)
 
             # Check EXIT_WORDS on partial text (not waiting for final)
-            stripped = text.strip().lower()
-            if any(stripped.endswith(w) for w in EXIT_WORDS):
+            if jarvis_dialog.exit_word_detected(text):
                 logger.info("Exit word detected: %s", text)
                 await self._transition_to(JarvisState.EXIT_DETECTED)
                 await self._stop_tts()
@@ -946,8 +945,7 @@ class JarvisStateMachine:
                 self.on_asr_partial(partial)
 
             # EXIT_WORDS stay jarvis-owned (mode extension, not delegated).
-            stripped = text.strip().lower()
-            if any(stripped.endswith(w) for w in EXIT_WORDS):
+            if jarvis_dialog.exit_word_detected(text):
                 logger.info("Exit word detected: %s", text)
                 await self._transition_to(JarvisState.EXIT_DETECTED)
                 await self._stop_tts()
@@ -1016,7 +1014,16 @@ class JarvisStateMachine:
             except Exception as exc:
                 logger.warning("ASR stream reset failed: %s", exc)
 
-        if _is_garbage_text(utterance):
+        # Endpoint verdict (extracted batch 6): garbage drop first, then the
+        # Smart Turn semantic gate (fail-open + default-off), then send.
+        # ``commit_verdict`` short-circuits exactly like the original inline
+        # block — the Smart Turn model is never invoked for garbage text.
+        verdict = jarvis_dialog.commit_verdict(
+            utterance,
+            _is_garbage_text,
+            self._smart_turn_allows_send,
+        )
+        if verdict == "garbage":
             logger.info(
                 "ASR endpoint reached, dropping garbage: %r",
                 utterance,
@@ -1024,10 +1031,7 @@ class JarvisStateMachine:
             await self._transition_to(JarvisState.DIALOG_ACTIVE)
             return "garbage"
 
-        # Smart Turn semantic gate (fail-open + default-off). When it
-        # judges the user has NOT finished (e.g. trailing "嗯……那个"),
-        # defer: keep the partial, do NOT clear/reset/send/transition.
-        if not self._smart_turn_allows_send(utterance):
+        if verdict == "deferred":
             logger.debug(
                 "Smart Turn deferred send; keeping DIALOG_ACTIVE for: '%s'",
                 utterance,
