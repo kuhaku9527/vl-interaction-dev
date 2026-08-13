@@ -1,6 +1,6 @@
 # Spec Draft：Phase C — C.B 完整直播形态（VLM 视觉 + 主动搭话）
 
-> 生命周期: **草稿 v1**（2026-08-13）——C.B 是"直播=核心"主线的终点验证；走 草稿→设计评审→实现→QA→真机 流程
+> 生命周期: **草稿 v2**（2026-08-13）——层1/层2/层3 已实现并通过 QA（604 测试），待真机验收后转正式；走 草稿→设计评审→实现→QA→真机 流程
 > 上游: `draft-live-interaction-layer.md`（§0 收敛终点定义）+ `draft-unified-turn-controller.md`（TurnConfig.live() 预设）+ `draft-addressee-detection.md`（四态 not-for-me）
 > 前置（已实证就绪）: VLM mmproj 已加载（run-windows.ps1:67 `mmproj-joyai-vl-interaction-preview-f16.gguf`）；webinfer `/v1/chat/completions` 支持 image（infer_loop.py:306 拒绝 image 于 text/chat，指向多模态路径）；前端 `screen_capture.js` 已实现 1fps JPEG 帧 → WS `frame` 消息管线（frameSeq 单调 + 间隔测量）；源项目 live_adapter（7-22）有完整视频流助手实现（帧观察 prompt + video_history + FORCE_SILENCE_BEFORE_QUERY）可参照
 
