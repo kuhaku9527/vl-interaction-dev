@@ -401,6 +401,27 @@ async def websocket_handler(request):
                         if not isinstance(payload, str) or not payload:
                             logger.warning("frame: empty data")
                         else:
+                            # Live visual path (spec draft-live-visual-cb.md
+                            # §2.4): when a live session is active, forward the
+                            # raw frame to its ring buffer in parallel with the
+                            # video pipeline below (independent paths).
+                            live_session = (
+                                manager.get_live_session(session_id)
+                                if manager is not None
+                                else None
+                            )
+                            if live_session is not None:
+                                try:
+                                    live_session.handle_frame(
+                                        payload,
+                                        float(
+                                            data.get("ts")
+                                            or data.get("timestamp")
+                                            or time.time() * 1000
+                                        ),
+                                    )
+                                except Exception as live_exc:
+                                    logger.warning("live frame route failed: %s", live_exc)
                             try:
                                 from PIL import Image as _PILImage
 

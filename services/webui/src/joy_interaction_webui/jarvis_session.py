@@ -172,6 +172,15 @@ class LiveSession:
         """Route mic audio to the live state machine."""
         await self.state_machine.feed_audio(pcm)
 
+    def handle_frame(self, image_b64: str, ts_ms: float) -> None:
+        """Delegate a screen/camera frame to the live state machine's ring buffer.
+
+        Live visual path (spec draft-live-visual-cb.md §2.2): the WS ``frame``
+        message routes through the session (mirroring the enroll passthrough
+        pattern) into ``LiveStateMachine.handle_frame``.
+        """
+        self.state_machine.handle_frame(image_b64, ts_ms)
+
     def start_enroll(self) -> bool:
         """Delegate enrollment start to the live state machine."""
         return self.state_machine.start_enroll()

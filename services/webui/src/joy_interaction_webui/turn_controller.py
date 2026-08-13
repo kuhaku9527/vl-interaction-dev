@@ -813,6 +813,30 @@ class TurnController:
                 is_final,
             )
 
+    def on_agent_turn_started(self) -> None:
+        """Agent-initiated turn (proactive speak): LISTENING → THINKING.
+
+        Proactive rounds (spec draft-live-visual-cb.md §2.4) have no user
+        speech, so the usual LISTENING → USER_SPEAKING → PROCESSING entry does
+        not apply. This additive event drives the controller straight to
+        THINKING so the following ``on_tts_started`` puts the agent into
+        SPEAKING — making barge-in work exactly like a user-initiated turn.
+        Only LISTENING accepts it; any other state is logged and ignored
+        (fail-open: proactive work never disturbs the dialog).
+        """
+        event = "on_agent_turn_started"
+        if self.state == TurnState.LISTENING:
+            self._transition(
+                TurnState.THINKING,
+                event,
+                "agent-initiated turn (proactive speak) -> reasoning started",
+            )
+        else:
+            logger.info(
+                "[turn_controller] agent turn started ignored in state=%s",
+                self.state.name,
+            )
+
     def on_llm_token(self, token: str) -> None:
         """Streamed LLM content token (decision token stripped upstream)."""
         event = "on_llm_token"

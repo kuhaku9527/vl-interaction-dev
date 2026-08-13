@@ -83,6 +83,7 @@ class StreamingTurnConsumer:
         on_sentence: Callable[[str, int, int], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
         stream_logger: logging.Logger | None = None,
+        frames: list | None = None,
     ) -> None:
         self.endpoint_url = endpoint_url
         self.model = model
@@ -96,6 +97,10 @@ class StreamingTurnConsumer:
         self.on_sentence = on_sentence
         self.is_cancelled = is_cancelled
         self._log = stream_logger or logger
+        # Live visual path (spec draft-live-visual-cb.md §3 层 2): optional
+        # ``[{image_b64, ts_ms}]`` frames carried on this round's request.
+        # ``None`` (jarvis / text-only live) keeps the request body unchanged.
+        self.frames = list(frames) if frames else None
 
     def build_messages(self, text: str) -> list[dict]:
         """Compose the OpenAI-style message list (system + history + user).
@@ -152,19 +157,22 @@ class StreamingTurnConsumer:
         )
 
         try:
+            request_body = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "interaction_mode": interaction_mode,
+                "stream": True,
+            }
+            if self.frames is not None:
+                request_body["frames"] = self.frames
             async with (
                 httpx.AsyncClient(timeout=self.timeout_s) as client,
                 client.stream(
                     "POST",
                     self.endpoint_url,
-                    json={
-                        "model": self.model,
-                        "messages": messages,
-                        "max_tokens": self.max_tokens,
-                        "temperature": self.temperature,
-                        "interaction_mode": interaction_mode,
-                        "stream": True,
-                    },
+                    json=request_body,
                 ) as resp,
             ):
                 if resp.status_code != 200:

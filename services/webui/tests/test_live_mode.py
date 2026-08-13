@@ -512,14 +512,15 @@ async def test_fail_open_llm_stream_retries_non_streaming(monkeypatch):
     monkeypatch.setattr(live_module, "StreamingTurnConsumer", fake)
     retry_calls: list = []
 
-    async def fake_retry(text, *, interaction_mode="live", reply_epoch=None):
-        retry_calls.append((text, interaction_mode, reply_epoch))
+    async def fake_retry(text, *, interaction_mode="live", reply_epoch=None, frames=None):
+        retry_calls.append((text, interaction_mode, reply_epoch, frames))
 
     monkeypatch.setattr(sm, "_send_to_llm_non_streaming", fake_retry)
 
     await sm._send_to_llm("你好", interaction_mode="live", stream=True)
 
-    assert retry_calls == [("你好", "live", 1)]
+    # frames defaults to None on the pure-text path (zero regression).
+    assert retry_calls == [("你好", "live", 1, None)]
 
 
 @pytest.mark.asyncio

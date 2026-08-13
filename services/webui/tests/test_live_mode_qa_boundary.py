@@ -277,7 +277,7 @@ async def test_double_interrupt_connected_barge_in(monkeypatch):
 
     sends: list = []
 
-    async def fake_send(text, *, interaction_mode="live", stream=True):
+    async def fake_send(text, *, interaction_mode="live", stream=True, frames=None):
         sm._llm_reply_epoch += 1  # mirror the real turn-start bump
         sends.append((text, sm._llm_reply_epoch, interaction_mode, stream))
 
@@ -348,7 +348,7 @@ async def test_vad_unavailable_partial_drives_onset(monkeypatch):
 
     sends: list = []
 
-    async def fake_send(text, *, interaction_mode="live", stream=True):
+    async def fake_send(text, *, interaction_mode="live", stream=True, frames=None):
         sm._llm_reply_epoch += 1
         sends.append((text, interaction_mode, stream))
 
@@ -391,7 +391,7 @@ async def test_asr_exception_mid_turn_recovers(monkeypatch):
 
     sends: list = []
 
-    async def fake_send(text, *, interaction_mode="live", stream=True):
+    async def fake_send(text, *, interaction_mode="live", stream=True, frames=None):
         sm._llm_reply_epoch += 1
         sends.append((text, interaction_mode))
 
@@ -441,7 +441,7 @@ async def test_non_streaming_retry_reply_stays_audible(monkeypatch):
     )
     monkeypatch.setattr(live_module, "StreamingTurnConsumer", fake)
 
-    async def fake_retry(text, *, interaction_mode="live", reply_epoch=None):
+    async def fake_retry(text, *, interaction_mode="live", reply_epoch=None, frames=None):
         await sm._finish_llm_turn(
             text=text,
             response="重试回复",
@@ -500,7 +500,7 @@ async def test_garbage_utterance_dropped_back_to_listening(monkeypatch):
 
     sends: list = []
 
-    async def fake_send(text, *, interaction_mode="live", stream=True):
+    async def fake_send(text, *, interaction_mode="live", stream=True, frames=None):
         sends.append(text)
 
     monkeypatch.setattr(sm, "_send_to_llm", fake_send)
@@ -537,7 +537,7 @@ async def test_vad_onset_with_silent_asr_is_documented(monkeypatch):
 
     sends: list = []
 
-    async def fake_send(text, *, interaction_mode="live", stream=True):
+    async def fake_send(text, *, interaction_mode="live", stream=True, frames=None):
         sm._llm_reply_epoch += 1
         sends.append((text, interaction_mode))
 
