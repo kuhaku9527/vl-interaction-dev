@@ -1,7 +1,9 @@
-# Spec Draft：Phase C — C.B 完整直播形态（VLM 视觉 + 主动搭话）
+# Spec：Phase C — C.B 完整直播形态（VLM 视觉 + 主动搭话）
 
-> 生命周期: **草稿 v2**（2026-08-13）——层1/层2/层3 已实现并通过 QA（604 测试），待真机验收后转正式；走 草稿→设计评审→实现→QA→真机 流程
-> 上游: `draft-live-interaction-layer.md`（§0 收敛终点定义）+ `draft-unified-turn-controller.md`（TurnConfig.live() 预设）+ `draft-addressee-detection.md`（四态 not-for-me）
+> 生命周期: **正式（Implemented，待真机验收）**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成；状态标 "Implemented（待真机验收）"）
+> 上游: `live-interaction-layer.md`（§0 收敛终点定义）+ `unified-turn-controller.md`（TurnConfig.live() 预设）+ `addressee-detection.md`（四态 not-for-me）
+> 实现: a536ef3（层1 webinfer live 视觉路径：frames 协议 + [Visual Context]）→ 80caf37（层2 帧缓冲 + proactive 循环）→ d9736ee（proactive P2/P3 QA 修复）→ 08ab0c4（层3 前端画面接入 + set_proactive 运行时开关）
+> 验证: QA PASS（604 测试相关：webinfer `test_live_visual` / `test_qa_live_visual_boundary` 等 + webui `test_live_proactive` / `test_live_visual_frontend_contract` 等）；**待真机验收**（开 proactive 观察主动搭话质量；画面问答测试）
 > 前置（已实证就绪）: VLM mmproj 已加载（run-windows.ps1:67 `mmproj-joyai-vl-interaction-preview-f16.gguf`）；webinfer `/v1/chat/completions` 支持 image（infer_loop.py:306 拒绝 image 于 text/chat，指向多模态路径）；前端 `screen_capture.js` 已实现 1fps JPEG 帧 → WS `frame` 消息管线（frameSeq 单调 + 间隔测量）；源项目 live_adapter（7-22）有完整视频流助手实现（帧观察 prompt + video_history + FORCE_SILENCE_BEFORE_QUERY）可参照
 
 ---
@@ -67,7 +69,7 @@
 
 ## §6 关联
 
-- `draft-live-interaction-layer.md`（C.B 定位 = §0 收敛终点）
-- `draft-addressee-detection.md`（四态 not-for-me 已上线，proactive 判定复用）
+- `live-interaction-layer.md`（C.B 定位 = §0 收敛终点）
+- `addressee-detection.md`（四态 not-for-me 已上线，proactive 判定复用）
 - 源项目 `D:/AI/workspace/7-22/JoyAI-VL-Interaction-main/services/webinfer/live_adapter.py`（视频流助手 prompt/FORCE_SILENCE 参照）
 - 前端 `screen_capture.js`（1fps 帧推送，复用）

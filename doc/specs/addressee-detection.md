@@ -1,8 +1,10 @@
-# Spec Draft：Addressee Detection（说话对象判定）落地方案
+# Spec：Addressee Detection（说话对象判定）落地方案
 
-> 生命周期: **草稿**（2026-08-12 20:5x）——交叉验证完成后首版，走 草稿→验证→替换→整合 流程
+> 生命周期: **正式**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成）
 > 上游: 云端调研 `final_report_addressee_detection.md`（12 份）+ 交叉验证 `doc/research/addressee-cross-validation-2026-08-12.md`
 > 用户授权（20:4x/20:5x）：**效果优先，大改不怕，云端兜底，硬件不设限**；**ADR0006 可演进**（旧框架不是不可改，新功能走 spec 记录+后续整合流程）
+> 实现: 2b10c0c（Phase1：CAM++ 声学预筛 detector + 本地基准）→ ce641fc（live_mode 门控 + enroll 端点 + 前端）→ 80cffce（Phase2：四态 decision token `+not-for-me` 六层）
+> 验证: QA PASS（webui `test_addressee_detector` / `test_addressee_qa_edges` + webinfer 四态 `test_decision_notforme` / `test_qa_4state_supplement` 回归）
 > 原则: 宁可漏、不可乱插（误响应代价 > 漏判代价）；分阶段独立验收/回滚；env 闸门默认关（fail-open 传统）
 
 ---
@@ -117,7 +119,7 @@
 
 ## §7 关联
 
-- `draft-live-interaction-layer.md`（live 主草稿，本方案是其 §3.3 的落地）
+- `live-interaction-layer.md`（live 主 spec，本方案是其 §3.3 的落地）
 - `doc/research/addressee-cross-validation-2026-08-12.md`（交叉验证，本 spec 依据）
 - ADR0006（llm-gateway 单入口——Phase2 随四态演进，本 spec 记录演进意向）
 - 部署真值：run-windows.ps1:372（-ngl 999 GPU）

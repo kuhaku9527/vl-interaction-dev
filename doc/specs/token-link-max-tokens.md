@@ -1,9 +1,10 @@
-# Spec Draft：token 链路 max_tokens 规范（草稿）
+# Spec：token 链路 max_tokens 规范
 
-> 生命周期: **草稿**（2026-08-11）——待真机验证后完善并替换为正式 spec
+> 生命周期: **正式**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成）
 > 上游依据: `doc/research/block2-token-truncation-diagnosis-2026-08-11.md`（根因 A/B 已修复）
-> 原则: 草稿→验证可行性→完善→替换旧 spec；不直接改正式文档
-> 状态: 根因已修复（128→1024 + normalize 多行保留）；本草案规范"长期如何不复发"
+> 实现: 29dd71e（webinfer `main_max_tokens` 128→1024 + `normalize_model_output` 多行保留）
+> 验证: QA 190 测试（webinfer 回归）— QA PASS
+> 状态: 根因已修复（128→1024 + normalize 多行保留）；本 spec 规范"长期如何不复发"
 
 ---
 

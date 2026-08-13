@@ -1,8 +1,10 @@
-# Spec Draft v2：统一 Turn Controller（共享核心 + 配置矩阵）
+# Spec v2：统一 Turn Controller（共享核心 + 配置矩阵）
 
-> 生命周期: **草稿 v2**（2026-08-12）——v1 经块3 深潜（110 断言）交叉验证后修订；待沙箱原型 → 真机验收 → 正式 spec/ADR
+> 生命周期: **正式**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成）
 > 上游: 用户全局观（jarvis=直播变种，优先直播模式）+ 块0 交叉验证（"缺统一调度层"）+ 块3 深潜 + **块3 交叉验证**（`doc/research/block3-cross-validation-2026-08-12.md`）
-> 状态: 架构草案 v2（基于真实代码 + 外部调研核验，未实现）
+> 实现: 40ee9dc（沙箱原型：13 态状态机 + SentenceBuffer + 3 预设 TurnConfig）
+> 验证: 64 单测（turn_controller + SentenceBuffer）+ QA 27 — QA PASS
+> 状态: 架构正式 v2（沙箱原型已验证；live/jarvis 收敛落地见 `live-interaction-layer.md` / `live-visual-cb.md`）
 > v1→v2 变更: 状态机 7→12 态扁平（吸收 jarvis 已有态）；配置矩阵 2→7 场景；新增 Sentence Buffer/LLM 超时三层；否决分类头方案（与 ADR0006 冲突）
 
 ---

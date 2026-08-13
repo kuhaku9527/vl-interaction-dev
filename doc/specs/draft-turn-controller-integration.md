@@ -1,7 +1,7 @@
 # Spec Draft：Turn Controller 接入设计（Integration）
 
 > 生命周期: **草稿 v2**（2026-08-12）——Phase A/B 已实现并通过 QA（commit 95c3df6/5136e74 等），状态同步见 §2；走 草稿→沙箱验证→替换 流程
-> 上游: `draft-unified-turn-controller.md`（v2 状态机）+ `turn_controller.py` 原型（64 测试绿）+ jarvis_mode.py 现状
+> 上游: `unified-turn-controller.md`（v2 状态机，已定稿正式）+ `turn_controller.py` 原型（64 测试绿）+ jarvis_mode.py 现状
 > 原则: 渐进接入、绝不破坏现有行为、可回滚；原型已隔离验证，接入分阶段
 > 状态: 设计草稿（Phase A ✅ 影子 / Phase B ✅ 收敛委托 / Phase C ⏳ 待做）
 
@@ -79,7 +79,7 @@
 
 ## §6 关联
 
-- 状态机/配置：`draft-unified-turn-controller.md`（v2）
+- 状态机/配置：`unified-turn-controller.md`（v2，已定稿正式）
 - 原型：`services/webui/src/joy_interaction_webui/turn_controller.py`（64 测试）
 - jarvis 现状：`jarvis_mode.py`（run() 主循环 :696-729，_handle_kws :735）
 - 决策 token 规范：`决策/交互模式与决策token规范.md` D-2026-08-03-001/002

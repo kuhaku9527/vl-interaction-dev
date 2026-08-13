@@ -1,8 +1,10 @@
-# Spec Draft：TTS 链路流式化（LLM 流式 + Sentence Buffer 分句 TTS）
+# Spec：TTS 链路流式化（LLM 流式 + Sentence Buffer 分句 TTS）
 
-> 生命周期: **草稿**（2026-08-12）——P1 任务（用户反馈"打断后新回复 TTS 慢"）；走 草稿→实现→QA→真机 流程
+> 生命周期: **正式**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成）
 > 上游: `doc/research/tts-latency-analysis-2026-08-12.md`（瓶颈定位）+ 块3 报告 Sentence Buffer（P0 原语）+ `turn_controller.py` SentenceBuffer 原型
-> 状态: 设计草稿（未改代码）
+> 实现: 32c6db9（P0-A：webinfer stream=True + jarvis 流式消费 + SentenceBuffer 分句 TTS + 前端逐句播放队列）+ b1f285d（流式帧协议处理 delegation 教学格式）+ 667e302（流式消费抽共享 turn_streaming.py）
+> 验证: QA 604 相关（webinfer/webui 流式回归）— QA PASS
+> 状态: P0-A 已实现并过 QA；P0-B（MiniMax SSE 真流式）留待后续
 
 ---
 
