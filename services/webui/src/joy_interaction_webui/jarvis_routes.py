@@ -112,6 +112,32 @@ def _is_allowed_diagnostic_wav(path: Path) -> bool:
     return any(resolved == root or root in resolved.parents for root in allowed_roots)
 
 
+#: Maximum accepted size of a single diagnostic WAV upload (10 MiB).
+_MAX_DIAGNOSTIC_WAV_BYTES = 10 * 1024 * 1024
+
+
+def _sanitize_diagnostic_filename(raw: str) -> str | None:
+    """Return a safe plain basename for a diagnostic WAV, or ``None`` to reject.
+
+    The upload write path (``diagnostic_save_wav``) must never escape its
+    capture directory, so only a plain basename is accepted: any path
+    separator (``/`` or ``\\``), a ``..``/``.`` segment, a NUL byte, or a name
+    longer than the filesystem limit is rejected outright (audit P1-1).
+    """
+    if not isinstance(raw, str) or not raw:
+        return None
+    if "\x00" in raw or "/" in raw or "\\" in raw:
+        return None
+    if raw in (".", ".."):
+        return None
+    name = Path(raw).name
+    if name != raw:
+        return None
+    if len(name) > 255:
+        return None
+    return name
+
+
 def setup_jarvis_routes(app: web.Application) -> None:
     """Register the Jarvis HTTP routes on the given aiohttp app."""
     app.router.add_get("/api/jarvis/status", jarvis_status)
@@ -254,25 +280,67 @@ async def jarvis_feed_wav(request: web.Request) -> web.Response:
 
 
 async def diagnostic_save_wav(request: web.Request) -> web.Response:
-    """Save an uploaded WAV to D:/AI/data/kws/mic_captures/ for offline analysis."""
+    """Save an uploaded WAV to D:/AI/data/kws/mic_captures/ for offline analysis.
+
+    Security (audit P1-1): the client-supplied filename is reduced to a plain
+    basename (path separators / ``..`` / absolute paths are rejected), and the
+    upload is capped at :data:`_MAX_DIAGNOSTIC_WAV_BYTES` bytes so a malicious
+    multipart body can neither escape the capture directory nor exhaust disk.
+    """
     try:
         reader = await request.multipart()
     except Exception as exc:
         return web.json_response({"error": f"multipart failed: {exc}"}, status=400)
-    out_dir = Path("D:/AI/data/kws/mic_captures")
+    # Capture directory is overridable (tests point it at a tmp dir); the
+    # default keeps the historic diagnostics location.
+    out_dir = Path(os.environ.get("JARVIS_DIAGNOSTIC_WAV_DIR", "D:/AI/data/kws/mic_captures"))
     out_dir.mkdir(parents=True, exist_ok=True)
     saved = []
     async for part in reader:
         if part.name != "wav":
             await part.release()
             continue
-        filename = part.filename or "mic.wav"
+        filename = _sanitize_diagnostic_filename(part.filename or "mic.wav")
+        if filename is None:
+            await part.release()
+            return web.json_response(
+                {
+                    "error": (
+                        "invalid wav filename: only a plain basename is allowed "
+                        "(no path separators / '..' / absolute paths)"
+                    )
+                },
+                status=400,
+            )
         out_path = out_dir / filename
-        with out_path.open("wb") as f:
-            while True:
-                chunk = await part.read_chunk(8192)
-                if not chunk:
-                    break
-                f.write(chunk)
+        total_bytes = 0
+        too_large = False
+        try:
+            with out_path.open("wb") as f:
+                while True:
+                    chunk = await part.read_chunk(8192)
+                    if not chunk:
+                        break
+                    total_bytes += len(chunk)
+                    if total_bytes > _MAX_DIAGNOSTIC_WAV_BYTES:
+                        too_large = True
+                        break
+                    f.write(chunk)
+        finally:
+            if too_large:
+                # Do not leave a truncated partial file on disk.
+                try:
+                    out_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                await part.release()
+        if too_large:
+            return web.json_response(
+                {
+                    "error": "wav too large",
+                    "limit_bytes": _MAX_DIAGNOSTIC_WAV_BYTES,
+                },
+                status=400,
+            )
         saved.append(str(out_path))
     return web.json_response({"saved": saved})
