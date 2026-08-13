@@ -406,6 +406,30 @@ def _function_body(source: str, name: str) -> str:
     return match.group("body")
 
 
+# Batch-3 split: index.html's inline script#2 was extracted into standalone JS
+# files (same dependency order as the <script src> tags). Assertions run against
+# the combined sources so moved code keeps its contract with unchanged semantics.
+SPLIT_JS = (
+    "vlm_history.js",
+    "llm_reply_ui.js",
+    "ws_dispatcher.js",
+    "vlm_render.js",
+    "background_rich.js",
+    "tts_player.js",
+    "speech_input.js",
+    "live_ui.js",
+    "llm_reply_audio.js",
+    "status_poll.js",
+)
+
+
+def _index_html() -> str:
+    parts = [INDEX_HTML.read_text(encoding="utf-8")]
+    for name in SPLIT_JS:
+        parts.append((INDEX_HTML.parent / name).read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
 def _frame_payload_keys(js: str) -> set[str]:
     """Extract the keys of the JSON object literal passed to send()/JSON.stringify
     inside a frame send path (keys on their own line like `type: 'frame',`)."""
@@ -420,7 +444,7 @@ def test_camera_frame_format_matches_screen_capture():
     """The inline camera sender must ship EXACTLY the same wire keys as
     screen_capture.js so server.py's `frame` handler (which treats any frame
     identically) works for both sources."""
-    index_html = INDEX_HTML.read_text(encoding="utf-8")
+    index_html = _index_html()
     screen_js = SCREEN_CAPTURE_JS.read_text(encoding="utf-8")
 
     camera_body = _function_body(index_html, "startLiveCameraCapture")
@@ -450,7 +474,7 @@ def test_camera_frame_format_matches_screen_capture():
 def test_live_video_controls_disabled_until_live_active():
     """开画面 button + source select start disabled (usable only in live mode),
     and setLiveModeActive(active) flips them together."""
-    html = INDEX_HTML.read_text(encoding="utf-8")
+    html = _index_html()
     # Initial markup: disabled by default.
     assert 'id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled' in html
     assert 'id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled' in html
@@ -461,13 +485,13 @@ def test_live_video_controls_disabled_until_live_active():
 
 
 def test_start_live_video_bails_when_not_active_or_already_capturing():
-    body = _function_body(INDEX_HTML.read_text(encoding="utf-8"), "startLiveVideo")
+    body = _function_body(_index_html(), "startLiveVideo")
     assert "if (!liveModeActive || liveVideoActive) return;" in body
 
 
 def test_live_video_source_change_rejected_while_capturing():
     """Single-select: switching source while capturing is refused with a hint."""
-    html = INDEX_HTML.read_text(encoding="utf-8")
+    html = _index_html()
     idx = html.index("liveVideoSourceEl.addEventListener('change'")
     snippet = html[idx : idx + 500]
     assert "liveVideoActive" in snippet
@@ -478,7 +502,7 @@ def test_live_video_source_change_rejected_while_capturing():
 
 
 def test_stop_live_camera_clears_interval_and_tracks():
-    body = _function_body(INDEX_HTML.read_text(encoding="utf-8"), "stopLiveCameraCapture")
+    body = _function_body(_index_html(), "stopLiveCameraCapture")
     assert "clearInterval(liveCameraInterval)" in body
     assert "liveCameraInterval = null" in body
     assert "getTracks().forEach(track => track.stop())" in body
@@ -490,7 +514,7 @@ def test_stop_live_camera_clears_interval_and_tracks():
 def test_stop_live_video_only_stops_owned_screen_capture():
     """stopLiveVideoCapture must not kill a screen capture the live panel does
     not own (e.g. adopted from the main video panel)."""
-    body = _function_body(INDEX_HTML.read_text(encoding="utf-8"), "stopLiveVideoCapture")
+    body = _function_body(_index_html(), "stopLiveVideoCapture")
     # The screen-capture stop is guarded by liveVideoOwned.
     stop_call = body.index("window.stopScreenCapture")
     guard_snippet = body[:stop_call]
@@ -501,7 +525,7 @@ def test_stop_live_video_only_stops_owned_screen_capture():
 
 
 def test_set_live_mode_inactive_stops_live_video_and_resets_proactive():
-    body = _function_body(INDEX_HTML.read_text(encoding="utf-8"), "setLiveModeActive")
+    body = _function_body(_index_html(), "setLiveModeActive")
     assert "!liveModeActive" in body
     assert "stopLiveVideoCapture()" in body
     assert "liveProactiveToggle.checked = false" in body
@@ -509,7 +533,7 @@ def test_set_live_mode_inactive_stops_live_video_and_resets_proactive():
 
 
 def test_proactive_toggle_disabled_when_live_inactive_or_env_off():
-    body = _function_body(INDEX_HTML.read_text(encoding="utf-8"), "setLiveProactiveUiState")
+    body = _function_body(_index_html(), "setLiveProactiveUiState")
     assert "const usable = liveModeActive && liveProactiveSupported;" in body
     assert "liveProactiveToggle.disabled = !usable" in body
     # When live is active but env off, surface the env hint.

@@ -33,7 +33,26 @@ from joy_interaction_webui.jarvis_session import JarvisSessionManager  # noqa: E
 from joy_interaction_webui.turn_streaming import StreamingTurnConsumer  # noqa: E402
 
 INDEX_HTML = REPO / "services" / "webui" / "src" / "joy_interaction_webui" / "static" / "index.html"
-_JS = INDEX_HTML.read_text(encoding="utf-8")
+# Batch-3 split: index.html's inline script#2 was extracted into standalone JS
+# files (same dependency order as the <script src> tags). Combined sources keep
+# the static-contract assertions pointing at the moved code with unchanged
+# semantics.
+_SPLIT_JS = (
+    "vlm_history.js",
+    "llm_reply_ui.js",
+    "ws_dispatcher.js",
+    "vlm_render.js",
+    "background_rich.js",
+    "tts_player.js",
+    "speech_input.js",
+    "live_ui.js",
+    "llm_reply_audio.js",
+    "status_poll.js",
+)
+_JS = "\n".join(
+    [INDEX_HTML.read_text(encoding="utf-8")]
+    + [(INDEX_HTML.parent / name).read_text(encoding="utf-8") for name in _SPLIT_JS]
+)
 
 
 # ---------------------------------------------------------------------------

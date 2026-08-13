@@ -12,8 +12,29 @@ INDEX_HTML = WEBUI_ROOT / "src" / "joy_interaction_webui" / "static" / "index.ht
 STYLES_CSS = WEBUI_ROOT / "src" / "joy_interaction_webui" / "static" / "styles.css"
 
 
+# Batch-3 split: the former single inline script#2 was extracted into these
+# standalone JS files (same dependency order as the <script src> tags in
+# index.html). Contract assertions run against the combined sources so the
+# moved code is still checked with unchanged semantics.
+SPLIT_JS = (
+    "vlm_history.js",
+    "llm_reply_ui.js",
+    "ws_dispatcher.js",
+    "vlm_render.js",
+    "background_rich.js",
+    "tts_player.js",
+    "speech_input.js",
+    "live_ui.js",
+    "llm_reply_audio.js",
+    "status_poll.js",
+)
+
+
 def _index_html() -> str:
-    return INDEX_HTML.read_text(encoding="utf-8")
+    parts = [INDEX_HTML.read_text(encoding="utf-8")]
+    for name in SPLIT_JS:
+        parts.append((INDEX_HTML.parent / name).read_text(encoding="utf-8"))
+    return "\n".join(parts)
 
 
 def _styles_css() -> str:
