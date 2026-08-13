@@ -31,6 +31,73 @@ from time_ranges import _format_batch_time_marker
 
 LOGGER = logging.getLogger("streaming_infer_adapter")
 
+#: Visual-observation segment appended to the composed live system prompt
+#: when a live round carries frames (spec ``draft-live-visual-cb.md`` §2.3).
+#: The four-state ``LIVE_SYSTEM_PROMPT_EN`` stays untouched; this segment only
+#: teaches the model that the incoming image frames are the current visual
+#: context (the user's camera / screen) to ground the answer on.
+LIVE_VISUAL_OBSERVATION_SEGMENT = (
+    "\n\n[Visual Context]\n"
+    "The following image frames are the current visual context observed by the "
+    "user's camera/screen. Use them to ground your answer."
+)
+
+
+def _build_live_visual_user_message(
+    user_text: str,
+    frames: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the user message for one live visual round (text + frames).
+
+    ``user_text`` may be empty for proactive rounds (no user speech): the text
+    part is then omitted and the message carries only the ``image_url`` parts.
+    Each frame is emitted in OpenAI multimodal format as
+    ``{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<b64>"}}``
+    — JPEG is the format the frontend screen-capture pipeline produces.
+    Frames never enter conversation history (spec §2.6): they ride only on the
+    current round's request.
+    """
+    content: list[dict[str, Any]] = []
+    text = (user_text or "").strip()
+    if text:
+        content.append({"type": "text", "text": text})
+    for frame in frames:
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{(frame.get('image_b64') or '').strip()}"
+                },
+            }
+        )
+    return {"role": "user", "content": content}
+
+
+def _build_live_visual_messages(
+    system_prompt: str,
+    user_text: str,
+    frames: list[dict[str, Any]],
+    *,
+    history_messages: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Compose the OpenAI-style message list for a live visual round.
+
+    System = the caller-supplied composed live prompt (four-state
+    ``LIVE_SYSTEM_PROMPT_EN`` plus memory blocks) with the visual-observation
+    segment appended; user = the current utterance text (empty for proactive
+    rounds) + the image frames as ``image_url`` data URIs. Text-only history
+    turns (when provided) are inserted between the system and the visual user
+    message so conversation continuity is preserved without persisting frames.
+    """
+    visual_system = (
+        (system_prompt or "").rstrip() + "\n\n" + LIVE_VISUAL_OBSERVATION_SEGMENT.strip()
+    ).strip()
+    messages: list[dict[str, Any]] = [{"role": "system", "content": visual_system}]
+    for message in history_messages or []:
+        messages.append(dict(message))
+    messages.append(_build_live_visual_user_message(user_text, frames))
+    return messages
+
 
 def _resolve_base_system_prompt(
     config_system_prompt: str,

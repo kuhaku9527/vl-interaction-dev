@@ -8,6 +8,7 @@ frame reference parsing, and the main-model call previously on ``StreamingInferA
 
 from __future__ import annotations
 
+import base64
 import copy
 import json
 import logging
@@ -23,6 +24,7 @@ from typing import Any
 from adapter_types import SessionState
 from aiohttp import web
 from openai import AsyncOpenAI
+from prompt_assembly import _build_live_visual_messages
 from prompt_building import (
     _compute_prompt_guard_max_chars,
     _estimate_messages_chars,
@@ -67,6 +69,62 @@ LOGGER = logging.getLogger("streaming_infer_adapter")
 #                     `decision` field), but forced silence off (jarvis drives
 #                     its own turn flow).
 _VALID_INTERACTION_MODES = frozenset({"live", "call", "jarvis"})
+
+# --- live visual path (spec draft-live-visual-cb.md §3 层 1) ----------------
+# An optional top-level ``frames`` field on ``POST /v1/text/chat`` with
+# ``interaction_mode="live"`` routes the round through the multimodal path
+# (streaming for user rounds, non-streaming for proactive rounds). No
+# ``frames`` field -> the existing text path runs byte-for-byte unchanged
+# (pure-text live zero-regression rule).
+_LIVE_FRAMES_MAX: int = 6
+
+
+def _parse_live_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Validate and normalize the optional top-level ``frames`` payload field.
+
+    Contract (约法三章 — invalid frames are an explicit 400, never silently
+    swallowed):
+
+      * ``frames`` must be a list of dicts when present;
+      * at most ``_LIVE_FRAMES_MAX`` frames;
+      * each frame must carry a non-empty, base64-decodable ``image_b64``;
+      * ``ts_ms`` (optional) must be a number when present.
+
+    Returns a normalized ``[{"image_b64": str, "ts_ms": int|float|None}]``
+    list. A missing ``frames`` field returns ``[]`` (callers treat that as
+    "no frames" and keep the pure-text path).
+    """
+    raw = payload.get("frames")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise web.HTTPBadRequest(text="frames must be a list")
+    if len(raw) > _LIVE_FRAMES_MAX:
+        raise web.HTTPBadRequest(text=f"frames exceeds limit: {len(raw)} > {_LIVE_FRAMES_MAX}")
+    frames: list[dict[str, Any]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise web.HTTPBadRequest(text=f"frames[{index}] must be an object")
+        image_b64 = item.get("image_b64")
+        if not isinstance(image_b64, str) or not image_b64.strip():
+            raise web.HTTPBadRequest(
+                text=f"frames[{index}].image_b64 must be a non-empty base64 string"
+            )
+        image_b64 = image_b64.strip()
+        # Accept both padded and unpadded base64 (some frontends strip '=');
+        # anything that cannot decode is an explicit 400.
+        padded = image_b64 + "=" * (-len(image_b64) % 4)
+        try:
+            decoded = base64.b64decode(padded, validate=True)
+        except Exception as exc:
+            raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 is not valid base64") from exc
+        if not decoded:
+            raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 decodes to empty bytes")
+        ts_ms = item.get("ts_ms")
+        if ts_ms is not None and not isinstance(ts_ms, (int, float)):
+            raise web.HTTPBadRequest(text=f"frames[{index}].ts_ms must be a number")
+        frames.append({"image_b64": image_b64, "ts_ms": ts_ms})
+    return frames
 
 
 def _normalize_interaction_mode(mode: str | None) -> str:
@@ -332,6 +390,71 @@ class InferLoopMixin:
         client, model_name = self._resolve_backend(requested_model)
         state = self.get_session(session_id)
         t_start = time.perf_counter()
+        # Live visual path (spec draft-live-visual-cb.md): an optional
+        # top-level ``frames`` field on a live round routes through the
+        # multimodal path — streaming (user rounds) or non-streaming
+        # (proactive rounds) by the payload's existing ``stream`` flag.
+        # Frames are validated explicitly (invalid -> 400, never silent);
+        # non-live modes reject frames (they must use /v1/chat/completions).
+        # An absent OR empty ``frames`` field keeps the existing text path
+        # running byte-for-byte unchanged (pure-text live zero regression).
+        if payload.get("frames"):
+            try:
+                frames = _parse_live_frames(payload)
+            except web.HTTPException as exc:
+                # Invalid frames are an explicit 400 (约法三章 — never silent).
+                return _openai_error_response(exc.text or "invalid frames", status=exc.status_code)
+            if interaction_mode != "live":
+                return _openai_error_response(
+                    "frames only supported with interaction_mode='live'",
+                    status=400,
+                )
+            if payload.get("stream"):
+                return await self._handle_text_chat_streaming(
+                    request,
+                    state,
+                    payload,
+                    client=client,
+                    model_name=model_name,
+                    interaction_mode=interaction_mode,
+                    session_id=session_id,
+                    t_start=t_start,
+                    frames=frames,
+                )
+            async with state.lock:
+                try:
+                    result = await self._handle_text_payload(
+                        state,
+                        payload,
+                        client=client,
+                        model_name=model_name,
+                        interaction_mode=interaction_mode,
+                        frames=frames,
+                    )
+                except web.HTTPException:
+                    raise
+                except Exception as exc:
+                    LOGGER.exception("live visual chat completion failed")
+                    emit_event(
+                        "webinfer",
+                        "infer_error",
+                        level="error",
+                        session_id=session_id,
+                        extra={
+                            "error_type": type(exc).__name__,
+                            "path": "text_chat_live_visual",
+                        },
+                    )
+                    return _openai_error_response(str(exc), status=502)
+            emit_event(
+                "webinfer",
+                "webinfer_request",
+                level="info",
+                session_id=session_id,
+                latency_ms=round((time.perf_counter() - t_start) * 1000),
+                extra={"model": model_name, "path": "text_chat_live_visual"},
+            )
+            return web.json_response(result)
         # P0-A TTS streaming: ``stream: true`` takes the NDJSON streaming path
         # (decision frame first, then content frames). The non-streaming path
         # below is untouched for every other caller (call mode etc.).
@@ -385,6 +508,7 @@ class InferLoopMixin:
         client: AsyncOpenAI | None = None,
         model_name: str | None = None,
         interaction_mode: str = "live",
+        frames: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         # Single-LLM-gateway text path. Composes the system prompt
         # (character profile + [Local Wiki]), runs the v3.34 prompt
@@ -421,7 +545,22 @@ class InferLoopMixin:
 
         # Resolve any caller-supplied system message into a flat list.
         caller_messages = [dict(m) for m in api_messages if m.get("role") != "system"]
-        if composed_system:
+        if frames:
+            # Live visual round (spec draft-live-visual-cb.md): the final user
+            # turn carries the current utterance + the image frames; history
+            # turns stay text-only (frames never enter persistent history).
+            # `frames` is truthy only when the router validated a non-empty
+            # frame list, so the visual branch is unreachable otherwise.
+            history_messages = list(caller_messages)
+            if history_messages and history_messages[-1].get("role") == "user":
+                history_messages = history_messages[:-1]
+            http_messages = _build_live_visual_messages(
+                composed_system,
+                last_user_text,
+                frames,
+                history_messages=history_messages,
+            )
+        elif composed_system:
             http_messages = [{"role": "system", "content": composed_system}, *caller_messages]
         else:
             http_messages = caller_messages
@@ -484,6 +623,7 @@ class InferLoopMixin:
         interaction_mode: str,
         session_id: str,
         t_start: float,
+        frames: list[dict[str, Any]] | None = None,
     ) -> web.StreamResponse:
         """Serve ``POST /v1/text/chat`` with ``stream: true``.
 
@@ -517,6 +657,7 @@ class InferLoopMixin:
                     client=client,
                     model_name=model_name,
                     interaction_mode=interaction_mode,
+                    frames=frames,
                 ):
                     await stream_resp.write(
                         (json.dumps(frame, ensure_ascii=False) + "\n").encode("utf-8")
@@ -562,6 +703,7 @@ class InferLoopMixin:
         client: AsyncOpenAI | None = None,
         model_name: str | None = None,
         interaction_mode: str = "live",
+        frames: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Async generator of NDJSON frames for the streaming text path.
 
@@ -598,7 +740,20 @@ class InferLoopMixin:
         ).strip()
 
         caller_messages = [dict(m) for m in api_messages if m.get("role") != "system"]
-        if composed_system:
+        if frames:
+            # Live visual round (spec draft-live-visual-cb.md): the final user
+            # turn carries the current utterance + the image frames; history
+            # turns stay text-only (frames never enter persistent history).
+            history_messages = list(caller_messages)
+            if history_messages and history_messages[-1].get("role") == "user":
+                history_messages = history_messages[:-1]
+            http_messages = _build_live_visual_messages(
+                composed_system,
+                last_user_text,
+                frames,
+                history_messages=history_messages,
+            )
+        elif composed_system:
             http_messages = [{"role": "system", "content": composed_system}, *caller_messages]
         else:
             http_messages = caller_messages
