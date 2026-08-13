@@ -89,6 +89,7 @@ def test_create_session_without_background_service_keeps_none(monkeypatch):
 def test_llm_callback_does_not_double_route_delegation():
     """_make_llm_callback broadcasts the LLM reply only; delegation is handled in _send_to_llm."""
     from joy_interaction_webui import server
+    from joy_interaction_webui import ws_notify
 
     bg = SimpleNamespace(
         enabled=True,
@@ -115,10 +116,11 @@ def test_llm_callback_does_not_double_route_delegation():
         )
 
     try:
-        # Patch BOTH names: server.notify_session_llm_reply (the canonical
-        # attribute) and let the cb's local import pick it up via ``from .server import``.
+        # The notify contract now lives in ws_notify.py (jarvis_session's
+        # callbacks import it from there), so the patch target is ws_notify.
+        # server re-exports the same name for backward-compat callers.
         with patch.object(
-            server, "notify_session_llm_reply", side_effect=fake_notify_session_llm_reply
+            ws_notify, "notify_session_llm_reply", side_effect=fake_notify_session_llm_reply
         ):
             manager = _build_manager()
             cb = manager._make_llm_callback("sess-bg-3")

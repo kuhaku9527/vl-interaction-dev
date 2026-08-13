@@ -393,7 +393,7 @@ class JarvisSessionManager:
 
         def cb(partial: AsrPartial):
             try:
-                from .server import notify_session_asr_partial
+                from .ws_notify import notify_session_asr_partial
 
                 notify_session_asr_partial(
                     session_id,
@@ -411,7 +411,7 @@ class JarvisSessionManager:
 
         def cb(text: str):
             try:
-                from .server import notify_session_pilot_utterance
+                from .ws_notify import notify_session_pilot_utterance
 
                 notify_session_pilot_utterance(
                     session_id,
@@ -440,7 +440,7 @@ class JarvisSessionManager:
 
         def cb(text: str, source: str = "jarvis_voice"):
             try:
-                from .server import notify_session_llm_reply
+                from .ws_notify import notify_session_llm_reply
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "LLM reply broadcast import failed for %s: %s",
@@ -475,7 +475,7 @@ class JarvisSessionManager:
 
         def cb(text: str, seq: int, audio_b64: str, session: int):
             try:
-                from .server import notify_session_tts_sentence
+                from .ws_notify import notify_session_tts_sentence
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "tts_sentence broadcast import failed for %s: %s",
