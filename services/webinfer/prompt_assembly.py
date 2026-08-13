@@ -99,6 +99,35 @@ def _build_live_visual_messages(
     return messages
 
 
+def compose_live_visual_messages(
+    *,
+    composed_system: str,
+    last_user_text: str,
+    frames: list[dict[str, Any]],
+    caller_messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Assemble the OpenAI-style message list for a live visual round.
+
+    Live visual round (spec draft-live-visual-cb.md): the final user turn
+    carries the current utterance + the image frames; history turns stay
+    text-only (frames never enter persistent history).  ``frames`` is truthy
+    only when the router validated a non-empty frame list, so the visual
+    branch is unreachable otherwise.  ``caller_messages`` is the flat list of
+    non-system messages from the request; the trailing user turn (the current
+    utterance) is dropped from history because it rides on the visual user
+    message.
+    """
+    history_messages = list(caller_messages)
+    if history_messages and history_messages[-1].get("role") == "user":
+        history_messages = history_messages[:-1]
+    return _build_live_visual_messages(
+        composed_system,
+        last_user_text,
+        frames,
+        history_messages=history_messages,
+    )
+
+
 def _resolve_base_system_prompt(
     config_system_prompt: str,
     *,

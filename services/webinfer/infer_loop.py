@@ -24,7 +24,7 @@ from adapter_types import SessionState
 from aiohttp import web
 from io_utils import normalize_image_b64
 from openai import AsyncOpenAI
-from prompt_assembly import _build_live_visual_messages
+from prompt_assembly import compose_live_visual_messages
 from prompt_building import (
     _compute_prompt_guard_max_chars,
     _estimate_messages_chars,
@@ -548,16 +548,11 @@ class InferLoopMixin:
             # Live visual round (spec draft-live-visual-cb.md): the final user
             # turn carries the current utterance + the image frames; history
             # turns stay text-only (frames never enter persistent history).
-            # `frames` is truthy only when the router validated a non-empty
-            # frame list, so the visual branch is unreachable otherwise.
-            history_messages = list(caller_messages)
-            if history_messages and history_messages[-1].get("role") == "user":
-                history_messages = history_messages[:-1]
-            http_messages = _build_live_visual_messages(
-                composed_system,
-                last_user_text,
-                frames,
-                history_messages=history_messages,
+            http_messages = compose_live_visual_messages(
+                composed_system=composed_system,
+                last_user_text=last_user_text,
+                frames=frames,
+                caller_messages=caller_messages,
             )
         elif composed_system:
             http_messages = [{"role": "system", "content": composed_system}, *caller_messages]
@@ -743,14 +738,11 @@ class InferLoopMixin:
             # Live visual round (spec draft-live-visual-cb.md): the final user
             # turn carries the current utterance + the image frames; history
             # turns stay text-only (frames never enter persistent history).
-            history_messages = list(caller_messages)
-            if history_messages and history_messages[-1].get("role") == "user":
-                history_messages = history_messages[:-1]
-            http_messages = _build_live_visual_messages(
-                composed_system,
-                last_user_text,
-                frames,
-                history_messages=history_messages,
+            http_messages = compose_live_visual_messages(
+                composed_system=composed_system,
+                last_user_text=last_user_text,
+                frames=frames,
+                caller_messages=caller_messages,
             )
         elif composed_system:
             http_messages = [{"role": "system", "content": composed_system}, *caller_messages]
