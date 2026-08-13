@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import io
 import json
 import logging
 import os
@@ -40,7 +39,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-import httpx
 import uvicorn
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -116,44 +114,71 @@ def parse_audio_frame(frame: bytes) -> tuple[int, bytes]:
     return seqid, frame[FRAME_HEADER.size :]
 
 
+def _shared_upstream_module():
+    """Locate + import the shared upstream client from the repo (dev layout).
+
+    ``asr_adapter`` runs either as a subprocess from ``services/asr/`` (the
+    webui ASR bridge) or from the repo root during tests; the repo root is
+    not on ``sys.path`` in either case, so it is inserted lazily here (same
+    pattern as ``services/webui/.../asr.py::_ensure_repo_root_on_path``).
+
+    Returns
+    -------
+    module
+        :mod:`services.asr.jarvis.asr_upstream` (the shared client).
+
+    Raises
+    ------
+    RuntimeError
+        The repo layout could not be located (never in this project's dev
+        deployment).
+    """
+    import sys
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    cur = here
+    while True:
+        probe = os.path.join(cur, "services", "asr", "jarvis", "asr_upstream.py")
+        if os.path.exists(probe):
+            if cur not in sys.path:
+                sys.path.insert(0, cur)
+            from services.asr.jarvis import asr_upstream
+
+            return asr_upstream
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    raise RuntimeError(
+        "repo root not found: services/asr/jarvis/asr_upstream.py (adapter must run "
+        "from the repo, e.g. via services/webui/src/.../asr_bridge.py)"
+    )
+
+
 def pcm16_to_wav_bytes(pcm: bytes, sample_rate: int) -> bytes:
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(pcm)
-    return buffer.getvalue()
+    """Wrap raw int16 PCM into a mono RIFF/WAVE container.
 
-
-def extract_transcription_text(payload: dict[str, Any]) -> str:
-    if isinstance(payload.get("text"), str):
-        return payload["text"]
-    choices = payload.get("choices")
-    if isinstance(choices, list) and choices:
-        first = choices[0] or {}
-        message = first.get("message") or {}
-        content = message.get("content")
-        if isinstance(content, str):
-            return content
-    return ""
+    Delegates to the shared upstream client (:mod:`services.asr.jarvis.asr_upstream`)
+    so the call path and the jarvis/live cloud provider share one WAV builder.
+    """
+    return _shared_upstream_module().pcm16_to_wav_bytes(pcm, sample_rate)
 
 
 async def transcribe_with_vllm(wav_bytes: bytes, sample_rate: int, settings: Settings) -> str:
+    """Transcribe one WAV via the OpenAI-compatible multipart POST.
+
+    Delegates to the shared upstream client (:func:`services.asr.jarvis.asr_upstream.transcribe_wav_bytes`)
+    — same URL, same Bearer header, same multipart body and response
+    extraction, so the call path behavior is unchanged.
+    """
     del sample_rate
-    headers: dict[str, str] = {}
-    if settings.api_key:
-        headers["Authorization"] = f"Bearer {settings.api_key}"
-    async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-        response = await client.post(
-            settings.upstream_url,
-            headers=headers,
-            data={"model": settings.model},
-            files={"file": ("audio.wav", wav_bytes, "audio/wav")},
-        )
-        response.raise_for_status()
-        payload = response.json()
-    return extract_transcription_text(payload).strip()
+    return await _shared_upstream_module().transcribe_wav_bytes(
+        wav_bytes,
+        upstream_url=settings.upstream_url,
+        api_key=settings.api_key,
+        model=settings.model,
+        timeout=settings.request_timeout,
+    )
 
 
 def build_asr_result(
