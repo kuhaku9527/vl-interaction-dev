@@ -14,8 +14,9 @@
 | `addressee-detection.md` | 说话对象判定（Phase1 CAM++ 声学门控 + Phase2 四态 not-for-me） | **已实现 + QA PASS** | 2b10c0c / ce641fc / 80cffce |
 | `live-interaction-layer.md` | live 可交互层（C.A 常驻监听 + 模式互斥 + 日志分离 + 分句修复） | **已实现 + QA PASS** | b08c856 / 00a84eb / 5976581 / 5ae9401 |
 | `live-visual-cb.md` | C.B 完整直播形态（VLM 视觉 + 主动搭话） | **Implemented（待真机验收）** | a536ef3 / 80caf37 / d9736ee / 08ab0c4 |
+| `turn-controller-integration.md` | Turn Controller 三阶段接入蓝图（影子 → 委托 → live） | **Phase A/B ✅ + Phase C ✅（默认关，待真机回归后启用委托）** | 95c3df6 / 5136e74 / b08c856 |
 
-> 注：以上 6 份由 `draft-*.md` 定稿转正，草稿文件已删除（内容完整保留于正式文件，git 历史可追溯）。仍存草稿：`draft-turn-controller-integration.md`（三阶段蓝图，待整合）。
+> 注：以上 7 份由 `draft-*.md` 定稿转正，草稿文件已删除（内容完整保留于正式文件，git 历史可追溯）。
 
 ## 命名约定（沿用既有双轨，不强制统一）
 - 日期前缀式：`<YYYY-MM-DD>-<topic>.md`（如 `2026-07-14-loose-coupling-services.md`、`2026-07-13-current-state.md`）

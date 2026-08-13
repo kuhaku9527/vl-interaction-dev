@@ -1,7 +1,7 @@
 # Spec：Phase C — live 可交互层（接入设计 v3）
 
 > 生命周期: **正式**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成）
-> 上游: `unified-turn-controller.md`（v2 状态机 + live 预设）+ `draft-turn-controller-integration.md`（v2 三阶段蓝图）+ `tts-streaming-optimization.md`（P0-A 流式链路）
+> 上游: `unified-turn-controller.md`（v2 状态机 + live 预设）+ `turn-controller-integration.md`（v2 三阶段蓝图）+ `tts-streaming-optimization.md`（P0-A 流式链路）
 > 实现: b08c856（C.A 常驻监听层 + BUG-1 修复）→ 00a84eb（模式互斥 radiogroup）→ 5976581（日志心跳分离）→ 5ae9401（分句粒度修复）→ 59201d3（reply_epoch 地基）→ 667e302（turn_streaming 共享抽取）
 > 验证: QA PASS（webui live_mode 系列回归：test_live_mode / test_p0a_qa / test_reply_epoch_guard 等）
 > 用户全局观: **live 为当前主线，jarvis 模式之后搞**（避免局部优化崩坏全局）；最终验证"直播=核心、jarvis=配置矩阵"
@@ -110,7 +110,7 @@
 ## §8 关联
 
 - `unified-turn-controller.md`（TurnConfig.live() 预设参数：vad 0.5-0.7 / barge_in 0.7 / silence 500）
-- `draft-turn-controller-integration.md`（三阶段蓝图，本文件为 Phase C 细化）
+- `turn-controller-integration.md`（三阶段蓝图，本文件为 Phase C 细化）
 - `tts-streaming-optimization.md`（P0-A 流式链路，抽取共享的依据）
 - `live-visual-cb.md`（C.B 完整直播形态，下一步主线）
 - jarvis 现状：jarvis_mode.py（run :788、_send_to_llm_streaming、tts_sentence 推送）
