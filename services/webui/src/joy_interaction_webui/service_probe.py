@@ -181,7 +181,15 @@ def _probe_asr(asr_cfg):
     - http(s)://       -> probe the internal bridge ``/health`` (the WebUI's
                          actual connection target), not the upstream.
     - ws(s)://          -> operator override (ASR_URL env); not probed, treated ok.
+
+    When ``JARVIS_ASR_PROVIDER=cloud`` the jarvis/live dialog ASR also runs
+    against an upstream (``ASR_UPSTREAM_URL`` / the WebUI slot); that path is
+    probed explicitly (spec ``draft-asr-provider-unified.md`` §4) instead of
+    the local-model branch below.
     """
+    provider = os.environ.get("JARVIS_ASR_PROVIDER", "local").strip().lower()
+    if provider == "cloud":
+        return _probe_asr_cloud(asr_cfg)
     api_base = (asr_cfg or {}).get("api_base", "")
     if not api_base:
         return {"ok": True, "note": "local in-process paraformer"}
@@ -202,3 +210,47 @@ def _probe_asr(asr_cfg):
     if api_base.startswith("ws://") or api_base.startswith("wss://"):
         return {"ok": True, "endpoint": api_base, "note": "external ws override (not probed)"}
     return {"ok": False, "reason": "api_base must be http(s) or ws override"}
+
+
+def _probe_asr_cloud(asr_cfg):
+    """Probe the cloud ASR upstream used by jarvis/live (D-080 visible state).
+
+    The WebUI call path connects through the internal bridge when an http(s)
+    ``api_base`` is configured; the jarvis/live ``CloudBatchProvider`` POSTs
+    directly to ``ASR_UPSTREAM_URL``. Both are probed: the bridge ``/health``
+    first, then a direct GET on the upstream — any <500 response proves the
+    endpoint is reachable (an OpenAI transcriptions route answers 4xx/405 to
+    GET, which is fine).
+    """
+    import httpx
+
+    api_base = (asr_cfg or {}).get("api_base", "")
+    upstream_url = ""
+    if api_base.startswith("http://") or api_base.startswith("https://"):
+        from . import server as _server
+
+        bridge_http = _server.ASR_BRIDGE_HTTP
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                resp = client.get(bridge_http + "/health")
+            if resp.status_code != 200:
+                return {"ok": False, "reason": "http %d (asr bridge)" % resp.status_code}
+        except Exception as exc:
+            return {"ok": False, "reason": str(exc)[:120]}
+        upstream_url = api_base
+    else:
+        upstream_url = os.environ.get("ASR_UPSTREAM_URL", "").strip()
+    if not upstream_url:
+        return {
+            "ok": False,
+            "reason": "JARVIS_ASR_PROVIDER=cloud but no upstream configured "
+            "(set ASR_UPSTREAM_URL)",
+        }
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(upstream_url)
+        if resp.status_code < 500:
+            return {"ok": True, "upstream": upstream_url, "code": resp.status_code}
+        return {"ok": False, "reason": "http %d (upstream)" % resp.status_code}
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc)[:120]}

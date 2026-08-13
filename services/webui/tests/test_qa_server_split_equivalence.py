@@ -155,6 +155,12 @@ _BUGFIX_DIVERGED = {
         "update_background_config gained a backend handler (previously no "
         "backend processor existed)."
     ),
+    "_probe_asr": (
+        "2026-08-13 ASR provider unification (doc/specs/draft-asr-provider-unified.md): "
+        "_probe_asr gained a JARVIS_ASR_PROVIDER=cloud branch that probes the "
+        "upstream (new _probe_asr_cloud helper); the local (default) branch "
+        "remains the pre-split body verbatim."
+    ),
 }
 
 
