@@ -53,6 +53,7 @@ from prompt_building import (
 )
 from request_parsing import (
     _extract_all_image_refs,
+    _extract_last_user_text,
     _extract_time_range_from_request,
     _extract_time_ranges_from_request,
     _extract_user_prompt_text,
@@ -322,12 +323,11 @@ class InferLoopMixin:
 
         # PR #42 follow-up: _memory_recall must fire on the production text path
         # so the [Local Wiki] section actually lands in the prompt. Fail-open.
+        # The last user turn may carry OpenAI list content (live visual rounds);
+        # _extract_last_user_text handles str + list so the question is never
+        # silently dropped when frames rebuild the final user message (audit P1-1).
         pre_messages = list(payload.get("messages") or [])
-        last_user_text = ""
-        for m in reversed(pre_messages):
-            if m.get("role") == "user" and isinstance(m.get("content"), str):
-                last_user_text = m["content"]
-                break
+        last_user_text = _extract_last_user_text(pre_messages)
         try:
             await self._memory_recall(state, last_user_text)
         except Exception as exc:
@@ -516,11 +516,7 @@ class InferLoopMixin:
         model_name = model_name or self.config.main_model
 
         pre_messages = list(payload.get("messages") or [])
-        last_user_text = ""
-        for m in reversed(pre_messages):
-            if m.get("role") == "user" and isinstance(m.get("content"), str):
-                last_user_text = m["content"]
-                break
+        last_user_text = _extract_last_user_text(pre_messages)
         try:
             await self._memory_recall(state, last_user_text)
         except Exception as exc:
@@ -918,11 +914,10 @@ class InferLoopMixin:
         """Assemble the model input and run the main-model call (incl. forced-silence branch)."""
         # F-3 P1b: fire Local-Wiki recall on the multimodal path too, so the
         # [Local Wiki] section is mode-consistent (text path already does this).
-        last_user_text = ""
-        for m in reversed(messages):
-            if m.get("role") == "user" and isinstance(m.get("content"), str):
-                last_user_text = m["content"]
-                break
+        # List content is supported (audit P1-1): a multimodal caller that
+        # sends the question as ``content: [{type: text, ...}]`` must still
+        # trigger recall on the actual utterance.
+        last_user_text = _extract_last_user_text(messages)
         if last_user_text:
             try:
                 await self._memory_recall(state, last_user_text)

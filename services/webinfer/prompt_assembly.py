@@ -22,6 +22,7 @@ from prompt_building import (
     build_static_system_content,
 )
 from prompt_constants import LIVE_SYSTEM_PROMPT_EN, NO_DECISION_SYSTEM_PROMPT
+from request_parsing import _extract_last_user_text
 from system_prompts import (
     compose_system_prompt_with_memory,
     load_character_prompts,
@@ -115,11 +116,16 @@ def compose_live_visual_messages(
     branch is unreachable otherwise.  ``caller_messages`` is the flat list of
     non-system messages from the request; the trailing user turn (the current
     utterance) is dropped from history because it rides on the visual user
-    message.
+    message — but only when its text is actually carried by ``last_user_text``
+    (audit P1-1). If the trailing user message carries text that was NOT
+    extracted (e.g. a list-content shape the old str-only extractor missed),
+    it is kept so no caller text is silently lost.
     """
     history_messages = list(caller_messages)
     if history_messages and history_messages[-1].get("role") == "user":
-        history_messages = history_messages[:-1]
+        trailing_text = _extract_last_user_text(history_messages[-1:])
+        if trailing_text == (last_user_text or "").strip():
+            history_messages = history_messages[:-1]
     return _build_live_visual_messages(
         composed_system,
         last_user_text,

@@ -150,7 +150,18 @@ def _extract_local_image_path_from_request(
     return None
 
 
-def _extract_user_prompt_text(messages: list[dict[str, Any]]) -> str:
+def _extract_last_user_text(messages: list[dict[str, Any]]) -> str:
+    """Extract the current user utterance text from the last user message.
+
+    Handles both plain ``str`` content and the OpenAI multimodal list form
+    (``content: [{"type": "text", "text": ...}]``). The list branch is the
+    source of truth for live visual rounds: when a caller sends a question
+    as list content plus ``frames``, every rebuild site (visual user
+    message, memory recall, QA history) must see the same text the model
+    would receive — otherwise the question is silently dropped (audit
+    P1-1). Mirrors :func:`_extract_user_prompt_text` (which delegates here)
+    so the two names stay behaviourally identical.
+    """
     for message in reversed(messages):
         if message.get("role") != "user":
             continue
@@ -167,3 +178,13 @@ def _extract_user_prompt_text(messages: list[dict[str, Any]]) -> str:
             ]
             return "\n".join(text_parts).strip()
     return ""
+
+
+def _extract_user_prompt_text(messages: list[dict[str, Any]]) -> str:
+    """Return the last user message's text (str or OpenAI list content).
+
+    Delegates to :func:`_extract_last_user_text` so the video path
+    (``/v1/chat/completions``) and the live visual text path share exactly
+    one extraction implementation.
+    """
+    return _extract_last_user_text(messages)

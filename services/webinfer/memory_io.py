@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any
 
 from adapter_types import SessionState
+from request_parsing import _extract_last_user_text
 from response_format import archive_chunk_response_records
 
 # --- ADR-0014 JSONL event emission (services/common/event_json.py) ----------
@@ -389,13 +390,12 @@ class MemoryIOMixin:
         # so subsequent calls inherit the same context. Deliberately
         # ignores system messages and tool-style payloads; only the
         # last user turn is recorded (matches existing helper behaviour).
+        # The user turn may carry OpenAI list content (multimodal callers);
+        # _extract_last_user_text handles str + list so list-content turns
+        # are recorded instead of silently skipped (audit P1-1).
         if not self.config.keep_qa_history:
             return
-        last_user_text = ""
-        for message in reversed(api_messages):
-            if message.get("role") == "user" and isinstance(message.get("content"), str):
-                last_user_text = message["content"]
-                break
+        last_user_text = _extract_last_user_text(api_messages)
         if not last_user_text:
             return
         qa_history = state.memory_state.setdefault("qa_history", [])
