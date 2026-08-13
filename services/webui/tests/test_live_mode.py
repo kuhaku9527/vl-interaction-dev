@@ -27,6 +27,8 @@ for _p in (str(REPO), str(WEBUI_SRC)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from unittest.mock import AsyncMock  # noqa: E402
+
 import pytest  # noqa: E402
 from aiohttp import web  # noqa: E402
 from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
@@ -1000,3 +1002,101 @@ async def test_live_enroll_cancel_and_errors():
             json={"session_id": "ghost", "action": "bogus"},
         )
         assert resp.status == 404  # session check comes before action validation
+
+
+# ---------------------------------------------------------------------------
+# 12. Cloud batch ASR provider (JARVIS_ASR_PROVIDER=cloud, spec §3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cloud_provider_commit_via_finalize(monkeypatch):
+    """Cloud (no partials): energy drives onset -> 2s silence -> finalize -> commit."""
+    from services.asr.jarvis import asr_provider as ap
+    from services.asr.jarvis.asr_provider import CloudBatchProvider
+
+    class _UnavailableVAD:
+        """VAD-shaped object with no detector (cloud energy drives onset)."""
+
+        available = False
+
+        def accept_waveform(self, samples):
+            pass
+
+        def is_speech(self):
+            return True
+
+    clock = FakeClock(1000.0)
+    sm, _vad, _asr = build_live(
+        controller=_live_controller(clock), vad=_UnavailableVAD()
+    )
+    monkeypatch.setattr(live_module, "time", clock)
+
+    provider = CloudBatchProvider(upstream_url="http://upstream/v1/audio/transcriptions")
+    sm._asr = provider
+
+    async def fake_transcribe(wav_bytes, **kwargs):
+        return "你好世界"
+
+    monkeypatch.setattr(ap, "transcribe_wav_bytes", fake_transcribe)
+
+    commits: list = []
+    sm.on_user_utterance = lambda text: commits.append(text)
+    monkeypatch.setattr(sm, "_send_to_llm", AsyncMock())
+
+    # 1. Speech-energy chunk -> onset -> USER_SPEAKING, no partials.
+    await sm.feed_audio(b"\x00\x10" * 50)
+    assert sm.turn_state == TurnState.USER_SPEAKING
+    assert sm._current_asr_text == ""
+
+    # 2. User stops -> 2s silence -> cloud endpoint finalizes and commits.
+    clock.now += 2.5
+    await sm.feed_audio(PCM)  # silence
+
+    assert sm._current_asr_text == ""  # commit reset the ASR stream
+    assert commits == ["你好世界"]
+    assert provider._pcm == bytearray()  # buffer consumed by finalize
+
+
+@pytest.mark.asyncio
+async def test_cloud_provider_unreachable_live_explicit_error(monkeypatch, caplog):
+    """D-080: cloud unreachable in live -> explicit error, no commit, no fallback."""
+    from services.asr.jarvis import asr_provider as ap
+    from services.asr.jarvis.asr_provider import CloudBatchProvider
+
+    class _UnavailableVAD:
+        available = False
+
+        def accept_waveform(self, samples):
+            pass
+
+        def is_speech(self):
+            return True
+
+    monkeypatch.delenv("JARVIS_ASR_ALLOW_LOCAL_FAILOVER", raising=False)
+    clock = FakeClock(1000.0)
+    sm, _vad, _asr = build_live(
+        controller=_live_controller(clock), vad=_UnavailableVAD()
+    )
+    monkeypatch.setattr(live_module, "time", clock)
+
+    provider = CloudBatchProvider(upstream_url="http://upstream/v1/audio/transcriptions")
+    sm._asr = provider
+
+    async def boom(wav_bytes, **kwargs):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(ap, "transcribe_wav_bytes", boom)
+
+    commits: list = []
+    sm.on_user_utterance = lambda text: commits.append(text)
+    monkeypatch.setattr(sm, "_send_to_llm", AsyncMock())
+
+    with caplog.at_level(logging.ERROR, logger="joyai.live_mode"):
+        await sm.feed_audio(b"\x00\x10" * 50)
+        clock.now += 2.5
+        await sm.feed_audio(PCM)
+
+    assert commits == []
+    assert sm._asr is provider  # still cloud (no silent local fallback)
+    assert any("[asr] cloud provider unreachable" in r.getMessage() for r in caplog.records)

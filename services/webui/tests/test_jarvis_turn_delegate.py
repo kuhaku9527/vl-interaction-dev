@@ -496,3 +496,156 @@ def test_fail_open_transition_hook_error_is_swallowed(caplog):
     assert any(
         "[turn-delegate] dialog lifecycle hook failed" in r.getMessage() for r in caplog.records
     )
+
+
+# ---------------------------------------------------------------------------
+# 6. Cloud batch ASR provider (JARVIS_ASR_PROVIDER=cloud, spec §3)
+# ---------------------------------------------------------------------------
+
+
+def _make_cloud_provider():
+    """A real CloudBatchProvider with a stubbed upstream POST (no network)."""
+    from services.asr.jarvis.asr_provider import CloudBatchProvider
+
+    return CloudBatchProvider(upstream_url="http://upstream/v1/audio/transcriptions", api_key="")
+
+
+def _stub_cloud_transcribe(monkeypatch, text="你好世界", exc=None):
+    """Stub the shared upstream POST used by CloudBatchProvider.finalize."""
+    from services.asr.jarvis import asr_provider as ap
+
+    async def fake(wav_bytes, **kwargs):
+        if exc is not None:
+            raise exc
+        return text
+
+    monkeypatch.setattr(ap, "transcribe_wav_bytes", fake)
+    return fake
+
+
+SPEECH_PCM = b"\x00\x10" * 40  # int16 0x1000 -> peak 0.125 (>= cloud speech gate)
+
+
+def test_cloud_provider_dialog_commits_final(monkeypatch):
+    """feed -> silence 2s -> finalize -> existing commit path (legacy)."""
+    sm, _clock = _make_sm(with_delegate=False)
+    provider = _make_cloud_provider()
+    sm._asr = provider
+    _stub_cloud_transcribe(monkeypatch, text="你好世界")
+
+    calls = []
+    sm._send_to_llm = _make_send_stub(calls)
+
+    asyncio.run(sm._handle_dialog(SPEECH_PCM))  # speech activity stamp
+    assert sm._current_asr_text == ""  # no partials in cloud mode
+    sm._last_speech_time = time.time() - 2.5  # simulate 2s silence
+    asyncio.run(sm._handle_dialog(b"\x00\x00" * 80))  # silence -> endpoint
+
+    assert calls == ["你好世界"]
+    assert sm._current_asr_text == ""  # commit reset
+    assert sm.state.name == "DIALOG_ACTIVE"
+
+
+def test_cloud_provider_exit_word_checked_on_final(monkeypatch):
+    """Cloud has no partials -> EXIT_WORDS are checked on the final (spec §3)."""
+    sm, _clock = _make_sm(with_delegate=False)
+    provider = _make_cloud_provider()
+    sm._asr = provider
+    _stub_cloud_transcribe(monkeypatch, text="好的")  # "好的" is an exit word
+
+    goodbye = []
+
+    async def fake_goodbye():
+        goodbye.append(1)
+
+    sm._play_goodbye_wav = fake_goodbye
+    sm._send_to_llm = _make_send_stub([])
+
+    asyncio.run(sm._handle_dialog(SPEECH_PCM))
+    sm._last_speech_time = time.time() - 2.5
+    asyncio.run(sm._handle_dialog(b"\x00\x00" * 80))
+
+    _JarvisConfig, JarvisState, _JarvisStateMachine = _jarvis_mode()
+    assert sm.state == JarvisState.KWS_LISTENING  # exit -> reset to KWS
+    assert goodbye == [1]
+    assert sm._current_asr_text == ""
+
+
+def test_cloud_provider_unreachable_explicit_error_no_silent_fallback(monkeypatch):
+    """D-080: upstream unreachable -> explicit error, nothing sent to the LLM."""
+    monkeypatch.delenv("JARVIS_ASR_ALLOW_LOCAL_FAILOVER", raising=False)
+    sm, _clock = _make_sm(with_delegate=False)
+    provider = _make_cloud_provider()
+    sm._asr = provider
+    _stub_cloud_transcribe(monkeypatch, exc=RuntimeError("connection refused"))
+
+    calls = []
+    sm._send_to_llm = _make_send_stub(calls)
+
+    asyncio.run(sm._handle_dialog(SPEECH_PCM))
+    sm._last_speech_time = time.time() - 2.5
+    asyncio.run(sm._handle_dialog(b"\x00\x00" * 80))
+
+    assert calls == []  # never silently degraded / never sent junk
+    assert sm._asr is provider  # still cloud (no silent local fallback)
+    assert sm.state.name == "DIALOG_ACTIVE"
+
+
+def test_cloud_provider_unreachable_failover_opt_in(monkeypatch):
+    """JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1 -> swap to a local provider."""
+    monkeypatch.setenv("JARVIS_ASR_ALLOW_LOCAL_FAILOVER", "1")
+    sm, _clock = _make_sm(with_delegate=False)
+    provider = _make_cloud_provider()
+    sm._asr = provider
+    _stub_cloud_transcribe(monkeypatch, exc=RuntimeError("connection refused"))
+
+    from services.asr.jarvis import asr_provider as ap
+
+    fake_local = _FakeLocalProvider()
+    monkeypatch.setattr(ap, "LocalStreamingProvider", lambda **kw: fake_local)
+    sm._send_to_llm = _make_send_stub([])
+
+    asyncio.run(sm._handle_dialog(SPEECH_PCM))
+    sm._last_speech_time = time.time() - 2.5
+    asyncio.run(sm._handle_dialog(b"\x00\x00" * 80))
+
+    assert sm._asr is fake_local
+    assert fake_local.started is True
+
+
+class _FakeLocalProvider:
+    """LocalStreamingProvider-shaped fake used by the failover test."""
+
+    streaming = True
+    available = True
+
+    def __init__(self):
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        pass
+
+    def feed_chunk(self, pcm):
+        return ""
+
+
+def test_cloud_provider_delegated_dialog_commits(monkeypatch):
+    """Cloud + turn-controller delegate: final text commits via the delegate."""
+    sm, clock = _make_sm(with_delegate=True)
+    provider = _make_cloud_provider()
+    sm._asr = provider
+    _stub_cloud_transcribe(monkeypatch, text="你好世界")
+
+    calls = []
+    sm._send_to_llm = _make_send_stub(calls)
+
+    asyncio.run(sm._handle_dialog(SPEECH_PCM))  # speech: delegate on_speech_started
+    sm._last_speech_time = time.time() - 2.5
+    clock.advance(2000)
+    asyncio.run(sm._handle_dialog(b"\x00\x00" * 80))  # silence -> finalize + commit
+
+    assert calls == ["你好世界"]
+    assert sm._current_asr_text == ""

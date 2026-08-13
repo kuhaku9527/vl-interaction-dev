@@ -18,6 +18,7 @@ import asyncio
 import base64
 import json
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -31,7 +32,6 @@ for _p in (str(REPO), str(WEBUI_SRC)):
         sys.path.insert(0, _p)
 
 from joy_interaction_webui.jarvis_mode import JarvisConfig, JarvisStateMachine  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -483,3 +483,56 @@ def test_wrap_pcm16_wav_header():
     assert wav[8:12] == b"WAVE"
     assert wav[36:40] == b"data"
     assert len(wav) == 44 + len(pcm)
+
+
+# ---------------------------------------------------------------------------
+# Cloud batch ASR provider (JARVIS_ASR_PROVIDER=cloud, spec §3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cloud_provider_dialog_final_reaches_streaming_llm(monkeypatch):
+    """Cloud final (no partials) commits through the P0-A streaming LLM path."""
+    from services.asr.jarvis import asr_provider as ap
+    from services.asr.jarvis.asr_provider import CloudBatchProvider
+
+    sm = _build_sm()
+    sm._asr = CloudBatchProvider(upstream_url="http://upstream/v1/audio/transcriptions")
+    sm._asr_stream_active = True
+    sm._current_asr_text = ""
+    sm._last_speech_time = 0.0
+    sm.on_asr_partial = None
+
+    async def fake_transcribe(wav_bytes, **kwargs):
+        return "Hello cloud"
+
+    monkeypatch.setattr(ap, "transcribe_wav_bytes", fake_transcribe)
+
+    lines = [
+        _frame(type="decision", decision="response", delegation_question=None),
+        _frame(type="content", token="Hello cloud, Pilot"),
+        _frame(type="content", token="."),
+        _frame(
+            type="done",
+            decision="response",
+            full_text="Hello cloud, Pilot.",
+            delegation_question=None,
+        ),
+    ]
+    client = FakeAsyncClient(stream_response=FakeStreamResponse(lines))
+    with patch("httpx.AsyncClient", return_value=client), patch.object(
+        sm, "_fetch_tts_pcm", new=AsyncMock(return_value=b"\x00\x00" * 200)
+    ):
+        await sm._handle_dialog_legacy(b"\x00\x10" * 40)  # speech activity
+        assert sm._current_asr_text == ""  # no partials in cloud mode
+        sm._last_speech_time = time.time() - 2.5  # simulate 2s silence
+        await sm._handle_dialog_legacy(b"\x00\x00" * 80)  # silence -> endpoint
+        await asyncio.gather(*list(sm._tts_sentence_tasks), return_exceptions=True)
+
+    # The cloud final was committed through the streaming consumer.
+    assert any(
+        "Hello cloud" in str(call)
+        for call in client.stream_calls
+    )
+    assert sm._conv_history[-1] == ("assistant", "Hello cloud, Pilot.")
+    assert sm._current_asr_text == ""
