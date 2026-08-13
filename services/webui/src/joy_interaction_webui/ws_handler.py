@@ -245,6 +245,54 @@ async def websocket_handler(request):
                                     ),
                                 }
                             )
+                    elif t == "update_background_config":
+                        # P1-5 (audit-frontend-2026-08-13): no backend handler
+                        # existed, so the "Enable delegation solver / Frame
+                        # multiplier / Max background frames" settings were
+                        # silently ignored. Map the fields the frontend sends
+                        # (vlm_history.js sendBackgroundConfig) onto the
+                        # session's BackgroundModelService and reply with the
+                        # effective config. When the service is unavailable the
+                        # reply carries an explicit error instead of going
+                        # silent.
+                        if background_service is None:
+                            logger.warning(
+                                "update_background_config: background_service unavailable"
+                            )
+                            await ws.send_json(
+                                {
+                                    "type": "background_config_updated",
+                                    "background_model": None,
+                                    "error": "background_service unavailable",
+                                }
+                            )
+                        else:
+                            try:
+                                config = background_service.update_config(
+                                    enabled=bool(
+                                        data.get("enabled", background_service.enabled)
+                                    ),
+                                    frame_multiplier=data.get("frame_multiplier"),
+                                    max_frames=data.get("max_frames"),
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "update_background_config failed: %s", exc, exc_info=True
+                                )
+                                await ws.send_json(
+                                    {
+                                        "type": "background_config_updated",
+                                        "background_model": background_service.get_config(),
+                                        "error": str(exc),
+                                    }
+                                )
+                            else:
+                                await ws.send_json(
+                                    {
+                                        "type": "background_config_updated",
+                                        "background_model": config,
+                                    }
+                                )
                 except Exception as e:
                     logger.error("Error handling client message: %s", e)
             elif msg.type == web.WSMsgType.ERROR:

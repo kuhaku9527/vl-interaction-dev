@@ -150,8 +150,10 @@ MOVED = {
 # branch was removed (the fix may only ADD handling).
 _BUGFIX_DIVERGED = {
     "websocket_handler": (
-        "audit-frontend-2026-08-13 P1-4: update_frames_per_batch now writes "
-        "back the new value (previously the branch only echoed the old one)."
+        "audit-frontend-2026-08-13 P1-4/P1-5: update_frames_per_batch now "
+        "writes back the new value (previously only echoed the old one); "
+        "update_background_config gained a backend handler (previously no "
+        "backend processor existed)."
     ),
 }
 
