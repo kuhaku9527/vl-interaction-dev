@@ -30,6 +30,15 @@ from typing import Any
 import frame_parsing
 from adapter_types import SessionState
 from aiohttp import web
+from chat_payload import (
+    build_adapter_timing,
+    build_memory_payload,
+    build_prediction_dict,
+    build_summarizer_timing,
+    build_turn_input_record,
+    is_forced_silence,
+    update_query_state,
+)
 from frame_parsing import (
     _LIVE_FRAMES_MAX,  # noqa: F401  (re-export: tests import from infer_loop)
     _normalize_interaction_mode,
@@ -888,9 +897,12 @@ class InferLoopMixin:
         (wake-word driven) modes never force silence -- they drive their own
         turn flow and always want a real model response (issue #45).
         """
-        if interaction_mode != "live":
-            return False
-        return self.config.force_silence_before_query and not state.current_query_text
+        # Implementation lives in chat_payload (batch-2 split, zero behaviour change).
+        return is_forced_silence(
+            interaction_mode,
+            self.config.force_silence_before_query,
+            state.current_query_text,
+        )
 
     async def _chat_payload_build_and_infer(
         self,
@@ -916,18 +928,8 @@ class InferLoopMixin:
                 await self._memory_recall(state, last_user_text)
             except Exception as exc:
                 LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
-        turn_input_record = {
-            "source_message": messages[-1] if messages else None,
-            "vllm_message": ctx.user_message,
-            "chunk_index": state.chunk_index,
-            "has_image": True,
-            "image_path": str(ctx.image_paths[-1]),
-            "image_paths_batch": [str(ip) for ip in ctx.image_paths],
-            "num_chunk_turns": state.current_chunk["turn_count"],
-            "num_chunk_frames": state.current_chunk["frame_count"],
-            "image_paths": list(state.current_chunk["image_paths"]),
-            "frame_time_ranges": list(state.current_chunk["frame_time_ranges"]),
-        }
+        # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
+        turn_input_record = build_turn_input_record(messages, ctx, state)
 
         is_forced_silence = self._is_forced_silence(state, interaction_mode)
         # call / jarvis must never teach the model the decision-token framework.
@@ -1047,37 +1049,12 @@ class InferLoopMixin:
         t_end = time.perf_counter()
         total_time = t_end - ctx.t_start
 
-        prediction = {
-            "turn": ctx.turn_count,
-            "time_range": ctx.time_range,
-            "query": ctx.query_text,
-            "input": ctx.turn_input_record,
-            "output": turn_output_record,
-            "prediction": ctx.generated_text,
-            "total_time": round(total_time, 3),
-            "inference_time": round(ctx.inference_time, 3),
-        }
-        if ctx.model_input_record is not None:
-            ctx.turn_input_record["model_input"] = ctx.model_input_record
-        if ctx.chunk_start_model_input_path:
-            prediction["chunk_start_model_input_path"] = ctx.chunk_start_model_input_path
-        if ctx.raw_text and ctx.raw_text.strip() != ctx.generated_text:
-            prediction["raw_prediction"] = ctx.raw_text
+        # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
+        prediction = build_prediction_dict(ctx, turn_output_record, total_time)
         state.predictions.append(prediction)
 
         t_end = time.perf_counter()
-        adapter_timing = {
-            "adapter_total_ms": round((t_end - ctx.t_start) * 1000, 1),
-        }
-        if not ctx.is_forced_silence:
-            adapter_timing["prompt_build_ms"] = round(
-                (ctx.t_prompt_build_end - ctx.t_prompt_build_start) * 1000, 1
-            )
-            adapter_timing["vllm_inference_ms"] = round(ctx.inference_time * 1000, 1)
-            adapter_timing["post_process_ms"] = round((t_end - ctx.t_inference_end) * 1000, 1)
-            adapter_timing["pre_inference_ms"] = round(
-                (ctx.t_prompt_build_start - ctx.t_start) * 1000, 1
-            )
+        adapter_timing = build_adapter_timing(ctx, t_end)
 
         if not ctx.is_forced_silence:
             LOGGER.info(
@@ -1109,34 +1086,9 @@ class InferLoopMixin:
             delegation_question=delegation_question,
         )
         result["streamingharness"]["timing"] = adapter_timing
-        summarizer_timing = {}
-        if state.mid_term_history:
-            last_mid = state.mid_term_history[-1]
-            summarizer_timing["last_mid_term_ms"] = round(
-                last_mid.get("inference_time", 0) * 1000, 1
-            )
-            summarizer_timing["last_mid_term_chunk"] = last_mid.get("chunk_index")
-            if last_mid.get("barrier_wait_time") is not None:
-                summarizer_timing["barrier_wait_ms"] = round(
-                    last_mid["barrier_wait_time"] * 1000, 1
-                )
-        if state.long_term_history:
-            last_long = state.long_term_history[-1]
-            summarizer_timing["last_long_term_ms"] = round(
-                last_long.get("inference_time", 0) * 1000, 1
-            )
-        result["streamingharness"]["summarizer_timing"] = summarizer_timing
-        result["streamingharness"]["memory"] = {
-            "mid_term_summaries": [
-                {
-                    "chunk_index": e["chunk_index"],
-                    "frame_range": e["frame_range"],
-                    "summary_text": e["summary_text"],
-                }
-                for e in state.mid_term_summaries
-            ],
-            "long_term_memory": state.memory_state.get("long_term_memory", ""),
-        }
+        # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
+        result["streamingharness"]["summarizer_timing"] = build_summarizer_timing(state)
+        result["streamingharness"]["memory"] = build_memory_payload(state)
         return result
 
     async def _forward_text_only(
@@ -1197,30 +1149,8 @@ class InferLoopMixin:
         prompt_text: str,
         time_range: str,
     ) -> str | None:
-        if not self.config.use_prompt_as_query:
-            return None
-
-        normalized_prompt = (prompt_text or "").strip()
-        if not normalized_prompt:
-            return None
-
-        if state.current_query_text is None:
-            state.current_query_text = normalized_prompt
-            state.query_start_time = time_range
-            state.query_in_current_chunk = True
-            return normalized_prompt
-
-        if normalized_prompt != state.current_query_text:
-            state._pending_qa_archive = (
-                state.current_query_text,
-                state.query_start_time,
-            )
-            state.current_query_text = normalized_prompt
-            state.query_start_time = time_range
-            state.query_in_current_chunk = True
-            return normalized_prompt
-
-        return state.current_query_text
+        # Implementation lives in chat_payload (batch-2 split, zero behaviour change).
+        return update_query_state(state, prompt_text, time_range, self.config.use_prompt_as_query)
 
     async def _call_main_model(
         self,
