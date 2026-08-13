@@ -119,7 +119,29 @@ from .jarvis_routes import bind_audio, setup_jarvis_routes  # noqa: E402
 from .jarvis_session import JarvisSessionManager  # noqa: E402
 from .live_routes import bind_live_audio_for_peer, setup_live_routes  # noqa: E402
 from .local_file_server import setup_local_file_routes  # noqa: E402
+
+# Facade re-exports from service_probe (reachability probes + status endpoints).
+from .service_probe import _LLM_PROBE_CACHE as _LLM_PROBE_CACHE  # noqa: E402
+from .service_probe import _LLM_PROBE_TTL_S as _LLM_PROBE_TTL_S  # noqa: E402
+from .service_probe import _now as _now  # noqa: E402
+from .service_probe import _probe_asr as _probe_asr  # noqa: E402
+from .service_probe import _probe_kws as _probe_kws  # noqa: E402
+from .service_probe import _probe_llm as _probe_llm  # noqa: E402
+from .service_probe import _probe_summary as _probe_summary  # noqa: E402
+from .service_probe import _probe_tts as _probe_tts  # noqa: E402
+from .service_probe import (  # noqa: E402
+    _resolve_service_targets as _resolve_service_targets,
+)
+from .service_probe import llm_status as llm_status  # noqa: E402
+from .service_probe import tts_health as tts_health  # noqa: E402
 from .tts import setup_tts_routes  # noqa: E402
+from .tts_endpoint import _tts_synthesize_handler as _tts_synthesize_handler  # noqa: E402
+from .tts_endpoint import _wav_chunk_header as _wav_chunk_header  # noqa: E402
+
+# Facade re-exports from tts_endpoint (POST /api/tts/synthesize).
+from .tts_endpoint import (  # noqa: E402
+    build_tts_synthesize_payload as build_tts_synthesize_payload,
+)
 from .vlm_service import VLMService  # noqa: E402
 
 # Facade re-exports from ws_notify (the WS push contract layer) — same objects.
@@ -377,237 +399,6 @@ async def websocket_handler(request):
             len(websockets),
         )
     return ws
-
-
-def _probe_llm(llm_api_url):
-    import httpx
-
-    try:
-        with httpx.Client(timeout=2.0) as client:
-            resp = client.get(llm_api_url.rstrip("/") + "/models")
-        if resp.status_code == 200:
-            try:
-                data = resp.json()
-                models = data.get("data") or []
-                return {
-                    "status": "ok",
-                    "models": [m.get("id", "") for m in models if isinstance(m, dict)],
-                }
-            except Exception as exc:
-                return {"status": "degraded", "reason": "parse: %s" % exc}
-        return {"status": "error", "reason": "http %d" % resp.status_code}
-    except Exception as exc:
-        return {"status": "error", "reason": str(exc)[:120]}
-
-
-def _probe_tts(tts_api_url):
-    # Probe the voice_clone_api ``/health`` endpoint first; if absent,
-    # fall back to a GET on ``/v1/synthesize`` (POST-only, so 405 also
-    # counts as "endpoint present"). Two short-lived clients per probe
-    # to avoid any keep-alive edge cases.
-    from urllib.parse import urlsplit, urlunsplit
-
-    import httpx
-
-    parsed = urlsplit(tts_api_url.rstrip("/"))
-    service_root = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
-    health_url = service_root + "/health" if service_root else None
-    synth_url = tts_api_url.rstrip("/")
-    for url in (h for h in (health_url, synth_url) if h):
-        try:
-            with httpx.Client(timeout=3.0) as client:
-                resp = client.get(url)
-        except Exception as exc:
-            logger.warning("TTS health check failed for %s: %s", url, exc)
-            continue
-        if resp.status_code == 200:
-            return {"status": "ok", "endpoint": url, "code": 200}
-        if "synthesize" in url and resp.status_code in (405, 422):
-            return {"status": "ok", "endpoint": url, "code": resp.status_code, "note": "POST-only"}
-    return {"status": "error", "reason": "unreachable"}
-
-
-def _probe_kws(kws_model_dir):
-    from pathlib import Path
-
-    p = Path(kws_model_dir)
-    if not p.exists():
-        return {"status": "missing", "reason": "dir not found: %s" % kws_model_dir}
-    matches = list(p.glob("encoder*chunk-*.onnx"))
-    if not matches and all(
-        (p / name).exists() for name in ("encoder.onnx", "decoder.onnx", "joiner.onnx")
-    ):
-        matches = [p / "encoder.onnx"]
-    if not matches:
-        return {"status": "missing", "reason": "no encoder*.onnx in %s" % kws_model_dir}
-    return {"status": "ok", "model": matches[0].name}
-
-
-_LLM_PROBE_CACHE = {"payload": None, "ts": 0.0}
-_LLM_PROBE_TTL_S = 5.0
-
-
-def _now():
-    return time.time()
-
-
-def _resolve_service_targets(app):
-    from .jarvis_mode import JarvisConfig
-
-    cfg = JarvisConfig.from_env()
-    return cfg.llm_api_url, cfg.tts_api_url
-
-
-async def llm_status(request):
-    llm_url, tts_url = _resolve_service_targets(request.app)
-    kws_dir = os.environ.get("JARVIS_KWS_MODEL_DIR", "D:/AI/models/sherpa-onnx/models/kws/bt-en")
-    now = _now()
-    cached = _LLM_PROBE_CACHE
-    if cached["payload"] is not None and (now - cached["ts"]) < _LLM_PROBE_TTL_S:
-        llm_payload = dict(cached["payload"])
-    else:
-        llm_payload = _probe_llm(llm_url)
-        cached["payload"] = llm_payload
-        cached["ts"] = now
-    loop = asyncio.get_running_loop()
-    tts_future = loop.run_in_executor(None, _probe_tts, tts_url)
-    kws_future = loop.run_in_executor(None, _probe_kws, kws_dir) if kws_dir else None
-    tts_payload, kws_payload = await asyncio.gather(
-        tts_future,
-        kws_future
-        if kws_future is not None
-        else asyncio.sleep(
-            0, result={"status": "missing", "reason": "kws_model_dir not configured"}
-        ),
-    )
-    overall = "ok"
-    for p in (llm_payload, tts_payload, kws_payload):
-        if p.get("status") in ("error", "missing"):
-            overall = "error"
-            break
-        if p.get("status") == "degraded" and overall == "ok":
-            overall = "degraded"
-    return web.json_response(
-        {
-            "ts": now,
-            "overall": overall,
-            "llm": {"url": llm_url, **llm_payload},
-            "tts": {"url": tts_url, **tts_payload},
-            "kws": {"model_dir": kws_dir, **kws_payload},
-        }
-    )
-
-
-async def tts_health(request):
-    _llm_url, tts_url = _resolve_service_targets(request.app)
-    payload = await asyncio.get_running_loop().run_in_executor(None, _probe_tts, tts_url)
-    return web.json_response({"ts": _now(), "url": tts_url, **payload})
-
-
-def _wav_chunk_header(sample_rate: int, channels: int, bits_per_sample: int = 16) -> bytes:
-    """Return a 44-byte canonical PCM WAV header for the given format."""
-    riff = b"RIFF"
-    wave = b"WAVE"
-    fmt_ = b"fmt "
-    data = b"data"
-    audio_format = 1  # PCM
-    byte_rate = sample_rate * channels * bits_per_sample // 8
-    block_align = channels * bits_per_sample // 8
-    fmt_chunk_size = 16
-    return (
-        riff
-        + b"\x00\x00\x00\x00"  # placeholder; caller fills RIFF size after data
-        + wave
-        + fmt_
-        + fmt_chunk_size.to_bytes(4, "little")
-        + audio_format.to_bytes(2, "little")
-        + channels.to_bytes(2, "little")
-        + sample_rate.to_bytes(4, "little")
-        + byte_rate.to_bytes(4, "little")
-        + block_align.to_bytes(2, "little")
-        + bits_per_sample.to_bytes(2, "little")
-        + data
-        + b"\x00\x00\x00\x00"  # placeholder; caller fills data size after data
-    )
-
-
-def build_tts_synthesize_payload(upstream_json: dict) -> bytes:
-    """Wrap a voice_clone_api /v1/synthesize response in a playable WAV blob.
-
-    The upstream returns ``{"pcm16_base64": "...", "sample_rate": 24000, ...}``;
-    browsers need a RIFF/WAVE container to play it via HTML5 ``<audio>``.
-    Defaults: sample_rate=24000, channels=1 (MiniMax ``speech-2.8-hd`` shape).
-    """
-    import base64 as _b64
-
-    pcm_b64 = upstream_json.get("pcm16_base64")
-    if not pcm_b64:
-        raise ValueError(
-            "upstream /v1/synthesize response missing pcm16_base64; "
-            f"keys={list(upstream_json.keys())}"
-        )
-    pcm = _b64.b64decode(pcm_b64)
-    sample_rate = int(upstream_json.get("sample_rate") or 24000)
-    channels = int(upstream_json.get("channels") or 1)
-    header = _wav_chunk_header(sample_rate, channels)
-    out = bytearray(header)
-    out[4:8] = (len(out) + len(pcm) - 8).to_bytes(4, "little")
-    out[40:44] = len(pcm).to_bytes(4, "little")
-    out.extend(pcm)
-    return bytes(out)
-
-
-async def _tts_synthesize_handler(request):
-    """POST /api/tts/synthesize -- wrap voice_clone_api into playable WAV.
-
-    Body: ``{"text": "..."}`` (voice_id is read from ``JARVIS_TTS_VOICE_ID``).
-    Returns ``audio/wav`` bytes on 200; 400 on empty text; 502 on upstream error.
-    """
-    import httpx as _httpx
-
-    try:
-        data = await request.json()
-    except Exception:
-        return web.json_response({"error": "invalid json"}, status=400)
-    text = (data.get("text") or "").strip()
-    if not text:
-        return web.json_response({"error": "text is required"}, status=400)
-    # Reuse the same JARVIS_TTS_* env that jarvis_mode.py uses, so behavior
-    # stays in sync with the audio path used by the WebRTC speaker track.
-    tts_api_url = os.environ.get("JARVIS_TTS_API_URL", "http://127.0.0.1:8985/v1/synthesize")
-    voice_id = os.environ.get("JARVIS_TTS_VOICE_ID", "minimax_man_33333")
-    body = {
-        "text": text,
-        "voice_id": voice_id,
-        "model": os.environ.get("MINIMAX_DEFAULT_MODEL", "speech-2.8-hd"),
-        "language_boost": os.environ.get("MINIMAX_LANGUAGE_BOOST", "Chinese"),
-        "streaming": False,
-    }
-    try:
-        async with _httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(tts_api_url, json=body)
-    except Exception as exc:
-        logger.warning("tts_synthesize: upstream unreachable: %s", exc)
-        return web.json_response(
-            {"error": "upstream unreachable", "reason": str(exc)[:120]}, status=502
-        )
-    if resp.status_code >= 500:
-        return web.json_response(
-            {"error": "upstream error", "status": resp.status_code}, status=502
-        )
-    try:
-        upstream_json = resp.json()
-    except Exception as exc:
-        return web.json_response(
-            {"error": "upstream non-json", "reason": str(exc)[:120]}, status=502
-        )
-    try:
-        wav = build_tts_synthesize_payload(upstream_json)
-    except ValueError as exc:
-        return web.json_response(
-            {"error": "upstream payload invalid", "reason": str(exc)[:120]}, status=502
-        )
-    return web.Response(body=wav, content_type="audio/wav")
 
 
 async def llm_message(request):
@@ -1312,58 +1103,6 @@ def _asr_bridge_sync() -> None:
         _asr_bridge_ensure(api_base, asr_cfg.get("model", ""), asr_cfg.get("api_key", ""))
     else:
         _asr_bridge_stop()
-
-
-def _probe_summary(summary_cfg):
-    """Lightweight reachability probe for the summary model endpoint.
-    Mirrors _probe_llm but with a stricter timeout and tolerates non-model
-    responses (501 / 404 / etc). Anything that returns JSON is "ok".
-    """
-    import httpx
-
-    api_base = (summary_cfg or {}).get("api_base", "").rstrip("/")
-    if not api_base:
-        return {"ok": False, "reason": "api_base empty"}
-    try:
-        with httpx.Client(timeout=2.0) as client:
-            resp = client.get(api_base + "/models")
-        if resp.status_code == 200:
-            return {"ok": True, "endpoint": api_base + "/models", "code": 200}
-        return {"ok": False, "reason": "http %d" % resp.status_code}
-    except Exception as exc:
-        return {"ok": False, "reason": str(exc)[:120]}
-
-
-def _probe_asr(asr_cfg):
-    """Probe reachability of the ASR slot.
-
-    The user-facing ``api_base`` is an http(s) *provider* URL. The WebUI does
-    not connect to it directly; it connects to a fixed internal bridge
-    (``ASR_BRIDGE_HTTP``), which the server keeps pointed at the upstream. So:
-
-    - empty api_base  -> local in-process paraformer is the intended primary
-                         path; this is a valid state (ok, no probe).
-    - http(s)://       -> probe the internal bridge ``/health`` (the WebUI's
-                         actual connection target), not the upstream.
-    - ws(s)://          -> operator override (ASR_URL env); not probed, treated ok.
-    """
-    api_base = (asr_cfg or {}).get("api_base", "")
-    if not api_base:
-        return {"ok": True, "note": "local in-process paraformer"}
-    if api_base.startswith("http://") or api_base.startswith("https://"):
-        import httpx
-
-        try:
-            with httpx.Client(timeout=2.0) as client:
-                resp = client.get(ASR_BRIDGE_HTTP + "/health")
-            if resp.status_code == 200:
-                return {"ok": True, "endpoint": ASR_BRIDGE_HTTP + "/health", "code": 200}
-            return {"ok": False, "reason": "http %d (asr bridge)" % resp.status_code}
-        except Exception as exc:
-            return {"ok": False, "reason": str(exc)[:120]}
-    if api_base.startswith("ws://") or api_base.startswith("wss://"):
-        return {"ok": True, "endpoint": api_base, "note": "external ws override (not probed)"}
-    return {"ok": False, "reason": "api_base must be http(s) or ws override"}
 
 
 def _log_config_change(slot, changed_fields, redacted_values, events_dir=None):
