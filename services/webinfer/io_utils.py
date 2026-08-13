@@ -74,8 +74,46 @@ def _file_url_to_path(url: str) -> str | None:
     return unquote(parsed.path)
 
 
+def is_data_url(raw: str) -> bool:
+    """Return True when ``raw`` starts with a ``data:`` URL prefix."""
+    return isinstance(raw, str) and raw.startswith("data:")
+
+
+def normalize_image_b64(raw: str) -> str:
+    """Normalize a raw base64 string or a ``data:`` URL into bare base64.
+
+    Accepts both raw base64 (padded or unpadded) and a full data URL of the
+    form ``data:image/<fmt>;base64,<b64>`` (the prefix is stripped and the
+    payload is returned).  The payload must decode to non-empty bytes;
+    anything else raises ``ValueError`` with a stable, actionable message
+    (约法三章 — explicit error, never silently swallowed).
+    """
+    if not isinstance(raw, str):
+        raise ValueError("image_b64 must be a string")
+    image_b64 = raw.strip()
+    if not image_b64:
+        raise ValueError("image_b64 is empty")
+    if is_data_url(image_b64):
+        comma = image_b64.find(",")
+        if comma == -1 or "base64" not in image_b64[:comma]:
+            raise ValueError("data URL must be base64")
+        image_b64 = image_b64[comma + 1 :].strip()
+        if not image_b64:
+            raise ValueError("data URL has no base64 payload")
+    # Accept both padded and unpadded base64 (some frontends strip '=');
+    # anything that cannot decode is an explicit error.
+    padded = image_b64 + "=" * (-len(image_b64) % 4)
+    try:
+        decoded = base64.b64decode(padded, validate=True)
+    except Exception as exc:
+        raise ValueError("is not valid base64") from exc
+    if not decoded:
+        raise ValueError("decodes to empty bytes")
+    return image_b64
+
+
 def _file_to_data_url(path: str, max_pixels: int = 0) -> str:
-    if path.startswith("data:"):
+    if is_data_url(path):
         return _resize_data_url_if_needed(path, max_pixels)
     return _file_to_data_url_cached(path, max_pixels)
 

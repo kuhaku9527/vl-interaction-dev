@@ -8,7 +8,6 @@ frame reference parsing, and the main-model call previously on ``StreamingInferA
 
 from __future__ import annotations
 
-import base64
 import copy
 import json
 import logging
@@ -23,6 +22,7 @@ from typing import Any
 
 from adapter_types import SessionState
 from aiohttp import web
+from io_utils import normalize_image_b64
 from openai import AsyncOpenAI
 from prompt_assembly import _build_live_visual_messages
 from prompt_building import (
@@ -110,30 +110,15 @@ def _parse_live_frames(payload: dict[str, Any]) -> list[dict[str, Any]]:
             raise web.HTTPBadRequest(
                 text=f"frames[{index}].image_b64 must be a non-empty base64 string"
             )
-        image_b64 = image_b64.strip()
-        # Tolerate a full data URI (``data:image/<fmt>;base64,<b64>``): the
-        # contract stays raw base64, but a caller that passes a complete data
-        # URL is accepted (prefix stripped) instead of 400ing. The normalized
-        # output is always raw base64 so the downstream visual message builder
-        # re-prepends its own ``data:image/jpeg;base64,`` prefix exactly once.
-        if image_b64.startswith("data:"):
-            comma = image_b64.find(",")
-            if comma == -1 or "base64" not in image_b64[:comma]:
-                raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 data URL must be base64")
-            image_b64 = image_b64[comma + 1 :].strip()
-            if not image_b64:
-                raise web.HTTPBadRequest(
-                    text=f"frames[{index}].image_b64 data URL has no base64 payload"
-                )
-        # Accept both padded and unpadded base64 (some frontends strip '=');
-        # anything that cannot decode is an explicit 400.
-        padded = image_b64 + "=" * (-len(image_b64) % 4)
+        # Shared normalization (io_utils.normalize_image_b64): tolerate a full
+        # data URI (``data:image/<fmt>;base64,<b64>``) by stripping the prefix
+        # and validate the payload decodes. The normalized output is always
+        # raw base64 so the downstream visual message builder re-prepends its
+        # own ``data:image/jpeg;base64,`` prefix exactly once.
         try:
-            decoded = base64.b64decode(padded, validate=True)
-        except Exception as exc:
-            raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 is not valid base64") from exc
-        if not decoded:
-            raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 decodes to empty bytes")
+            image_b64 = normalize_image_b64(image_b64)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=f"frames[{index}].image_b64 {exc}") from exc
         ts_ms = item.get("ts_ms")
         if ts_ms is not None and not isinstance(ts_ms, (int, float)):
             raise web.HTTPBadRequest(text=f"frames[{index}].ts_ms must be a number")
@@ -1412,9 +1397,14 @@ class InferLoopMixin:
         raise web.HTTPBadRequest(text="unsupported image reference kind")
 
     def _save_base64_frame(self, data_url: str, state: SessionState) -> str:
-        match = re.match(r"data:image/\w+;base64,(.+)", data_url)
-        if not match:
-            raise web.HTTPBadRequest(text="invalid data URL format")
+        # Shared normalization (io_utils.normalize_image_b64) validates that
+        # the payload is a decodable base64 image (bare or data-URI prefixed);
+        # the original value is returned unchanged so memory / output records
+        # keep the exact data URL the caller supplied.
+        try:
+            normalize_image_b64(data_url)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text="invalid data URL format") from exc
         state.session_frame_counter += 1
         return data_url
 
