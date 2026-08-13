@@ -2278,8 +2278,11 @@ limitations under the License.
             const interval = parseFloat(processEvery.value) || 1.0;
 
             if (websocket && websocket.readyState === WebSocket.OPEN) {
+                // P1-3 (audit 2026-08-13): backend ws_handler.py only handles
+                // `update_process_interval`; the old `update_processing` name was
+                // silently dropped so the RTSP Processing Interval never applied.
                 websocket.send(JSON.stringify({
-                    type: 'update_processing',
+                    type: 'update_process_interval',
                     process_interval: interval
                 }));
             }
@@ -2297,7 +2300,7 @@ limitations under the License.
 
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 websocket.send(JSON.stringify({
-                    type: 'update_processing',
+                    type: 'update_process_interval',
                     process_interval: interval
                 }));
             }
