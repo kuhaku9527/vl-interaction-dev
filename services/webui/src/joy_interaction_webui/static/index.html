@@ -2135,7 +2135,19 @@ limitations under the License.
                 element.classList.remove('applied');
             }, 600);
         }
-        updatePromptAvailability();
+        // P0-1 sibling (audit 2026-08-13): updatePromptAvailability() calls
+        // syncSpeechButtons(), which lives in the post-main speech_input.js script
+        // (loaded after this inline script). Deferring the initial paint to
+        // DOMContentLoaded keeps the same load behavior while guaranteeing the
+        // helper exists — an immediate call would throw ReferenceError before
+        // window.JoyWs.register() runs (WS bootstrap lost).
+        if (typeof syncSpeechButtons === 'function') {
+            updatePromptAvailability();
+        } else {
+            window.addEventListener('DOMContentLoaded', () => {
+                updatePromptAvailability();
+            });
+        }
         resizePromptInput();
 
         // refreshModelsBtn was removed by the Block 3 services-panel refactor (the
