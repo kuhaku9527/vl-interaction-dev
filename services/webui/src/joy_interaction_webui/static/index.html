@@ -2170,7 +2170,16 @@ limitations under the License.
             updateStatus,
             fetchModels,
             getWebSocket: () => websocket,
-            setWebSocket: (ws) => { websocket = ws; },
+            // P1-1 (audit 2026-08-13): screen_capture.js / live_ui.js / capture
+            // helpers resolve the socket via window.websocket, but the lexical
+            // `let websocket` is not visible on window — without this mirror the
+            // screen-capture and live-camera frame pipelines short-circuit on
+            // `!window.websocket`. Also clears window.websocket on close because
+            // joy_ws.js calls setWebSocket(null) in onclose/reset paths.
+            setWebSocket: (ws) => {
+                websocket = ws;
+                window.websocket = ws;
+            },
             getSessionId: () => sessionId,
             installLlmReplyHandler,
             dispatchServerMessage
