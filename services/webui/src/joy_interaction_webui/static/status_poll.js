@@ -304,22 +304,29 @@
             } else {
                 startExtendedStatusPoll();
             }
-        })();
 
-if (typeof window !== 'undefined') {
-    window.JoyStatusPoll = {
-        renderJarvisStatus,
-        pollJarvisStatus,
-        startJarvisStatusPoll,
-        stopJarvisStatusPoll,
-        renderLiveStatus,
-        pollLiveStatus,
-        startLiveStatusPoll,
-        stopLiveStatusPoll,
-        pollExtendedStatus,
-        startExtendedStatusPoll,
-        stopExtendedStatusPoll,
-        startServiceStatusPoll,
-        stopServiceStatusPoll
-    };
-}
+            // Split-introduced load crash (same family as P0-1 in audit 2026-08-13):
+            // the batch-3 extraction placed this namespace OUTSIDE the IIFE, but every
+            // function it references is scoped INSIDE it — bare identifiers threw
+            // ReferenceError at load and aborted this script (polls above had already
+            // auto-started, so the only loss was the namespace + a console error).
+            // Attach from inside the IIFE where the functions are in scope; nothing is
+            // deleted (recorded dead export, scope guard only).
+            if (typeof window !== 'undefined') {
+                window.JoyStatusPoll = {
+                    renderJarvisStatus,
+                    pollJarvisStatus,
+                    startJarvisStatusPoll,
+                    stopJarvisStatusPoll,
+                    renderLiveStatus,
+                    pollLiveStatus,
+                    startLiveStatusPoll,
+                    stopLiveStatusPoll,
+                    pollExtendedStatus,
+                    startExtendedStatusPoll,
+                    stopExtendedStatusPoll,
+                    startServiceStatusPoll,
+                    stopServiceStatusPoll
+                };
+            }
+        })();
