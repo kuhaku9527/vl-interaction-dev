@@ -494,6 +494,19 @@ async def on_startup(app):
         cfg.asr_model_dir = os.environ["JARVIS_ASR_MODEL_DIR"]
     app["jarvis_manager"] = JarvisSessionManager(config=cfg)
 
+    # P1-2 (audit): align the internal ASR bridge with the persisted services
+    # config at startup. Previously the bridge was only (re)started by PUT
+    # /api/services/config, so after a webui restart the persisted cloud ASR
+    # api_base left browser ASR pointing at a dead bridge (ERROR_NO_FALLBACK)
+    # until an operator manually re-PUT the config. _asr_bridge_sync is a
+    # blocking subprocess op (up to 15s readiness poll) — run it in a thread
+    # and never let a bridge failure abort webui startup. When the persisted
+    # config has no asr.api_base it is a no-op (stops a stale bridge only).
+    try:
+        await asyncio.to_thread(_asr_bridge_sync)
+    except Exception as exc:
+        logger.warning("ASR bridge startup sync failed (continuing): %s", exc)
+
     async def warm_browser_asr():
         try:
             from .asr import _get_inproc_asr
