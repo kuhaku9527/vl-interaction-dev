@@ -26,13 +26,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from services.asr.jarvis.asr_provider import (
-    ASR_SPEECH_PEAK_THRESHOLD as ASR_SPEECH_PEAK_THRESHOLD,
-)
-from services.asr.jarvis.asr_provider import (
-    allow_local_failover as allow_local_failover,
-)
-
 from . import jarvis_dialog, jarvis_kws, jarvis_llm
 
 # Facade re-exports (batch 6: jarvis_config / jarvis_state split): the
@@ -72,6 +65,16 @@ from .tts_turn_common import (
 )
 from .turn_streaming import StreamingTurnConsumer
 from .vad_bypass import VadBypass
+
+# Cloud batch ASR (JARVIS_ASR_PROVIDER=cloud) emits no partials, so the 2s
+# endpoint timer is driven by PCM audio energy. Peak (0..1) above which a
+# chunk counts as speech activity. Local copy (keep in sync with
+# ``services.asr.jarvis.asr_provider.ASR_SPEECH_PEAK_THRESHOLD``) so this
+# module never imports the ``services`` top-level package at module load —
+# production runs with cwd=services/webui + PYTHONPATH=services/webui/src,
+# where ``services`` is not importable (services.asr.* is imported lazily
+# inside the ASR provider call sites, same as the pre-unification code).
+_ASR_SPEECH_PEAK_THRESHOLD = 0.01
 
 logger = logging.getLogger("joyai.jarvis")
 
@@ -1123,7 +1126,7 @@ class JarvisStateMachine:
         if provider is None or getattr(provider, "streaming", True):
             return False
         peak, _rms = self._pcm_stats(pcm)
-        if peak >= ASR_SPEECH_PEAK_THRESHOLD:
+        if peak >= _ASR_SPEECH_PEAK_THRESHOLD:
             self._last_speech_time = now
         if not self._last_speech_time or (now - self._last_speech_time) <= 2.0:
             return False
@@ -1179,7 +1182,7 @@ class JarvisStateMachine:
             self._last_speech_time = 0.0
             return
         peak, _rms = self._pcm_stats(pcm)
-        if peak >= ASR_SPEECH_PEAK_THRESHOLD:
+        if peak >= _ASR_SPEECH_PEAK_THRESHOLD:
             self._last_speech_time = now
             try:
                 delegate.on_speech_started(conf=0.9)
@@ -1241,6 +1244,10 @@ class JarvisStateMachine:
         """
         logger.error("[asr] cloud provider unreachable: %s", exc)
         self._last_speech_time = 0.0
+        # Lazy import: ``services`` is not importable at module load in the
+        # production webui layout (cwd=services/webui, PYTHONPATH=.../src).
+        from services.asr.jarvis.asr_provider import allow_local_failover
+
         if allow_local_failover():
             logger.error(
                 "[asr] degrading to local streaming provider (JARVIS_ASR_ALLOW_LOCAL_FAILOVER=1)"

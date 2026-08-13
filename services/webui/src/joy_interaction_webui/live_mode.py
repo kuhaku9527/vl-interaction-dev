@@ -59,13 +59,6 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any
 
-from services.asr.jarvis.asr_provider import (
-    ASR_SPEECH_PEAK_THRESHOLD as ASR_SPEECH_PEAK_THRESHOLD,
-)
-from services.asr.jarvis.asr_provider import (
-    allow_local_failover as allow_local_failover,
-)
-
 from .jarvis_kws import pcm_stats
 from .jarvis_mode import _is_garbage_text
 from .live_enroll import (
@@ -112,6 +105,16 @@ LIVE_ENDPOINT_TIMEOUT_S: float = 2.0
 #: Minimum gated segment length (0.3s @ 16 kHz mono int16 = 9600 bytes) before
 #: AddresseeDetector.classify is worth running — shorter blips are dropped.
 _ADDRESSEE_MIN_SEGMENT_BYTES: int = 9600
+
+#: Cloud batch ASR (JARVIS_ASR_PROVIDER=cloud) emits no partials, so speech
+#: onset + the 2s endpoint are driven by PCM audio energy. Peak (0..1) above
+#: which a chunk counts as speech activity. Local copy (keep in sync with
+#: ``services.asr.jarvis.asr_provider.ASR_SPEECH_PEAK_THRESHOLD``) so this
+#: module never imports the ``services`` top-level package at module load —
+#: production runs with cwd=services/webui + PYTHONPATH=services/webui/src,
+#: where ``services`` is not importable (services.asr.* is imported lazily
+#: inside the ASR provider call sites, same as the pre-unification code).
+_ASR_SPEECH_PEAK_THRESHOLD: float = 0.01
 
 # --- live visual context + proactive speak (spec draft-live-visual-cb.md) ---
 # Env gates (all default OFF / conservative so default behavior is unchanged):
@@ -766,7 +769,7 @@ class LiveStateMachine:
             return False
         try:
             peak, _rms = pcm_stats(pcm)
-            return peak >= ASR_SPEECH_PEAK_THRESHOLD
+            return peak >= _ASR_SPEECH_PEAK_THRESHOLD
         except Exception as exc:
             logger.debug("[live-mode] PCM energy check failed (%s)", exc)
             return False
@@ -790,6 +793,10 @@ class LiveStateMachine:
         except Exception as exc:
             logger.error("[asr] cloud provider unreachable: %s", exc)
             self._last_speech_time = 0.0
+            # Lazy import: ``services`` is not importable at module load in
+            # the production webui layout (cwd=services/webui, PYTHONPATH).
+            from services.asr.jarvis.asr_provider import allow_local_failover
+
             if allow_local_failover():
                 logger.error(
                     "[asr] degrading to local streaming provider "
