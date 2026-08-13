@@ -357,6 +357,12 @@ server.py (核心 2288→~500)
 3. **D-029 / D-026 / D-028 / D-032~034 守护路径**：chat/completions 视频 QA、parse_model_decision 唯一实现、state.lock 并发、前端命名空间契约——拆解时逐项回归
 4. **共享实现先去重后拆分**：`tts_turn_common` / `frame_parsing` / `compose_live_visual_messages` 是三个去重点，抽 helper 的 PR 应排在对应巨石拆分之前
 5. **约法三章**：被拆函数保持「必 log、不静默、增新删旧」
+6. **前端加载序守则（2026-08-13 审计补充，P0-1 教训）**：
+   - 主内联 script 加载期（DOMContentLoaded 前）**不得调用 post-main 拆分 JS 的函数**（getVlmDisplayText/syncSpeechButtons 等）——需立即调用则包 `typeof fn === "function"` 守卫 + DOMContentLoaded 兜底；
+   - pre-main JS（vlm_history/llm_reply_ui/ws_dispatcher）**不得引用主内联声明的 let/const**（命名空间导出用 `typeof x !== "undefined" ? x : undefined` 槽位）；
+   - 拆分 JS 的 `window.JoyXxx` 导出块**必须在 IIFE 内**（D-033 additive 模式），不得在 IIFE 外引用 IIFE 作用域符号；
+   - 静态契约测试只 grep 不执行 JS——**新拆分必须跑 node 全加载序复现脚本**（pre-main → 主内联 → post-main → DOMContentLoaded）验证无 ReferenceError。
+7. **审计先行（2026-08-13 新增）**：巨石/跨模块改动后，派只读审计轮（webinfer/webui-后端/前端+整体三面）找真 bug、死代码、重复实现、过度拆分——再决定修复/合并/拆除。
 
 ### 只读确认
 - ✅ 未创建/修改任何代码文件（唯一写入：本报告 + doc/architecture/ 目录）
