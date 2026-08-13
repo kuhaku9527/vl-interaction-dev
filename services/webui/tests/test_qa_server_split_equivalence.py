@@ -144,6 +144,37 @@ MOVED = {
 }
 
 
+# Functions that intentionally diverge from the pre-split baseline because of
+# a LATER bugfix (not part of the mechanical split). For each entry the strict
+# equality claim is waived, but the test still pins that no existing WS message
+# branch was removed (the fix may only ADD handling).
+_BUGFIX_DIVERGED = {
+    "websocket_handler": (
+        "audit-frontend-2026-08-13 P1-4: update_frames_per_batch now writes "
+        "back the new value (previously the branch only echoed the old one)."
+    ),
+}
+
+
+def _extract_message_branches(func_source: str) -> set[str]:
+    """Collect the WS message type literals compared as ``t == \"...\"``."""
+    tree = ast.parse(func_source)
+    types: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Compare)
+            and isinstance(node.left, ast.Name)
+            and node.left.id == "t"
+            and len(node.ops) == 1
+            and isinstance(node.ops[0], ast.Eq)
+            and len(node.comparators) == 1
+            and isinstance(node.comparators[0], ast.Constant)
+            and isinstance(node.comparators[0].value, str)
+        ):
+            types.add(node.comparators[0].value)
+    return types
+
+
 @pytest.mark.parametrize("name,module", sorted(MOVED.items()))
 def test_moved_function_mechanically_equivalent(baseline_server, name, module):
     """Moved function body matches pre-split implementation after normalization."""
@@ -155,6 +186,17 @@ def test_moved_function_mechanically_equivalent(baseline_server, name, module):
     new = _extract_defs(new_source, {name}).get(name)
     assert old is not None, f"{name} not found in pre-split server.py"
     assert new is not None, f"{name} not found in {module}"
+
+    if name in _BUGFIX_DIVERGED:
+        # Legitimate post-split bugfix: the body diverges from the pre-split
+        # baseline, so the equality claim is waived. We still pin that NO
+        # existing WS message branch was dropped — the fix is additive.
+        missing_branches = _extract_message_branches(old) - _extract_message_branches(new)
+        assert not missing_branches, (
+            f"function {name} dropped WS message branch(es): {sorted(missing_branches)}\n"
+            f"reason for divergence: {_BUGFIX_DIVERGED[name]}"
+        )
+        return
 
     assert _normalize(old) == _normalize(new), (
         f"function {name} differs from pre-split implementation:\n"

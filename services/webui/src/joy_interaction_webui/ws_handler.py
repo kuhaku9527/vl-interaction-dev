@@ -108,8 +108,25 @@ async def websocket_handler(request):
                             }
                         )
                     elif t == "update_frames_per_batch":
+                        # P1-4 (audit-frontend-2026-08-13): this branch used to
+                        # echo the OLD value without ever writing the new one,
+                        # so the frontend setting was silently ignored. Write
+                        # the requested batch size back to the shared video
+                        # pipeline config, then reply with the ACTUAL value
+                        # that took effect (invalid input keeps the previous
+                        # value instead of silently dropping the reply).
                         from .video_processor import VideoProcessorTrack
 
+                        try:
+                            new_batch = max(1, int(data.get("frames_per_batch") or 1))
+                        except (TypeError, ValueError):
+                            new_batch = VideoProcessorTrack.frames_per_batch
+                            logger.warning(
+                                "update_frames_per_batch: invalid value %r, keeping %s",
+                                data.get("frames_per_batch"),
+                                new_batch,
+                            )
+                        VideoProcessorTrack.frames_per_batch = new_batch
                         await ws.send_json(
                             {
                                 "type": "frames_per_batch_updated",
