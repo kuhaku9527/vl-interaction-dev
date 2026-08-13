@@ -323,6 +323,13 @@ if (typeof window !== 'undefined') {
         connectWebSocket,
         dispatchServerMessage,
         resetSession,
-        sendDebugFlags
+        // Split-introduced load crash (same family as P0-1 in audit 2026-08-13):
+        // sendDebugFlags is declared in the MAIN inline script, which loads AFTER
+        // this pre-main file — a bare shorthand here throws ReferenceError at load
+        // and aborts this script before the namespace is attached. `typeof` is safe
+        // on not-yet-declared identifiers; the export slot is preserved so the
+        // namespace shape is unchanged and the value resolves once the function is
+        // defined (recorded as dead export, not deleted — scope guard).
+        sendDebugFlags: typeof sendDebugFlags !== 'undefined' ? sendDebugFlags : undefined
     };
 }
