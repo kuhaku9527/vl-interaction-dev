@@ -6,7 +6,6 @@ Main server that handles WebRTC connections and serves the web interface
 """
 
 import asyncio
-import copy
 import json
 import logging
 import os as _os_for_accesslog  # access log path
@@ -147,6 +146,27 @@ from .service_probe import (  # noqa: E402
 )
 from .service_probe import llm_status as llm_status  # noqa: E402
 from .service_probe import tts_health as tts_health  # noqa: E402
+from .services_config import _SERVICES_CONFIG_DEFAULTS as _SERVICES_CONFIG_DEFAULTS  # noqa: E402
+from .services_config import _SERVICES_CONFIG_PATH as _SERVICES_CONFIG_PATH  # noqa: E402
+
+# Facade re-exports from services_config (live services config + persistence).
+from .services_config import (  # noqa: E402
+    _default_services_config_path as _default_services_config_path,
+)
+from .services_config import _log_config_change as _log_config_change  # noqa: E402
+from .services_config import (  # noqa: E402
+    _merge_services_config_file as _merge_services_config_file,
+)
+from .services_config import _persist_services_config as _persist_services_config  # noqa: E402
+from .services_config import _probe_result_ok as _probe_result_ok  # noqa: E402
+from .services_config import _probe_result_reason as _probe_result_reason  # noqa: E402
+from .services_config import _probe_slot as _probe_slot  # noqa: E402
+from .services_config import (  # noqa: E402
+    _reload_services_config_from_file as _reload_services_config_from_file,
+)
+from .services_config import _services_config as _services_config  # noqa: E402
+from .services_config import _validate_and_apply_slot as _validate_and_apply_slot  # noqa: E402
+from .services_config import _validate_api_base as _validate_api_base  # noqa: E402
 from .tts import setup_tts_routes  # noqa: E402
 from .tts_endpoint import _tts_synthesize_handler as _tts_synthesize_handler  # noqa: E402
 from .tts_endpoint import _wav_chunk_header as _wav_chunk_header  # noqa: E402
@@ -479,382 +499,11 @@ async def on_shutdown(app):
             logger.warning("error closing peer connection during shutdown: %s", exc)
 
 
-# Default in-memory services config. This is the base layer; any persisted
-# file (``config/services.json``) is deep-merged ON TOP of these at startup
-# (see ``_merge_services_config_file``) so the file only needs to override what
-# differs from the defaults. Kept as a separate constant so a "restart" can be
-# simulated by resetting to it and re-applying the file.
-_SERVICES_CONFIG_DEFAULTS: dict = {
-    "llm": {
-        "api_base": "http://127.0.0.1:8070/v1",
-        "model": "streaming-infer-adapter",
-        "api_key": "",
-    },
-    "summary": {"api_base": "https://api.minimaxi.com/v1", "model": "MiniMax-VL-01", "api_key": ""},
-    "tts": {"api_base": "http://127.0.0.1:8985/v1/synthesize", "model": "", "api_key": ""},
-    "asr": {
-        "api_base": "",
-        "model": "D:/AI/models/sherpa-onnx/models/asr/streaming-paraformer-bilingual-zh-en",
-        "api_key": "",
-    },
-}
-
-# Live, mutable services config — the single source of truth the webui owns.
-_services_config: dict = copy.deepcopy(_SERVICES_CONFIG_DEFAULTS)
-
-
-def _default_services_config_path() -> str:
-    """Absolute path of the persisted services config (repo-root ``config/``)."""
-    repo_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    )
-    return os.path.join(repo_root, "config", "services.json")
-
-
-# Overridable in tests (monkeypatch before the PUT handler runs) so persistence
-# can be exercised against a tmp_path instead of the real repo config dir.
-_SERVICES_CONFIG_PATH = _default_services_config_path()
-
-
-def _merge_services_config_file(target: dict, path: str) -> bool:
-    """Deep-merge the on-disk ``services.json`` over ``target`` (in place).
-
-    Only the known slots (``llm`` / ``summary`` / ``tts`` / ``asr``) and known
-    fields (``api_base`` / ``model`` / ``api_key``) are merged; anything else
-    is ignored so a partially-written or hand-edited file can never inject
-    unexpected keys into the runtime config.
-
-    Returns
-    -------
-    bool
-        ``True`` if the file existed and parsed (even if empty / partial);
-        ``False`` if it was absent.
-
-    Notes
-    -----
-    Raises nothing — a missing or corrupt file must not abort webui startup;
-    it simply falls back to the in-memory defaults (logging the reason). This
-    is the load path, not the validation gate; PUT-time validation lives in
-    ``_validate_and_apply_slot``.
-    """
-    if not os.path.exists(path):
-        return False
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-    except Exception as exc:
-        logger.warning("could not read services config file %s: %s", path, exc)
-        return False
-    if not isinstance(data, dict):
-        logger.warning("services config file %s is not a JSON object; ignoring", path)
-        return False
-    for slot, slot_cfg in data.items():
-        if slot not in ("llm", "summary", "tts", "asr"):
-            continue
-        if not isinstance(slot_cfg, dict):
-            continue
-        dst = target.setdefault(slot, {})
-        for key in ("api_base", "model", "api_key"):
-            val = slot_cfg.get(key)
-            if isinstance(val, str):
-                dst[key] = val
-    return True
-
-
-def _reload_services_config_from_file() -> None:
-    """Reset to defaults and re-apply the persisted file.
-
-    Used to simulate a webui restart in tests, and if ever needed, to force a
-    re-read of ``config/services.json`` without a full process restart.
-    """
-    _services_config.clear()
-    _services_config.update(copy.deepcopy(_SERVICES_CONFIG_DEFAULTS))
-    _merge_services_config_file(_services_config, _SERVICES_CONFIG_PATH)
-
-
-def _persist_services_config() -> None:
-    """Atomically write the current ``_services_config`` to ``services.json``.
-
-    Writes to a temp file in the same directory then ``os.replace`` so a reader
-    never observes a half-written file. The file is ``chmod 0600`` (local-only,
-    gitignored) because it may carry ``api_key`` plaintext — see the api_key
-    persistence tradeoff recorded in the issue. Raises on directory creation /
-    write failure: persistence is a hard requirement of a successful PUT, not a
-    best-effort nicety.
-    """
-    path = os.path.abspath(_SERVICES_CONFIG_PATH)
-    directory = os.path.dirname(path)
-    os.makedirs(directory, exist_ok=True)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(_services_config, fh, ensure_ascii=False, indent=2)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp_path, path)
-    os.chmod(path, 0o600)
-
-
-def _validate_api_base(api_base: str) -> str | None:
-    """Validate the ``api_base`` format.
-
-    Returns ``None`` when the value is acceptable (empty string, meaning
-    "use default / local", or a syntactically valid http(s) / ws(s) URL).
-    Returns a human-readable reason string when the value must be rejected
-    (HTTP 400).
-
-    ws(s):// is allowed because the external ASR may be a websocket bridge
-    (e.g. ``asr_adapter.py`` exposing ``/ws/asr``); the webui connects to it
-    via ``aiohttp.ws_connect`` (see asr.connect_asr).
-    """
-    if not isinstance(api_base, str):
-        return "api_base must be a string"
-    if api_base != api_base.strip():
-        return "api_base must not have leading/trailing whitespace"
-    if not api_base:
-        return None
-    from urllib.parse import urlsplit
-
-    parsed = urlsplit(api_base)
-    if parsed.scheme not in ("http", "https"):
-        return "api_base must be empty or an http(s) URL"
-    if not parsed.netloc:
-        return "api_base is missing a host"
-    return None
-
-
-def _probe_result_ok(result: object) -> bool:
-    """Normalize the heterogeneous probe return shapes into a single bool.
-
-    ``_probe_summary`` / ``_probe_asr`` return ``{"ok": bool, ...}`` while
-    ``_probe_llm`` / ``_probe_tts`` return ``{"status": "ok"|"error"|...}``.
-    """
-    if not isinstance(result, dict):
-        return False
-    if "ok" in result:
-        return bool(result.get("ok"))
-    if "status" in result:
-        return result.get("status") == "ok"
-    return False
-
-
-def _probe_result_reason(result: object, default: str = "probe failed") -> str:
-    """Extract a short, capped reason string from a probe result."""
-    if not isinstance(result, dict):
-        return default
-    reason = result.get("reason") or default
-    return str(reason)[:200]
-
-
-async def _probe_slot(slot: str, proposed: dict, loop: asyncio.AbstractEventLoop) -> dict | None:
-    """Run the reachability probe for one slot.
-
-    Returns the probe result dict, or ``None`` when no probe applies (e.g. an
-    HTTP slot whose ``api_base`` is empty). ASR is special: it probes either an
-    http(s) ``api_base`` OR a local model directory, so it is always probed
-    when reachability is in scope.
-    """
-    api_base = proposed.get("api_base", "")
-    if slot == "llm":
-        return await loop.run_in_executor(None, _probe_llm, api_base)
-    if slot == "summary":
-        return await loop.run_in_executor(None, _probe_summary, {"api_base": api_base})
-    if slot == "tts":
-        return await loop.run_in_executor(None, _probe_tts, api_base)
-    if slot == "asr":
-        return await loop.run_in_executor(
-            None, _probe_asr, {"api_base": api_base, "model": proposed.get("model", "")}
-        )
-    return None
-
-
-async def _validate_and_apply_slot(
-    slot: str, incoming: dict, loop: asyncio.AbstractEventLoop
-) -> tuple[dict | None, bool]:
-    """Validate and apply one incoming slot to ``_services_config``.
-
-    Per 约法三章②, invalid config is rejected with an explicit structured body
-    and is NEVER silently written. Only the fields the caller actually changes
-    are validated / probed — the current persisted state is already trusted, so
-    a no-op PUT never triggers a reachability probe.
-
-    Parameters
-    ----------
-    slot: str
-        Service slot (``llm`` / ``summary`` / ``tts`` / ``asr``).
-    incoming: dict
-        The ``{api_base, model, api_key}`` object for this slot from the PUT.
-    loop: asyncio.AbstractEventLoop
-        Event loop used to run the (sync) probes off the aiohttp loop.
-
-    Returns
-    -------
-    tuple[dict | None, bool]
-        ``(invalid_entry, applied)``. ``invalid_entry`` is the structured 4xx
-        body fragment (including its own ``status``) when the slot is rejected,
-        else ``None``. ``applied`` is ``True`` when at least one field was
-        committed. Nothing is applied when the slot is rejected.
-    """
-    cur = _services_config.setdefault(slot, {})
-    changing = [
-        k for k in ("api_base", "model", "api_key") if k in incoming and incoming[k] != cur.get(k)
-    ]
-    if not changing:
-        return None, False
-
-    # 1) Format gate (before applying): api_base must be empty or a valid
-    #    http(s) URL. Reject typos like "htp://" with a 400.
-    if "api_base" in changing:
-        fmt_err = _validate_api_base(incoming["api_base"])
-        if fmt_err is not None:
-            return (
-                {
-                    "error": fmt_err,
-                    "slot": slot,
-                    "field": "api_base",
-                    "reason": fmt_err,
-                    "status": 400,
-                },
-                False,
-            )
-
-    # 2) Reachability gate (before applying): probe the new endpoint. Never
-    #    silently accept an unreachable service (no local fallback, D-080).
-    #    For non-ASR slots an empty api_base means "use default / local" — it
-    #    is valid and must NOT be probed.
-    #    ASR: the user-facing api_base is an http(s) provider URL. When set we
-    #    must bring the internal bridge up BEFORE the probe (and stop it when
-    #    the slot reverts to local). Empty api_base = local in-process (no probe).
-    proposed_api_base = incoming.get("api_base", cur.get("api_base", ""))
-    if slot == "asr" and changing:
-        proposed_model = incoming.get("model", cur.get("model", ""))
-        proposed_key = incoming.get("api_key", cur.get("api_key", ""))
-        # Bridge start/stop is a blocking subprocess op (up to 15s readiness
-        # poll). Run it off the aiohttp event loop so saving a cloud ASR config
-        # never freezes the whole WebUI. Per code-review BLOCKING fix.
-        if proposed_api_base:
-            await loop.run_in_executor(
-                None, _asr_bridge_ensure, proposed_api_base, proposed_model, proposed_key
-            )
-        else:
-            await loop.run_in_executor(None, _asr_bridge_stop)
-    reachability_in_scope = (
-        (("api_base" in changing) and bool(proposed_api_base))
-        if slot != "asr"
-        else bool(proposed_api_base) and proposed_api_base.startswith(("http://", "https://"))
-    )
-    if reachability_in_scope:
-        proposed = {
-            "api_base": proposed_api_base,
-            "model": incoming.get("model", cur.get("model", "")),
-        }
-        result = await _probe_slot(slot, proposed, loop)
-        if result is not None and not _probe_result_ok(result):
-            reason = _probe_result_reason(result, "service unreachable")
-            field = "model" if (slot == "asr" and not proposed["api_base"]) else "api_base"
-            return (
-                {
-                    "error": "service unreachable: %s" % reason,
-                    "slot": slot,
-                    "field": field,
-                    "reason": reason,
-                    "status": 422,
-                },
-                False,
-            )
-
-    # 3) Valid -> apply the change and audit-log it (ADR-0014 redaction).
-    changed_fields = []
-    redacted = {}
-    for key in ("api_base", "model", "api_key"):
-        if key in incoming and incoming[key] != cur.get(key):
-            cur[key] = incoming[key]
-            changed_fields.append(key)
-            if key == "api_key":
-                redacted["api_key"] = "***set***" if incoming[key] else "***cleared***"
-            else:
-                redacted[key] = incoming[key]
-    if changed_fields:
-        _log_config_change(slot, changed_fields, redacted)
-    return None, bool(changed_fields)
-
-
-if _merge_services_config_file(_services_config, _SERVICES_CONFIG_PATH):
-    logger.info("loaded persisted services config from %s", _SERVICES_CONFIG_PATH)
-else:
-    logger.debug("no persisted services config at %s; using defaults", _SERVICES_CONFIG_PATH)
-
-# Feed the live service config to the ASR module so it can hot-reload the
-# external ASR url/api_key without a process restart (see asr.connect_asr).
-asr_module.set_asr_config_source(_services_config)
-
-# Last asr subset we propagated, used to detect real changes and avoid
-# needless reconnect logging on every PUT. Seeded from the current asr slot
-# so the first _propagate_services_to_runtime() call does not false-trigger
-# invalidate_asr_client() / reconnect logging.
 _last_asr_propagated: dict = {
     "api_base": _services_config.get("asr", {}).get("api_base", ""),
     "api_key": _services_config.get("asr", {}).get("api_key", ""),
     "model": _services_config.get("asr", {}).get("model", ""),
 }
-
-
-def _log_config_change(slot, changed_fields, redacted_values, events_dir=None):
-    """Append one config_change event to the per-service JSONL event stream.
-
-    Aligns with ADR-0014 (``doc/adr/0014-log-event-schema.md``): writes one
-    JSON object per line to ``logs/events/webui-<UTC-YYYY-MM-DD>.jsonl`` with
-    the four required fields — ``ts`` (ISO-8601 UTC), ``level`` ∈
-    {debug,info,warn,error,critical}, ``service`` (``"webui"``) and ``event``
-    (kebab-case ``config.services.patch``). The original ``slot`` /
-    ``changed_fields`` / ``redacted_values`` are carried inside the optional
-    ``extra`` object.
-
-    PII red line (spec S-1 / D-2026-08-01-061): api_key is NEVER written in
-    plaintext — the caller already replaces it with ``***set***`` /
-    ``***cleared***``, so this helper only persists what it is given.
-
-    Parameters
-    ----------
-    slot: str
-        Service slot that changed (llm / summary / tts / asr).
-    changed_fields: list[str]
-        Names of the fields that actually changed.
-    redacted_values: dict
-        Field -> redacted representation. Non-secret fields (api_base, model)
-        may carry their plaintext; api_key must be redacted.
-    events_dir: str | None
-        Override for the events directory (used by tests to redirect output).
-        Defaults to ``<repo>/logs/events``.
-    """
-    try:
-        if events_dir is None:
-            repo_logs = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "..",
-                "..",
-                "..",
-                "..",
-                "logs",
-            )
-            events_dir = os.path.join(repo_logs, "events")
-        os.makedirs(events_dir, exist_ok=True)
-        utc_date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-        log_path = os.path.join(events_dir, "webui-%s.jsonl" % utc_date)
-        record = {
-            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "level": "info",
-            "service": "webui",
-            "event": "config.services.patch",
-            "extra": {
-                "slot": slot,
-                "changed_fields": list(changed_fields),
-                "redacted_values": dict(redacted_values),
-            },
-        }
-        with open(log_path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as exc:
-        logger.warning("failed to append config-change event: %s", exc)
 
 
 async def _services_config_handler(request):
