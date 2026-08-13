@@ -885,7 +885,13 @@ class InferLoopMixin:
             )
         ctx.user_message = user_message
 
-    def _is_forced_silence(self, state: SessionState, interaction_mode: str) -> bool:
+    def _is_forced_silence(
+        self,
+        state: SessionState,
+        interaction_mode: str,
+        *,
+        has_frames: bool = False,
+    ) -> bool:
         """Decide whether this turn is a forced-silence (no-inference) turn.
 
         Forced silence only applies to the ``live`` mode: it suppresses model
@@ -893,7 +899,17 @@ class InferLoopMixin:
         between events. ``call`` (direct voice-to-text) and ``jarvis``
         (wake-word driven) modes never force silence -- they drive their own
         turn flow and always want a real model response (issue #45).
+
+        A live round that carries visual context (``has_frames`` — the video
+        path always reaches inference with image frames) is exempt: with a
+        camera/screen observation in hand the assistant must decide what to
+        say (the four-state prompt still lets it emit ``</silence>`` itself),
+        so the ``USE_PROMPT_AS_QUERY=0`` + ``force_silence_before_query=1``
+        config combination can no longer make the video path mute every round
+        (audit P1-3).
         """
+        if interaction_mode == "live" and has_frames:
+            return False
         # Implementation lives in chat_payload (batch-2 split, zero behaviour change).
         return is_forced_silence(
             interaction_mode,
@@ -927,7 +943,9 @@ class InferLoopMixin:
         # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
         turn_input_record = build_turn_input_record(messages, ctx, state)
 
-        is_forced_silence = self._is_forced_silence(state, interaction_mode)
+        is_forced_silence = self._is_forced_silence(
+            state, interaction_mode, has_frames=bool(ctx.image_paths)
+        )
         # call / jarvis must never teach the model the decision-token framework.
         include_decision_tokens = interaction_mode != "call"
         inference_start = None
