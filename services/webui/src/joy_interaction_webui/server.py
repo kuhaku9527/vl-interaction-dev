@@ -6,9 +6,7 @@ Main server that handles WebRTC connections and serves the web interface
 """
 
 import asyncio
-import base64
 import copy
-import io
 import json
 import logging
 import os as _os_for_accesslog  # access log path
@@ -90,7 +88,6 @@ import os  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
-import uuid  # noqa: E402
 
 # Fix double-module-load bug: when run via `python -m joy_interaction_webui.server`,
 # Python executes this file as __main__ and *also* registers a separate module
@@ -114,7 +111,12 @@ from . import asr as asr_module  # noqa: E402
 from .asr import setup_asr_routes  # noqa: E402
 from .audio_processor import MicAudioTrack  # noqa: E402
 from .background_model import BackgroundModelService  # noqa: E402
-from .jarvis_mode import JarvisState, asr_model_display_name  # noqa: E402
+from .jarvis_mode import (  # noqa: E402
+    JarvisState,
+)
+from .jarvis_mode import (  # noqa: E402
+    asr_model_display_name as asr_model_display_name,
+)
 from .jarvis_routes import bind_audio, setup_jarvis_routes  # noqa: E402
 from .jarvis_session import JarvisSessionManager  # noqa: E402
 from .live_routes import bind_live_audio_for_peer, setup_live_routes  # noqa: E402
@@ -143,6 +145,9 @@ from .tts_endpoint import (  # noqa: E402
     build_tts_synthesize_payload as build_tts_synthesize_payload,
 )
 from .vlm_service import VLMService  # noqa: E402
+
+# Facade re-export from ws_handler (the /ws main loop).
+from .ws_handler import websocket_handler as websocket_handler  # noqa: E402
 
 # Facade re-exports from ws_notify (the WS push contract layer) — same objects.
 from .ws_notify import _spawn_bg as _spawn_bg  # noqa: E402
@@ -180,225 +185,6 @@ default_vlm_config = {}
 sessions = {}
 ws_to_session = {}
 session_peer_connections = defaultdict(set)
-
-
-async def websocket_handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-    session_id = request.query.get("session_id", "").strip() or str(uuid.uuid4())
-    ws_to_session[ws] = session_id
-    session_websockets[session_id].add(ws)
-    websockets.add(ws)
-    logger.info(
-        "WebSocket client connected. session_id=%s, total clients: %d", session_id, len(websockets)
-    )
-    session = get_or_create_session(session_id)
-    svc = session["vlm_service"]
-    # Jarvis session manager (holds the shared JarvisConfig; used for the
-    # ASR-promotion runtime toggle and to advertise the ASR model name).
-    manager = request.app.get("jarvis_manager")
-    bg_svc = session.get("background_service")
-    background_service = bg_svc
-    try:
-        await ws.send_json(
-            {
-                "type": "status",
-                "text": "Connected to server",
-                "status": "Ready",
-                "session_id": session_id,
-            }
-        )
-        from .video_processor import VideoProcessorTrack as _VPT
-
-        await ws.send_json(
-            {
-                "type": "server_config",
-                "model": svc.model,
-                "api_base": svc.api_base,
-                "prompt": svc.prompt,
-                "process_interval": _VPT.process_interval_seconds,
-                "frames_per_batch": _VPT.frames_per_batch,
-                "background_model": (
-                    background_service.get_config() if background_service else None
-                ),
-                "asr_promotion_enabled": (
-                    bool(manager.config.asr_promotion_enabled) if manager else False
-                ),
-                "asr_model_name": (
-                    asr_model_display_name(manager.config)
-                    if manager
-                    else "sherpa-onnx local paraformer (unknown)"
-                ),
-                "session_id": session_id,
-            }
-        )
-        async for msg in ws:
-            if msg.type == web.WSMsgType.TEXT:
-                try:
-                    data = json.loads(msg.data)
-                except json.JSONDecodeError:
-                    continue
-                try:
-                    t = data.get("type")
-                    if t == "update_prompt":
-                        svc.update_prompt(data.get("prompt", ""))
-                        await ws.send_json(
-                            {"type": "prompt_updated", "prompt": data.get("prompt", "")}
-                        )
-                    elif t == "update_model":
-                        if svc.set_model(data.get("model", "")):
-                            await ws.send_json(
-                                {"type": "model_updated", "model": data.get("model", "")}
-                            )
-                    elif t == "update_process_interval":
-                        from .video_processor import VideoProcessorTrack
-
-                        VideoProcessorTrack.process_interval_seconds = float(
-                            data.get("process_interval", 1.0)
-                        )
-                        await ws.send_json(
-                            {
-                                "type": "processing_updated",
-                                "process_interval": VideoProcessorTrack.process_interval_seconds,
-                            }
-                        )
-                    elif t == "update_frames_per_batch":
-                        from .video_processor import VideoProcessorTrack
-
-                        await ws.send_json(
-                            {
-                                "type": "frames_per_batch_updated",
-                                "frames_per_batch": VideoProcessorTrack.frames_per_batch,
-                            }
-                        )
-                    elif t == "frame":
-                        # Screen capture frames shipped via WebSocket (parallel to WebRTC).
-                        # Decode base64 JPEG -> PIL Image -> vlm_service.process_frame, then broadcast the
-                        # resulting text exactly like VideoProcessorTrack does for webcam/RTSP streams.
-                        payload = data.get("data") or ""
-                        if not isinstance(payload, str) or not payload:
-                            logger.warning("frame: empty data")
-                        else:
-                            # Live visual path (spec draft-live-visual-cb.md
-                            # §2.4): when a live session is active, forward the
-                            # raw frame to its ring buffer in parallel with the
-                            # video pipeline below (independent paths).
-                            live_session = (
-                                manager.get_live_session(session_id)
-                                if manager is not None
-                                else None
-                            )
-                            if live_session is not None:
-                                try:
-                                    live_session.handle_frame(
-                                        payload,
-                                        float(
-                                            data.get("ts")
-                                            or data.get("timestamp")
-                                            or time.time() * 1000
-                                        ),
-                                    )
-                                except Exception as live_exc:
-                                    logger.warning("live frame route failed: %s", live_exc)
-                            try:
-                                from PIL import Image as _PILImage
-
-                                t_arrive = time.perf_counter()
-                                raw = base64.b64decode(payload)
-                                img = _PILImage.open(io.BytesIO(raw)).convert("RGB")
-                                t_decoded = time.perf_counter()
-                                meta = {
-                                    "source": data.get("source") or "screen",
-                                    "format": data.get("format") or "jpeg",
-                                    "width": data.get("width"),
-                                    "height": data.get("height"),
-                                    "timestamp": data.get("timestamp"),
-                                }
-                                await svc.process_frame(img, frame_metadata=meta)
-                                response, _ = svc.get_current_response()
-                                t_processed = time.perf_counter()
-                                metrics = svc.get_metrics()
-                                if response:
-                                    get_session_callback(session_id)(
-                                        response, metrics, data.get("frame_seq")
-                                    )
-                                logger.info(
-                                    "latency[transport+infer-screen]: arrive->processed_ms=%.1f decode_ms=%.1f seq=%s",
-                                    (t_processed - t_arrive) * 1000,
-                                    (t_decoded - t_arrive) * 1000,
-                                    data.get("frame_seq"),
-                                )
-                            except Exception as frame_exc:
-                                logger.warning("frame decode/process failed: %s", frame_exc)
-                    elif t == "background_request":
-                        if background_service and data.get("question"):
-                            try:
-                                task_id = background_service.handle_background_request(
-                                    data["question"], session_id=session_id
-                                )
-                                await ws.send_json(
-                                    {
-                                        "type": "background_request_accepted",
-                                        "task_id": task_id,
-                                        "session_id": session_id,
-                                    }
-                                )
-                            except Exception as exc:
-                                await ws.send_json(
-                                    {
-                                        "type": "background_result_error",
-                                        "task_id": "",
-                                        "error": str(exc),
-                                    }
-                                )
-                    elif t == "update_asr_promotion":
-                        # Runtime toggle for the local paraformer ASR
-                        # promotion (recall booster). The frontend sends
-                        # {type:"update_asr_promotion", enabled: bool}. The
-                        # change propagates to every live Jarvis session via
-                        # the shared JarvisConfig (same asyncio event loop).
-                        raw = data.get("enabled")
-                        if isinstance(raw, str):
-                            enabled = raw.strip().lower() in {"1", "true", "yes", "on"}
-                        else:
-                            enabled = bool(raw)
-                        if manager is None:
-                            logger.warning("update_asr_promotion: jarvis_manager unavailable")
-                            await ws.send_json(
-                                {
-                                    "type": "asr_promotion_updated",
-                                    "enabled": False,
-                                    "asr_model_name": "sherpa-onnx local paraformer (unknown)",
-                                    "error": "jarvis_manager unavailable",
-                                }
-                            )
-                        else:
-                            manager.set_asr_promotion_enabled(enabled)
-                            await ws.send_json(
-                                {
-                                    "type": "asr_promotion_updated",
-                                    "enabled": bool(enabled),
-                                    "asr_model_name": asr_model_display_name(manager.config),
-                                }
-                            )
-                except Exception as e:
-                    logger.error("Error handling client message: %s", e)
-            elif msg.type == web.WSMsgType.ERROR:
-                logger.error("WebSocket error: %s", ws.exception())
-    finally:
-        s = session_websockets.get(session_id)
-        if s is not None:
-            s.discard(ws)
-            if not s:
-                session_websockets.pop(session_id, None)
-        ws_to_session.pop(ws, None)
-        websockets.discard(ws)
-        logger.info(
-            "WebSocket client disconnected. session_id=%s, total clients: %d",
-            session_id,
-            len(websockets),
-        )
-    return ws
 
 
 async def llm_message(request):
