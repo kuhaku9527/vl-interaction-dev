@@ -1582,7 +1582,20 @@ limitations under the License.
                 resultText.style.display = hasDisplayText ? 'flex' : 'none';
             }
         }
-        applyOverlayPosition(settings.overlayPosition);
+        // P0-1 (audit 2026-08-13): getVlmDisplayText lives in the post-main
+        // vlm_render.js script, which loads after this inline script — an
+        // immediate call here would throw ReferenceError (getVlmDisplayText is
+        // not defined) and abort the whole inline script (WS bootstrap, settings
+        // modal, WrappedWS IIFE, ...). Defer the overlay initial paint until that
+        // script is guaranteed to have loaded. DOMContentLoaded fires after all
+        // synchronous classic scripts at the end of <body> have executed.
+        if (typeof getVlmDisplayText === 'function') {
+            applyOverlayPosition(settings.overlayPosition);
+        } else {
+            window.addEventListener('DOMContentLoaded', () => {
+                applyOverlayPosition(settings.overlayPosition);
+            });
+        }
 
         // Apply layout order
         function isMobileLayout() {
