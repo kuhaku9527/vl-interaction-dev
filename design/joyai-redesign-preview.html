@@ -135,10 +135,11 @@
   .svc-name .sdot{width:7px;height:7px;border-radius:50%;}
   .svc-state{font-size:12px;color:var(--text-3);}
 
-  /* v6-lite: 主视图常驻状态卡片（满铺 grid 两列） */
-  .status-card{grid-column:1/-1;padding:0;}
-  .status-card .status-list{padding:6px 10px;}
-  .status-card .head-actions .ghost-btn{font-size:12px;padding:5px 10px;}
+  /* v6-lite.2: header 顶部模式快捷标签（live / jarvis / kws） */
+  .quick-tabs{display:flex;align-items:center;gap:2px;margin-right:8px;font-size:12px;font-weight:500;}
+  .qt{padding:5px 11px;border-radius:var(--radius-pill);color:var(--brand);cursor:pointer;transition:background .15s, color .15s;}
+  .qt:hover{background:var(--bg-elev-2);}
+  .qt.active{color:var(--text);background:var(--bg-elev-2);}
 
   /* ---------- main ---------- */
   .main{
@@ -440,6 +441,11 @@
       <div class="tag">本地 · 开源 Apache 2.0</div>
     </div>
     <div class="header-right">
+      <div class="quick-tabs">
+        <a class="qt active">live</a>
+        <a class="qt">jarvis</a>
+        <a class="qt">kws</a>
+      </div>
       <div class="health-pill" id="healthPill" onclick="document.getElementById('healthMenu').classList.toggle('open')">
         <span class="dot"></span> 系统正常
       </div>
@@ -465,26 +471,6 @@
   </header>
 
   <div class="main">
-    <section class="card status-card">
-      <div class="result-head">
-        <div class="rt">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          系统状态
-        </div>
-        <div class="head-actions">
-          <button class="ghost-btn" onclick="document.getElementById('healthMenu').classList.toggle('open')" title="查看更多服务健康">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-            更多
-          </button>
-        </div>
-      </div>
-      <div class="status-list">
-        <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--warn)"></span>KWS · 唤醒词</span><span class="svc-state">未加载</span></div>
-        <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Jarvis · 常驻</span><span class="svc-state">监听中</span></div>
-        <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Live · 常驻模式</span><span class="svc-state">关闭</span></div>
-      </div>
-    </section>
-
     <section class="card">
       <div class="video-wrap">
         <div class="video-tools">

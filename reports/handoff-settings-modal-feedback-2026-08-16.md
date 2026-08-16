@@ -496,3 +496,24 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 ### 13.4 待闭环
 
 - 等用户验收 v6-lite → 回灌 `services/webui/static/`。
+
+---
+
+## 14. 17:20 用户反馈 v6-lite.2 → 系统状态卡片彻底删除，改为 header 文字快捷标签
+
+> 用户反馈原话（@image 标号）：
+> - `@image#1`：**「应该是这样。」** → 展示示意：三个红字文字标签 `live | jarvis | kws` 横排贴在 `● 系统正常` 健康胶囊**左边**，无边框、无圆角、无图标，纯文字。
+> - `@image#2`：**「删除。」** → 直接展示当前预览里那个 `系统状态` 卡片（`grid-column:1/-1` 占满 main 顶部），用户明确要求删掉。
+
+**新方案（落地预览）**：
+- **删除** 主视图 `.main` 顶部整张 `系统状态` 卡片（含 `更多` 按钮 + 3 行 svc）。
+- **删除** `.status-card` / `.status-list` CSS 块（无引用）。
+- **新增** header `header-right` 内、`health-pill` 之前：`quick-tabs` 容器 + 三个 `<a class="qt">` 文字标签（live 当前 active 高亮、jarvis/kws 品牌红字可点）。
+- 健康菜单下拉里**保留** KWS/Jarvis/Live svc 三行（折叠项与详细状态仍在菜单里可查），header 顶部的 `live | jarvis | kws` 是**模式/快捷入口**（不是状态显示）。
+
+**设计原则（§13.3 状态分层的进一步精炼）**：
+- **header 顶部** = 模式快捷入口（轻量、品牌色文字，1 秒扫一眼能切）
+- **健康菜单** = 详细健康态（含 KWS/Jarvis/Live 三状态的实际值）
+- 主视图**不再**单独占一卡片展示运行态（用户认为噪音 > 价值）
+
+**校验**：`node --check` JS 语法 OK；HTML tag balance `<section>` 10/10、`<div>` 192/192、`<span>` 93/93、`<a>` 3/3、`<button>` 44/44；grep `status-card|status-list` 零残留。
