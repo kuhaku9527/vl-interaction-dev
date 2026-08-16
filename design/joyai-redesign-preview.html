@@ -153,6 +153,10 @@
     box-shadow:var(--shadow);min-height:0;display:flex;flex-direction:column;overflow:hidden;
     transition:background-color .18s ease, border-color .18s ease;
   }
+  /* v6-lite.4: 卡片内容区（视频采集等），遵循 8px 网格 16px 留白 */
+  .card-body{padding:16px;display:flex;flex-direction:column;gap:16px;}
+  /* v6-lite.4: 本地/云端风格视频源选择块（复用 .seg.seg-3 滑动指示器） */
+  .cap-sub .row{margin:0;}
   .video-wrap{position:relative;flex:1;background:var(--video-bg);
     display:flex;align-items:center;justify-content:center;overflow:hidden;}
   .video-placeholder{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--text-3);}
@@ -486,6 +490,66 @@
         <div class="hud">
           <span class="who">BT-7274</span>
           <span class="line">已识别到玩家进入战斗姿态，建议优先清理右侧远程单位。</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== 视频采集（本地/云端风格选择块） =================== -->
+    <section class="card">
+      <div class="result-head">
+        <div class="rt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 8-6 4 6 4V8z"/></svg> 视频采集</div>
+        <div class="head-actions">
+          <span class="chip" id="capStatus" title="当前采集源"><span class="cdot"></span><span id="capStatusText">摄像头 · 本地</span></span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="group">
+          <div class="seg seg-3" id="cap-seg" data-current="webcam">
+            <span class="seg-indicator pos-0" aria-hidden="true"></span>
+            <button class="on" onclick="switchCapture('webcam',this)">摄像头</button>
+            <button onclick="switchCapture('screen',this)">屏幕</button>
+            <button onclick="switchCapture('rtsp',this)">RTSP 流</button>
+          </div>
+        </div>
+
+        <!-- 摄像头子表单（本地 getUserMedia + WebRTC） -->
+        <div class="group cap-sub" id="cap-webcam-form">
+          <div class="row"><label>摄像头设备</label>
+            <select class="sel">
+              <option>OBS 虚拟摄像头</option>
+              <option>内置摄像头</option>
+              <option>FaceTime 高清摄像头</option>
+              <option>USB 摄像头</option>
+            </select>
+          </div>
+          <div class="row"><label>分辨率</label>
+            <select class="sel">
+              <option>1920 × 1080</option>
+              <option>1280 × 720</option>
+            </select>
+          </div>
+          <div class="hint">本地采集 · 经 WebRTC 推流，无需云端依赖。</div>
+        </div>
+
+        <!-- 屏幕子表单（本地 getDisplayMedia · 1fps 截图上传） -->
+        <div class="group cap-sub" id="cap-screen-form" style="display:none;">
+          <div class="row"><label>采集帧率 (FPS)</label><input class="inp" value="1"></div>
+          <div class="row"><label>处理间隔 (ms)</label><input class="inp" value="1000"></div>
+          <div class="row"><label>每批帧数</label><input class="inp" value="1"></div>
+          <div class="hint">本地屏幕采集 · 1fps 截图经 WebSocket 上传。</div>
+        </div>
+
+        <!-- RTSP 子表单（远程流 · 服务端拉取经 WebRTC 回传） -->
+        <div class="group cap-sub" id="cap-rtsp-form" style="display:none;">
+          <div class="row"><label>RTSP 流地址</label><input class="inp" placeholder="rtsp://host:554/stream"></div>
+          <div class="row"><label>分辨率</label>
+            <select class="sel">
+              <option>由服务端转码</option>
+              <option>1920 × 1080</option>
+              <option>1280 × 720</option>
+            </select>
+          </div>
+          <div class="hint">远程流 · 由服务端拉取并经 WebRTC 回传（需网络）。</div>
         </div>
       </div>
     </section>
@@ -1203,6 +1267,29 @@
     local.style.display = (mode === 'local') ? '' : 'none';
     cloud.style.display = (mode === 'cloud') ? '' : 'none';
     fadeForm(mode === 'local' ? local : cloud);
+  }
+
+  /* v6-lite.4: 视频采集源切换（摄像头 / 屏幕 / RTSP 流，复用 .seg.seg-3 滑动指示器） */
+  function switchCapture(mode, btn){
+    var seg = btn.parentElement;
+    var buttons = Array.prototype.slice.call(seg.querySelectorAll('button:not([disabled])'));
+    if(seg.dataset.current === mode) return;
+    buttons.forEach(function(b){ b.classList.remove('on'); });
+    btn.classList.add('on');
+    var indicator = seg.querySelector('.seg-indicator');
+    if(indicator){ indicator.classList.remove('pos-0','pos-1','pos-2'); indicator.classList.add('pos-' + buttons.indexOf(btn)); }
+    seg.dataset.current = mode;
+    var forms = { webcam:'cap-webcam-form', screen:'cap-screen-form', rtsp:'cap-rtsp-form' };
+    Object.keys(forms).forEach(function(k){
+      document.getElementById(forms[k]).style.display = (k === mode) ? '' : 'none';
+    });
+    fadeForm(document.getElementById(forms[mode]));
+    /* 状态说明：本地源=绿（健康/激活），远程 RTSP=黄（需网络），统一语义色 */
+    var status = document.getElementById('capStatus');
+    var dot = status.querySelector('.cdot');
+    var text = document.getElementById('capStatusText');
+    if(mode === 'rtsp'){ dot.style.background = 'var(--warn)'; text.textContent = 'RTSP · 网络'; }
+    else { dot.style.background = 'var(--ok)'; text.textContent = (mode === 'webcam' ? '摄像头 · 本地' : '屏幕 · 本地'); }
   }
 
   /* init */

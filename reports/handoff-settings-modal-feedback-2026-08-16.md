@@ -555,3 +555,29 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 - `doc/specs/webui-component-consistency-spec.md`（草稿）：把 §9 提升为跨表面硬约束，含 **D1 元件复用白名单**（`.status-badge` / `.chip` / `.svc` / `.health-pill`，禁止新造形态）、**D2 状态色语义**（绿/黄/灰/红复用 §9.1）、**D3 禁止裸文字状态标签**、**D4 8px 网格**、**D5 字体归属**；§4 Harness 要求 UI PR 必须引用本 spec + §9。
 - `doc/adr/0019-webui-component-consistency.md`： ratification 建议，决策内容与 spec 对齐。
 - 后续动作（待 lead / 审查组）：① 本 spec 列入 `AGENTS.md` onboarding 必读；② redesign 回灌 `services/webui/static/` 时按 D1–D5 自查；③ 可选加 static lint 拦未登记状态 class。
+
+### 16. 视频采集 UI 重设计（本地/云端风格选择块） — v6-lite.4
+
+> 用户原话（≈18:0x）：「视频捕获呢。这个怎么实现，你可以参考项目的 web 内容，但 ui 要统一，原本的是一切都展示出来，不美观，你改成跟本地\云端那样的选择块。」
+
+**参照的真实实现（`services/webui/src/joy_interaction_webui/static/`）**：
+- `capture_webcam.js`：本地 `getUserMedia` + 自带 `RTCPeerConnection`；参数含摄像头设备、分辨率（ideal 1920×1080）。
+- `screen_capture.js`：本地 `getDisplayMedia` 默认 1fps，JPEG 经 WebSocket 上传；参数含采集帧率、处理间隔、每批帧数。
+- `capture_rtsp.js`：远程流，服务端拉取 RTSP 并经 WebRTC 回传；参数含 RTSP 流地址（必填）。
+- `i18n_device_label.js`：`Video Source`→视频源、`Webcam Capture`→摄像头采集、`Screen Capture`→屏幕采集、`RTSP Stream URL`→RTSP 流地址、`Processing Interval`→处理间隔、`Frames per Batch`→每批帧数；设备名 `OBS Virtual Camera`→OBS 虚拟摄像头、`Integrated Webcam`→内置摄像头 等。
+
+**原 ui 问题**：原 webui 把三源的控件（摄像头按钮、屏幕按钮、RTSP 地址、摄像头下拉、处理间隔、每批帧数…）一次性平铺全展示，不美观。
+
+**v6-lite.4 落地（`design/joyai-redesign-preview.html`）**：
+- 视频预览卡下方新增「视频采集」卡片，顶部 **`.seg.seg-3` 三段选择块**：摄像头 / 屏幕 / RTSP 流 —— 1:1 映射三个真实采集模块，复用既有滑动指示器（`.seg-indicator`）。
+- 仅显示当前源子表单（`.group`+`.row`+`.inp`+`.sel`+`.hint`，全复用既有元件，未造新形态 → 符合一致性 spec D1）：
+  - 摄像头：`摄像头设备`（i18n 设备名下拉）、`分辨率`（1920×1080 / 1280×720）。
+  - 屏幕：`采集帧率 (FPS)`=1、`处理间隔 (ms)`=1000、`每批帧数`=1。
+  - RTSP：`RTSP 流地址`（placeholder）、`分辨率`（由服务端转码 / 1920×1080 / 1280×720）。
+- **状态说明（补「激活哪个」缺口，沿用 §15 教训）**：卡片头部 `capStatus` chip 实时显示当前源 + 本地/网络归属 —— 本地源绿点（`--ok`）、RTSP 远程黄点（`--warn`，需网络=语义警告），文字 `摄像头 · 本地`/`屏幕 · 本地`/`RTSP · 网络`。
+- 新增 8px 网格布局工具 `.card-body`（16px 留白）承载卡片内容；`.cap-sub .row{margin:0}` 兜底间距。
+- `switchCapture(mode,btn)` 复用 indicator 定位 + `fadeForm` 淡入，切换三表单并刷新状态 chip。
+
+**校验**：`node --check` JS OK；tag balance `<section>` 11/11、`<div>` 211/211、`<select>` 11/11。
+
+**一致性合规自检（D1–D5）**：D1 全复用 `.seg/.group/.row/.inp/.sel/.hint/.chip/.cdot`，无新元件；D2 状态色复用 `--ok/--warn`；D3 无裸文字状态标签（chip 带 dot）；D4 16px 留白=8px 网格；D5 字体沿用 `--font`。
