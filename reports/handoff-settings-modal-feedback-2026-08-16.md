@@ -601,3 +601,25 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 **一致性合规自检（D1–D5）**：D1 复用 `.seg/.group/.row/.inp/.sel/.hint/.chip/.cdot/.card 视觉变量`，新加的仅是动作按钮 `.cap-pop-go`（与 `.send` 同色同语义）+ 浮层定位 `.ctrl-wrap`/`.cap-pop`/`close`，均非状态指示元件；D2 状态色复用 `--ok/--warn`；D3 无裸文字状态标签；D4 14px 留白=8px 网格；D5 字体沿用 `--font`。
 
 **教训（给 UI 组 + 自己）**：用户提到的入口（截图里**那个**被点击的按钮）是触发点，不是「在主视图加一张配置卡」。**先识别交互的物理触发入口，再设计承载界面**——卡片 vs 浮层 vs 模态，取决于用户在什么上下文触发。
+
+### 18. 底部工具栏图标雷同 + 无点击反馈（v6-lite.6）
+
+> 用户反馈（约 18:0x）：「底部另外两个的图标一模一样啊。哪个是 live 模式，哪个是语音识别 call 呢。而且点击没反馈，有做吗？」
+
+**定位的 bug（v6-lite.5 遗留）**：
+- 底部 `.controls` 三个按钮：麦克风（`.ctrl active`）/ 摄像头（popover）/ **Jarvis 常驻**。其中 **麦克风与 Jarvis 用了几乎一样的麦克风 SVG**（都带 `M12 17v4` 竖杆 + 胶囊），肉眼分不出 → 用户说的「另外两个图标一模一样」。
+- **麦克风、Jarvis 两个按钮都没有绑定 onclick** → 点击无任何反馈（只有摄像头能开浮层）。
+- 语义混乱：用户预期底部有「live 模式」和「语音识别 call」，但实际第三个是 Jarvis（且图标像麦克风）。
+
+**修正（v6-lite.6）**：
+- **三个底部按钮全部改「图标 + 文字标签」**（` .ctrl-labeled` + `.ctrl-label`，竖排，8px 网格）：**语音**（麦克风图标）/ **视频**（摄像头图标）/ **实时**（广播波纹图标）。文字标签直接回答「哪个是哪个」，消除图标雷同的歧义。
+- **麦克风 → `onclick="toggleCtrl(this)"`**：点一下切换 `.active`（红=监听中），有反馈。
+- **实时按钮**：换成**广播波纹图标**（与麦克风/摄像头都不同），`onclick="toggleLive()"`。顶部 header 的 `live` chip 也加 `id="liveChip"` 并改用 `toggleLive()`，**双向同步**（点底部实时或点顶部 live 都同步高亮）。顶部 `live` chip 原 `toggleMode` 逻辑顺移——live 不再是独立三态之一，统一由 `toggleLive` 管。
+- **删除底部冗余的 Jarvis 按钮**：Jarvis 常驻 / 唤醒词 仍留在 header 的 quick-tabs 模式 chip（本就可点），底部不再重复一个「假麦克风」造成混淆。底部聚焦三个主会话控制：语音 / 视频 / 实时。
+- `toggleCtrl(btn)` / `toggleLive()` 两个轻量函数；`toggleLive` 用 `classList.toggle('active', on)` 把底部按钮与顶部 chip 状态锁死一致。
+
+**校验**：`node --check` JS OK；tag balance `<section>`10/10、`<div>`211/211、`<button>`50/50、`<span>`106/106、`<svg>`30/30。
+
+**一致性合规自检（D1–D5）**：D1 复用 `.ctrl`/`.chip`/`.mode-chip` 元件，新增仅是 `.ctrl-labeled`（`.ctrl` 的竖排标签变体，非新元件形态）+ `.ctrl-label` 文字；D2/D3 状态点语义不变；D4 标签按钮 7px/12px padding = 8px 网格近似（label 10px 字号）；D5 字体沿用 `--font`。
+
+**语义澄清（给用户）**：底部「实时」= live 模式（与顶部 live chip 同步）；底部「语音」= 语音识别/ASR 输入（call）；摄像头 = 视频捕获（浮层选源）；Jarvis 常驻 / 唤醒词 在顶部模式 chip。

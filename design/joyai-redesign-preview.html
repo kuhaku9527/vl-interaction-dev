@@ -221,6 +221,10 @@
   .ctrl:hover{color:var(--text);border-color:var(--border-strong);}
   .ctrl.active{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 0 14px rgba(200,30,42,.45);}
   .ctrl svg{width:18px;height:18px;}
+  /* v6-lite.6: 带文字标签的底部控制按钮（图标 + 标签，消除「图标雷同认不出」） */
+  .ctrl-labeled{flex-direction:column;gap:3px;width:auto;height:auto;padding:7px 12px;border-radius:var(--radius-sm);}
+  .ctrl-labeled svg{width:18px;height:18px;}
+  .ctrl-label{font-size:10px;line-height:1;letter-spacing:.2px;font-family:var(--font);}
   .prompt{flex:1;display:flex;align-items:center;background:var(--bg-input);border:1px solid var(--border);
     border-radius:var(--radius-pill);padding:0 6px 0 16px;height:44px;transition:border-color .15s;}
   .prompt:focus-within{border-color:var(--border-strong);}
@@ -472,7 +476,7 @@
     </div>
     <div class="header-right">
       <div class="quick-tabs">
-        <span class="chip mode-chip" title="实时模式（关闭）" onclick="toggleMode(this)"><span class="cdot"></span>live</span>
+        <span class="chip mode-chip" id="liveChip" title="实时模式（关闭）" onclick="toggleLive()"><span class="cdot"></span>live</span>
         <span class="chip mode-chip active" title="Jarvis 常驻（监听中）" onclick="toggleMode(this)"><span class="cdot"></span>jarvis</span>
         <span class="chip mode-chip" title="唤醒词（未加载）" onclick="toggleMode(this)"><span class="cdot"></span>kws</span>
       </div>
@@ -558,9 +562,9 @@
 
   <div class="inputbar">
     <div class="controls">
-      <button class="ctrl active" title="麦克风"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg></button>
+      <button class="ctrl ctrl-labeled active" id="micBtn" title="语音输入（点击开关麦克风）" onclick="toggleCtrl(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg><span class="ctrl-label">语音</span></button>
       <div class="ctrl-wrap" id="camCtrl">
-        <button class="ctrl" title="摄像头" onclick="toggleCapPop(event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></button>
+        <button class="ctrl ctrl-labeled" id="camBtn" title="视频捕获（点击选择采集源）" onclick="toggleCapPop(event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span class="ctrl-label">视频</span></button>
         <!-- 视频采集浮层（本地/云端风格选择块） -->
         <div class="cap-pop" id="capPop" onclick="event.stopPropagation()">
           <div class="cap-pop-head">
@@ -620,7 +624,7 @@
           </div>
         </div>
       </div>
-      <button class="ctrl" title="Jarvis 常驻"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4"/></svg></button>
+      <button class="ctrl ctrl-labeled" id="liveBtn" title="实时模式（点击开关 · 与顶部 live 同步）" onclick="toggleLive()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg><span class="ctrl-label">实时</span></button>
     </div>
     <div class="prompt">
       <input type="text" placeholder="和 BT-7274 对话…">
@@ -1337,6 +1341,15 @@
   function closeCapPopOutside(e){
     var wrap = document.getElementById('camCtrl');
     if(wrap && !wrap.contains(e.target)){ closeCapPop(); }
+  }
+
+  /* v6-lite.6: 底部控制按钮 —— 语音 / 实时 点击反馈（切换 .active 高亮） */
+  function toggleCtrl(btn){ btn.classList.toggle('active'); }
+  function toggleLive(){
+    var b = document.getElementById('liveBtn');
+    var on = b ? b.classList.toggle('active') : false;
+    var chip = document.getElementById('liveChip');
+    if(chip) chip.classList.toggle('active', on);   /* 与顶部 live chip 双向同步 */
   }
 
   /* init */
