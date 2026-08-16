@@ -233,7 +233,31 @@
   .send{width:38px;height:38px;border-radius:50%;background:var(--brand);border:0;color:#fff;cursor:pointer;
     display:flex;align-items:center;justify-content:center;transition:.15s;flex:0 0 auto;}
   .send:hover{background:var(--brand-bright);box-shadow:0 0 16px rgba(200,30,42,.5);}
+  .send:active{transform:scale(.9);box-shadow:0 0 24px rgba(200,30,42,.7);}
+  .send.sent{animation:sendPulse .5s ease;}
+  @keyframes sendPulse{0%{transform:scale(.9);box-shadow:0 0 24px rgba(200,30,42,.7);}50%{transform:scale(1.06);}100%{transform:scale(1);box-shadow:0 0 16px rgba(200,30,42,.5);}}
   .send svg{width:17px;height:17px;}
+
+  /* v6-lite.7: 麦克风按钮嵌入输入框内（参考微信式语音输入图标） */
+  .prompt-mic{
+    width:32px;height:32px;border-radius:50%;background:transparent;border:0;
+    color:var(--text-3);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;flex:0 0 auto;transition:.15s;margin-right:4px;
+  }
+  .prompt-mic:hover{color:var(--text);background:var(--bg-elev-2);}
+  .prompt-mic.active{color:var(--brand);background:rgba(200,30,42,.12);}
+  .prompt-mic svg{width:16px;height:16px;}
+  .prompt.voice-on{border-color:var(--brand);box-shadow:0 0 0 3px rgba(200,30,42,.18);}
+
+  /* v6-lite.7: 输入栏左缘的「语音监听中」红色脉冲灯 */
+  .voice-pulse{
+    position:absolute;left:-6px;top:50%;transform:translateY(-50%);
+    width:12px;height:12px;border-radius:50%;background:var(--brand);
+    box-shadow:0 0 12px rgba(200,30,42,.7);
+    animation:voicePulse 1.4s ease-in-out infinite;
+  }
+  @keyframes voicePulse{0%,100%{opacity:.35;transform:translateY(-50%) scale(.85);}50%{opacity:1;transform:translateY(-50%) scale(1.05);}}
+  .voice-pulse[hidden]{display:none;}
 
   /* v6-lite.5: 视频采集浮层（点击底部摄像头按钮弹出，含本地/云端风格选择块） */
   .ctrl-wrap{position:relative;}
@@ -477,7 +501,6 @@
     <div class="header-right">
       <div class="quick-tabs">
         <span class="chip mode-chip" id="liveChip" title="实时模式（关闭）" onclick="toggleLive()"><span class="cdot"></span>live</span>
-        <span class="chip mode-chip active" title="Jarvis 常驻（监听中）" onclick="toggleMode(this)"><span class="cdot"></span>jarvis</span>
         <span class="chip mode-chip" title="唤醒词（未加载）" onclick="toggleMode(this)"><span class="cdot"></span>kws</span>
       </div>
       <div class="health-pill" id="healthPill" onclick="document.getElementById('healthMenu').classList.toggle('open')">
@@ -561,8 +584,8 @@
   </div>
 
   <div class="inputbar">
+    <span class="voice-pulse" id="voicePulse" hidden aria-hidden="true"></span>
     <div class="controls">
-      <button class="ctrl ctrl-labeled active" id="micBtn" title="语音输入（点击开关麦克风）" onclick="toggleCtrl(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg><span class="ctrl-label">语音</span></button>
       <div class="ctrl-wrap" id="camCtrl">
         <button class="ctrl ctrl-labeled" id="camBtn" title="视频捕获（点击选择采集源）" onclick="toggleCapPop(event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span class="ctrl-label">视频</span></button>
         <!-- 视频采集浮层（本地/云端风格选择块） -->
@@ -626,9 +649,10 @@
       </div>
       <button class="ctrl ctrl-labeled" id="liveBtn" title="实时模式（点击开关 · 与顶部 live 同步）" onclick="toggleLive()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg><span class="ctrl-label">实时</span></button>
     </div>
-    <div class="prompt">
+    <div class="prompt" id="promptBox">
       <input type="text" placeholder="和 BT-7274 对话…">
-      <button class="send" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+      <button class="prompt-mic" id="micBtn" title="语音输入（点击开关麦克风）" onclick="toggleMic()" aria-label="语音输入"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg></button>
+      <button class="send" id="sendBtn" title="发送" onclick="sendDemo()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
     </div>
   </div>
 </div>
@@ -1343,8 +1367,25 @@
     if(wrap && !wrap.contains(e.target)){ closeCapPop(); }
   }
 
-  /* v6-lite.6: 底部控制按钮 —— 语音 / 实时 点击反馈（切换 .active 高亮） */
-  function toggleCtrl(btn){ btn.classList.toggle('active'); }
+  /* v6-lite.6: 底部控制按钮已统一用 toggleLive() / toggleCapPop()（语音迁入输入框 → toggleMic()） */
+  /* v6-lite.7: 嵌入输入框的麦克风切换（同时控制按钮 .active、输入框 .voice-on、左缘脉冲灯显隐） */
+  function toggleMic(){
+    var btn = document.getElementById('micBtn');
+    var box = document.getElementById('promptBox');
+    var pulse = document.getElementById('voicePulse');
+    var on = !btn.classList.contains('active');
+    btn.classList.toggle('active', on);
+    box.classList.toggle('voice-on', on);
+    pulse.hidden = !on;
+    btn.title = on ? '语音输入（监听中 · 点击关闭）' : '语音输入（点击开启）';
+  }
+  /* v6-lite.7: 发送按钮演示反馈（避免「测过没？」类质问 —— 触发瞬时缩放+闪烁动画） */
+  function sendDemo(){
+    var btn = document.getElementById('sendBtn');
+    btn.classList.remove('sent');
+    void btn.offsetWidth; /* 触发重排，重新播放动画 */
+    btn.classList.add('sent');
+  }
   function toggleLive(){
     var b = document.getElementById('liveBtn');
     var on = b ? b.classList.toggle('active') : false;
