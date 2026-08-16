@@ -135,11 +135,13 @@
   .svc-name .sdot{width:7px;height:7px;border-radius:50%;}
   .svc-state{font-size:12px;color:var(--text-3);}
 
-  /* v6-lite.2: header 顶部模式快捷标签（live / jarvis / kws） */
-  .quick-tabs{display:flex;align-items:center;gap:2px;margin-right:8px;font-size:12px;font-weight:500;}
-  .qt{padding:5px 11px;border-radius:var(--radius-pill);color:var(--brand);cursor:pointer;transition:background .15s, color .15s;}
-  .qt:hover{background:var(--bg-elev-2);}
-  .qt.active{color:var(--text);background:var(--bg-elev-2);}
+  /* v6-lite.3: header 模式 chip（统一 .chip 视觉语言 + 激活态 dot） */
+  .quick-tabs{display:flex;align-items:center;gap:6px;margin-right:8px;}
+  .mode-chip{cursor:pointer;text-transform:lowercase;transition:border-color .15s, background .15s, color .15s;}
+  .mode-chip:hover{border-color:var(--border-strong);}
+  .mode-chip .cdot{background:var(--text-3);}            /* 默认灰 = 未激活 */
+  .mode-chip.active{border-color:var(--brand);color:var(--text);background:var(--bg-elev-2);}
+  .mode-chip.active .cdot{background:var(--ok);box-shadow:0 0 6px rgba(47,191,113,.6);}  /* 绿 = 激活 */
 
   /* ---------- main ---------- */
   .main{
@@ -442,9 +444,9 @@
     </div>
     <div class="header-right">
       <div class="quick-tabs">
-        <a class="qt active">live</a>
-        <a class="qt">jarvis</a>
-        <a class="qt">kws</a>
+        <span class="chip mode-chip" title="实时模式（关闭）" onclick="toggleMode(this)"><span class="cdot"></span>live</span>
+        <span class="chip mode-chip active" title="Jarvis 常驻（监听中）" onclick="toggleMode(this)"><span class="cdot"></span>jarvis</span>
+        <span class="chip mode-chip" title="唤醒词（未加载）" onclick="toggleMode(this)"><span class="cdot"></span>kws</span>
       </div>
       <div class="health-pill" id="healthPill" onclick="document.getElementById('healthMenu').classList.toggle('open')">
         <span class="dot"></span> 系统正常
@@ -1036,6 +1038,11 @@
       menu.classList.remove('open');
     }
   });
+
+  /* ---------- header 模式 chip 激活态切换（预览：本地切换高亮，真实生效靠后端） ---------- */
+  function toggleMode(el){
+    el.classList.toggle('active');
+  }
 
   /* ---------- theme + accent (same as v2) ---------- */
   document.getElementById('themeToggle').addEventListener('click', function(){
