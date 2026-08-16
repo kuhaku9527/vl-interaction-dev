@@ -541,3 +541,17 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 - 截图/口头示意 = **传达意图**，不是像素稿；落地时优先复用既有元件 + 补用户指出的「信息缺口」（如状态说明），而非照抄外观。
 
 **校验**：`node --check` JS 语法 OK；HTML tag balance `<section>` 10/10、`<div>` 192/192、`<span>` 99/99、`<a>` 0/0（三 `<a>` 改 `<span>`）、`<button>` 44/44；grep `.qt` 零残留。
+
+### 15.1 根因升级：补一份跨表面 UI 元件一致性 spec + ADR（用户问责「为何没提前框定」）
+
+> 用户问责（17:30）：「企业流程里是否有一套来框定相关元素 ui 风格的流程、指定什么必须遵守？spec 文档我知道，但 ui 里是什么、你写了吗？有的话上文错误不会发生。对吧」
+
+**诚实复盘**：
+- 约束**确实已存在** —— `doc/subsystems/voice-ui.md` §9 Design Tokens 白纸黑字「必须 / 禁止」（新增状态元素必须取 token、语义色 `.status-badge` 系列、8px 网格）。但**范围仅限 voice HUD**，没扩展到设置弹窗 / 主视图 header；且前端开工前**没读 §9**（违反「先读文档，不要重新推导」）。
+- §15 的「统一规则」只是躺在本 handoff 的创可贴，**不是治理件**（没进 `doc/specs` / `doc/adr`，不能被审查组 ratification 进 `决策/`）。
+- 用户说得对：若一份**跨所有 WebUI 表面的元件一致性约束**提前写成 spec+adr 并执行，v6-lite→v6-lite.2→v6-lite.3 三轮返工可避免。
+
+**已落地治理件（前端端点产出，待审查组 ratification 进 `决策/`）**：
+- `doc/specs/webui-component-consistency-spec.md`（草稿）：把 §9 提升为跨表面硬约束，含 **D1 元件复用白名单**（`.status-badge` / `.chip` / `.svc` / `.health-pill`，禁止新造形态）、**D2 状态色语义**（绿/黄/灰/红复用 §9.1）、**D3 禁止裸文字状态标签**、**D4 8px 网格**、**D5 字体归属**；§4 Harness 要求 UI PR 必须引用本 spec + §9。
+- `doc/adr/0019-webui-component-consistency.md`： ratification 建议，决策内容与 spec 对齐。
+- 后续动作（待 lead / 审查组）：① 本 spec 列入 `AGENTS.md` onboarding 必读；② redesign 回灌 `services/webui/static/` 时按 D1–D5 自查；③ 可选加 static lint 拦未登记状态 class。
