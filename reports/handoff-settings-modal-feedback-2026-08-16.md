@@ -370,3 +370,54 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 - 不动 `.seg` 默认规则,TTS/嵌入两段保持 `flex:0 0 auto` 按内容自适应(2 个 4 字汉字本来就是等宽)。
 
 **未来回归时**:若 KWS 段宽度仍偏短,改 `min-width:280px`(上轮已尝试后撤回,因会让 KWS 段过长与 TTS/嵌入不齐)。
+
+---
+
+## 10. 16:44 用户澄清「Prompt 模板」误读 → 改为「人物设定（Persona）」轻档 + 版本控制基线
+
+### 10.1 设计前提纠偏（重要）
+
+> 用户原话：「关于这个模板我一开始理解错了，还以为是 llm 模型的人格 prompt。可以自定义人格。我的要求，不要现在的 prompt 模板，而是用于人物设定的自定义 prompt。功能对接是不一样的。」
+
+- **之前画错**：高级 tab 的「Prompt 模板」被画成**消息格式**预设（`[JoyAI ChatML]<im_start>system...`），这是 prompt **结构/格式**模板，**不是人格设定**。
+- **用户要的**：**人物设定（Persona）** —— 定义 AI 是谁、性格、说话方式、避讳。这是**独立于消息格式**的概念（类比 character.ai / SillyTavern 的 persona）。
+- **功能对接不一样**：不是改 `system_prompt` 字符串那么简单。Persona 是**结构化对象**，需要持久化（每用户多 persona）、与 TTS voice 绑定（本档**不做**，见 10.2）、主界面顶栏快捷切换入口。
+
+### 10.2 用户定稿：走轻档、不绑 voice_id
+
+> 用户原话：「走 B. 走轻档。不绑定 voice_id，让客户动手，不用做这么麻烦的实现。」
+
+- **轻档 scope**：仅 `人格名称`（text input）+ `系统提示词`（textarea），**不绑定音色**（音色让客户在语音 tab 自行设置）。
+- **不做**：多 persona 库 / 头像上传 / voice 训练联动 / 预设市集 —— 超当前 scope。
+- **字数限制**（用户主动问「有字数限制吧，太长会有问题的吧」）：
+  - 现状：后端只是把 system prompt 拼接进每次请求，**无硬上限**。
+  - 实际风险：① 每轮 token 成本/延迟随 system 长度线性上升；② 过长触发「lost in the middle」指令遵循退化；③ 本地模型上下文小（典型 4k–8k），过长会被截断。
+  - **UI 做法（已落地预览）**：实时字数计 + 1500 字软警告（`接近上限…`）+ 2000 字硬上限（边框标红，保存校验）。
+  - **后端待办（新增 P0）**：`services_config.py` 抽 `persona_system_prompt` 配置项；加 `MAX_SYSTEM_PROMPT_CHARS`（默认 2000），保存时校验/截断；新增 persona 保存/重置接口（PUT `/api/services/config` 已有槽位机制可复用）。
+
+### 10.3 版本控制 / 回滚基线（用户问「你不留痕的吗，万一要回滚怎么办」）
+
+- **之前的问题**：`design/joyai-redesign-preview.html` 不在 git 追踪、每轮同名覆盖，**v1→v5 无任何回滚点**。
+- **已建基线**（16:44）：开 `ui/redesign-preview` 分支，`git commit` 当前 v5 预览 + 本 handoff 文档为基线（`88107ec`）。后续每步改完单独提交，回滚用 `git revert <sha>` 或 `git checkout <sha> -- design/...`。
+- **一般企业流程（给用户说明用）**：feature 分支 → 增量提交（原子、可追） → Push → 开 PR → Review + CI → 合 main；回滚 = `git revert`（保留历史）或 `git checkout <sha> -- <file>`（仅取某版本某文件）。本环境多对话共享工作树，故 UI 组独立分支、**只提交自身产物**（design/ + 本 handoff），不碰其他 19 个在改文件。
+
+### 10.4 补做：handoff §3 启发的 UI 自定义方向（用户要求「你还有些没做，那你补做」）
+
+基于 `handoff-ui-optimization-2026-08-16.md` §3「前端热切能力现状」已就绪的 6 槽位 + agent/summary/embedding 路由，本轮回填两个最可见、可纯前端 mock 的方向：
+
+| 方向 | 预览落地 | 后端对接 |
+|---|---|---|
+| ① 主界面 provider 实时指示 + ⑤ 实时 probe 主界面化 | 顶栏 `prov-chip`：显示 `agent: hermes · embed: bge-m3` + 绿点（静态示意） | 真实数据来自 `/api/services/status`；点击切 provider 走 `/api/bg-agent/provider/route` 等 |
+| ② 方案预设（Profile Presets） | 模型 tab 顶部 `预设 seg`：隐私优先 / 云端加速 / 混合，切换更新 hint（静态） | 真实写入走 `PUT /api/services/config` 一次性套用 6 槽位 |
+
+**本次未做（标注待真实端点接线后补）**：
+- ③ provider-aware 提示（选 Claude 提示 XML、选 GPT 提示 developer role 等）—— 需 provider→提示词映射表
+- ④ embedding-aware 记忆 UX（召回结果旁标 `via bge-m3`）—— 需记忆检索接口回传 embedding provider
+
+---
+
+## 11. 待闭环（本文件去留）
+
+- 等用户验收 v5（prov-chip / 预设 / 人物设定轻档 / LIVE 浅色修复）→ 回灌 `services/webui/static/styles.css` + `index.html`（缝 A）。
+- 后端对话按 §3 P0 + §10.2 P0 接手（TTS schema 扩展、persona 槽位、MAX_SYSTEM_PROMPT_CHARS）。
+- 全部落地后，在 `reports/handoff-ui-optimization-2026-08-16.md` 补「§3.5 反馈闭环」标记关闭本文档。

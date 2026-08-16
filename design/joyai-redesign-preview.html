@@ -120,6 +120,27 @@
   }
   .health-menu.open{display:block;}
   .health-menu h4{margin:6px 8px 10px;font-size:12px;color:var(--text-3);font-weight:500;}
+
+  /* ---------- v5: 顶栏 provider 状态芯片（handoff §3 启发：主界面暴露当前 provider） ---------- */
+  .prov-chip{
+    display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:var(--radius-pill);
+    background:var(--bg-input);border:1px solid var(--border);color:var(--text-2);
+    font-size:11.5px;cursor:default;white-space:nowrap;
+  }
+  .prov-chip b{color:var(--text);font-weight:500;}
+  .prov-chip .pdot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px rgba(43,169,105,.6);}
+  .prov-chip .pdot.warn{background:var(--warn);box-shadow:0 0 6px rgba(217,131,23,.6);}
+  .prov-chip .psep{color:var(--text-3);}
+  @media (max-width:900px){ .prov-chip .prov-static{display:none;} }
+
+  /* ---------- v5: 人物设定 字数计 + 按钮 ---------- */
+  .char-meter{font-size:11.5px;color:var(--text-3);}
+  .char-meter .warn{color:var(--brand);display:none;}
+  .btn-ghost{
+    padding:6px 14px;border-radius:8px;border:1px solid var(--border-strong);
+    background:transparent;color:var(--text-2);font-size:12px;font-family:var(--font);cursor:pointer;transition:.12s;
+  }
+  .btn-ghost:hover{border-color:var(--brand);color:var(--text);}
   .svc{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;}
   .svc:hover{background:var(--bg-elev-2);}
   .svc-name{display:flex;align-items:center;gap:10px;color:var(--text);font-size:13px;}
@@ -434,6 +455,12 @@
       <div class="health-pill" id="healthPill" onclick="document.getElementById('healthMenu').classList.toggle('open')">
         <span class="dot"></span> 系统正常
       </div>
+      <div class="prov-chip" id="provChip" title="当前 provider（在「模型」tab 可切换）">
+        <span class="prov-static">provider</span>
+        <span class="pdot"></span>agent <b>hermes</b>
+        <span class="psep">·</span>
+        <span class="pdot"></span>embed <b>bge-m3</b>
+      </div>
       <button class="icon-btn" id="settingsBtn" title="设置">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -581,6 +608,15 @@
 
         <!-- =================== 模型 =================== -->
         <section class="section active" data-section="model">
+          <div class="group">
+            <div class="gl"><label>方案预设</label><span class="desc">一键套用 6 槽位组合（后端已就绪）</span></div>
+            <div class="seg" id="preset-seg">
+              <button class="on" onclick="applyPreset('privacy',this)">隐私优先 · 全本地</button>
+              <button onclick="applyPreset('cloud',this)">云端加速</button>
+              <button onclick="applyPreset('hybrid',this)">混合</button>
+            </div>
+            <div class="hint" id="presetHint">当前：隐私优先 —— LLM / 摘要 / TTS / 嵌入 全部本地，仅 KWS 走自训。切换会套用到下方各槽位表单（预览为静态示意，真实写入走 <code>/api/services/config</code>）。</div>
+          </div>
           <div class="group">
             <div class="gl"><label>后端服务地址</label><span class="desc">llama.cpp HTTP 服务</span></div>
             <input class="inp" value="http://127.0.0.1:7060">
@@ -891,22 +927,18 @@
           </div>
 
           <div class="group">
-            <div class="gl"><label>Prompt 模板</label></div>
-            <select class="sel" id="promptTplSel" onchange="document.getElementById('promptTplArea').value=this.value">
-              <option value="[JoyAI ChatML]\n&lt;|im_start|&gt;system\n{system}\n&lt;|im_end|&gt;\n&lt;|im_start|&gt;user\n{user}\n&lt;|im_end|&gt;\n&lt;|im_start|&gt;assistant\n">JoyAI ChatML</option>
-              <option value="[Llama-3 Instruct]\n&lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;\n\n{system}&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;\n\n{user}&lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;\n\n">Llama-3 Instruct</option>
-              <option value="[OpenAI Chat]\nsystem:\n{system}\n\nuser:\n{user}\n\nassistant:\n">OpenAI Chat</option>
-            </select>
-            <textarea id="promptTplArea" class="inp" style="height:auto;min-height:120px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:10px 12px;line-height:1.5;resize:vertical;">[JoyAI ChatML]
-&lt;|im_start|&gt;system
-{system}
-&lt;|im_end|&gt;
-&lt;|im_start|&gt;user
-{user}
-&lt;|im_end|&gt;
-&lt;|im_start|&gt;assistant
-</textarea>
-            <div class="hint">下拉选预设覆盖 textarea；可自由编辑覆盖下拉。占位符：<code>{system}</code> / <code>{user}</code> / <code>{history}</code></div>
+            <div class="gl"><label>人物设定</label><span class="desc">定义 AI 的角色与人格（轻档）</span></div>
+            <div class="row">
+              <label>人格名称</label>
+              <div class="ctrl-wrap"><input class="inp" id="personaName" value="JoyAI 默认人格"></div>
+            </div>
+            <div class="row" style="flex-direction:column;align-items:stretch;gap:6px;">
+              <label>系统提示词（人格定义）</label>
+              <textarea id="personaPrompt" class="inp" style="min-height:140px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;resize:vertical;" oninput="updatePersonaCount()">你是 JoyAI，一个本地优先、陪伴式的实时多模态 AI 助手。语气亲切自然，像朋友一样聊天；回答简洁，不堆砌术语；遇到不确定内容坦诚说明。你支持语音对话与视频理解。</textarea>
+              <div class="char-meter"><span id="personaCount">0</span> / 2000 字<span class="warn" id="personaWarn"> · 接近上限，过长会拖慢响应并降低指令遵循</span></div>
+            </div>
+            <div class="hint">轻档：仅名字 + 系统提示词，<b>不绑定音色</b>（音色请在「语音」tab 自行设置）。保存后作为 system message 注入每次对话。后端需新增 persona 槽位 + 保存/重置接口（见 handoff §10）。</div>
+            <div class="row" style="gap:8px;"><button class="btn-ghost" onclick="resetPersona()">重置为默认</button></div>
           </div>
 
           <div class="group">
@@ -1047,7 +1079,7 @@
       input:      ['输入 & 唤醒',    '麦克风 / ASR / KWS 唤醒词'],
       memory:     ['记忆',           '长期记忆 & 嵌入提供方'],
       wiki:       ['知识库',         '本地 RAG 召回'],
-      advanced:   ['高级',           '推理参数 · Prompt 模板 · 密钥策略'],
+      advanced:   ['高级',           '推理参数 · 人物设定 · 密钥策略'],
       appearance: ['外观',           '主题 / 强调色 / HUD'],
       about:      ['关于',           '版本信息 & 维护操作']
     };
@@ -1130,6 +1162,37 @@
     btn.parentElement.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
   }
+
+  /* ---------- v5: 人物设定 轻档（字数计 + 重置） ---------- */
+  var PERSONA_MAX = 2000;
+  var PERSONA_DEFAULT = '你是 JoyAI，一个本地优先、陪伴式的实时多模态 AI 助手。语气亲切自然，像朋友一样聊天；回答简洁，不堆砌术语；遇到不确定内容坦诚说明。你支持语音对话与视频理解。';
+  function updatePersonaCount(){
+    var ta = document.getElementById('personaPrompt');
+    var n = ta.value.length;
+    document.getElementById('personaCount').textContent = n;
+    document.getElementById('personaWarn').style.display = (n > 1500) ? 'inline' : 'none';
+    ta.style.borderColor = (n > PERSONA_MAX) ? 'var(--brand)' : '';
+  }
+  function resetPersona(){
+    document.getElementById('personaPrompt').value = PERSONA_DEFAULT;
+    document.getElementById('personaName').value = 'JoyAI 默认人格';
+    updatePersonaCount();
+  }
+
+  /* ---------- v5: 方案预设（handoff §3 启发：6 槽位一键组合；预览静态示意） ---------- */
+  var PRESETS = {
+    privacy: '隐私优先 —— LLM / 摘要 / TTS / 嵌入 全部本地，仅 KWS 走自训。',
+    cloud:   '云端加速 —— LLM / 摘要 / 嵌入 走云端 provider，TTS 走 MiniMax，本地仅作 fallback。',
+    hybrid:  '混合 —— LLM/摘要 本地，TTS/嵌入 云端（兼顾隐私与质量）。'
+  };
+  function applyPreset(mode, btn){
+    btn.parentElement.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    document.getElementById('presetHint').innerHTML = '当前：' + PRESETS[mode] + ' 切换会套用到下方各槽位表单（预览为静态示意，真实写入走 <code>/api/services/config</code>）。';
+  }
+
+  /* init */
+  updatePersonaCount();
 </script>
 </body>
 </html>
