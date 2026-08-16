@@ -581,3 +581,23 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 **校验**：`node --check` JS OK；tag balance `<section>` 11/11、`<div>` 211/211、`<select>` 11/11。
 
 **一致性合规自检（D1–D5）**：D1 全复用 `.seg/.group/.row/.inp/.sel/.hint/.chip/.cdot`，无新元件；D2 状态色复用 `--ok/--warn`；D3 无裸文字状态标签（chip 带 dot）；D4 16px 留白=8px 网格；D5 字体沿用 `--font`。
+
+### 17. 视频采集改放到浮层（点击底部摄像头按钮弹出） — v6-lite.5
+
+> 用户反馈（约 18:0x+）：「在哪实现呢我没找到，不应该点击这个有互动吗？」—— 截图显示底部工具栏的摄像头按钮被点击但无反应。我 v6-lite.4 把卡片错放到主视图是**误读了触发入口**：视频捕获不是「主视图多一张配置卡」，而是「点击底部摄像头按钮 → 弹出浮层选择采集源」。
+
+**修正（v6-lite.5）**：
+- **删掉主视图里那张「视频采集」卡**（§16 那块整段移除）——位置错配，干扰用户找入口。
+- **底部工具栏摄像头按钮改为可点击触发浮层**：原 `<button class="ctrl" title="摄像头">` 加上 `onclick="toggleCapPop(event)"`，外裹 `.ctrl-wrap`（relative 锚点）。
+- **`.cap-pop` 浮层（340px，从按钮上方弹出 10px）**：复用 `.card` 视觉语言（同 `--bg-elev`/`--border`/`--radius`/`--shadow`，加 12-36px 阴影增强层级感）。
+  - 头部：复用 `.chip` 显示 `摄像头 · 本地` / `屏幕 · 本地` / `RTSP · 网络` + 关闭按钮 `.cap-pop-close`（26×26 圆角，hover 提亮）。
+  - 主体：v6-lite.4 的 `.seg.seg-3` 三段选择块 + 三个 `.group.cap-sub` 子表单（摄像头设备/分辨率、采集帧率/处理间隔/每批帧数、RTSP 流地址/分辨率），逐字搬迁。
+  - 底部：`.ghost-btn` 取消 + `.cap-pop-go` 开始采集（品牌色 `--brand` 圆角按钮，与 `.send` 同语言）。
+- **交互**：点摄像头 → 浮层弹出 + 按钮亮红（`.active`）；再点 → 收起；点外面 → 自动收起（capture-phase 监听，判定 `#camCtrl.contains(target)`）；点 × 或取消 → 收起。新增 JS `toggleCapPop` / `closeCapPop` / `closeCapPopOutside`，复用既有 `switchCapture`。
+- 关闭后未捕获的 `switchCapture` 副作用已保留（capStatus chip + 三个 subform 状态独立于浮层开合），不会因为收起丢失已选项。
+
+**校验**：`node --check` JS OK；tag balance `<section>`10/10、`<div>`211/211、`<select>`11/11、`<svg>`30/30、`<button>`50/50。
+
+**一致性合规自检（D1–D5）**：D1 复用 `.seg/.group/.row/.inp/.sel/.hint/.chip/.cdot/.card 视觉变量`，新加的仅是动作按钮 `.cap-pop-go`（与 `.send` 同色同语义）+ 浮层定位 `.ctrl-wrap`/`.cap-pop`/`close`，均非状态指示元件；D2 状态色复用 `--ok/--warn`；D3 无裸文字状态标签；D4 14px 留白=8px 网格；D5 字体沿用 `--font`。
+
+**教训（给 UI 组 + 自己）**：用户提到的入口（截图里**那个**被点击的按钮）是触发点，不是「在主视图加一张配置卡」。**先识别交互的物理触发入口，再设计承载界面**——卡片 vs 浮层 vs 模态，取决于用户在什么上下文触发。
