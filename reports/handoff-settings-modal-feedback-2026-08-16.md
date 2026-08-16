@@ -408,7 +408,7 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 | 方向 | 预览落地 | 后端对接 |
 |---|---|---|
 | ① 主界面 provider 实时指示 + ⑤ 实时 probe 主界面化 | 顶栏 `prov-chip`：显示 `agent: hermes · embed: bge-m3` + 绿点（静态示意） | 真实数据来自 `/api/services/status`；点击切 provider 走 `/api/bg-agent/provider/route` 等 |
-| ② 方案预设（Profile Presets） | 模型 tab 顶部 `预设 seg`：隐私优先 / 云端加速 / 混合，切换更新 hint（静态） | 真实写入走 `PUT /api/services/config` 一次性套用 6 槽位 |
+| ② 方案预设（Profile Presets） | ~~模型 tab 顶部 `预设 seg`~~ **（v6 已移除 — 用户截图反馈「不需要这个」）** | 6 槽位一键套用属锦上添花，用户明确不需要；真实写入仍走 `PUT /api/services/config` |
 
 **本次未做（标注待真实端点接线后补）**：
 - ③ provider-aware 提示（选 Claude 提示 XML、选 GPT 提示 developer role 等）—— 需 provider→提示词映射表
@@ -418,6 +418,47 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 
 ## 11. 待闭环（本文件去留）
 
-- 等用户验收 v5（prov-chip / 预设 / 人物设定轻档 / LIVE 浅色修复）→ 回灌 `services/webui/static/styles.css` + `index.html`（缝 A）。
+- 等用户验收 v6（prov-chip / 人物设定轻档 / LIVE 浅色修复 / 模型 tab 本云分拆）→ 回灌 `services/webui/static/styles.css` + `index.html`（缝 A）。
 - 后端对话按 §3 P0 + §10.2 P0 接手（TTS schema 扩展、persona 槽位、MAX_SYSTEM_PROMPT_CHARS）。
 - 全部落地后，在 `reports/handoff-ui-optimization-2026-08-16.md` 补「§3.5 反馈闭环」标记关闭本文档。
+
+---
+
+## 12. 17:xx 用户反馈 v6（4 张截图逐条）→ 模型 tab 结构重做
+
+> 用户反馈原话（@image 标号）：
+> - `@image#1 #2`：**「不需要这两个。」** → 指 ① 方案预设（Profile Presets）② 密钥显示策略（Key Display Strategy）两个 group 直接砍掉。
+> - `@image#3`：**「主模型和摘要模型也要本地｜云端的各自单独切换。」** → 之前是单一「后端服务地址」共享端口 + 两个纯 model 名 input；改为 主模型 / 摘要模型 各自独立的 `本地 / 云端` 两段 Seg（与 15:08 定稿「每个 provider 槽位顶层一律 本地/云端 二选一」原则一致，粒度细化到模型）。
+> - `@image#4` 三条：
+>   1. **「并行槽数 · 是什么东西？不用吧。」** → 砍掉 `并行槽数` 行。
+>   2. **「少了输出长度填空。」** → 新增 `输出长度` 输入框（默认 `2048 tokens`）。
+>   3. **「上下文长度至少 16384，不然用以出错。」** → `上下文长度` 默认值 `8192` → **`16384 tokens`**，hint 明示「过短易触发截断与推理错误」。
+
+### 12.1 设计决策（落地预览）
+
+| 项 | 改动 | 理由 |
+|---|---|---|
+| 方案预设 group | **移除** | 用户截图明确「不需要这个」；6 槽位一键套用属锦上添花，真实写入仍可走 `PUT /api/services/config` |
+| 密钥显示策略 group | **移除** | 密钥「显示加密」已由每个云端字段**就地实现**（API 地址右侧 `仅前端显示加密` chip + API Key 的 👁 切换掩码），全局策略开关冗余 |
+| 主模型 / 摘要模型 | 各自加 `本地 / 云端` 两段 Seg + 子表单 | 本地：模型名 + 走共享后端端口；云端：API 地址 + API Key（掩码）+ 模型名。两份子表单 `display` 切换 + 滑动指示器 + 淡入（复用 v4-lite 零风险方案） |
+| 并行槽数 | **移除** | 用户不理解且非必要暴露；属后端启动参数，不应在 Settings 面板前段 |
+| 输出长度 | **新增** `2048 tokens` | 用户指出缺；对应后端 `max_tokens`（§2.2 路线图项，UI 先占位） |
+| 上下文长度 | `8192` → **`16384 tokens`** | 用户强制下限；避免本地模型截断/推理错误 |
+
+### 12.2 JS 改动
+
+- 新增 `switchModel(modelId, mode, btn)`：与 `switchTTS`/`switchEmb` 同构（移除 confirm 依赖，纯 `display` 切换 + `moveIndicator` + `fadeForm`），按 `modelId + '-local-form' / '-cloud-form'` 定位子表单。
+- **删除** `applyPreset()` + `PRESETS` 对象（方案预设移除后无引用）。
+- **删除** `setKeyMask()`（密钥显示策略移除后无引用）—— 遵循「增新删旧」纪律，不留死代码。
+- 校验：`node --check` JS 语法 OK；`grep` 已无 `applyPreset/PRESETS/setKeyMask/preset-seg/presetHint/keymask-seg/方案预设/密钥显示策略/并行槽数` 残留。
+
+### 12.3 后端待办增量
+
+- `上下文长度` 下限建议写进 schema 校验（≤16384 给出警告或拒绝保存）—— 与 §2.2「context_length 必须重启 llama-server」呼应。
+- `输出长度` 字段对应 `max_tokens`，需在 §2.2 路线图里明确是否热调整（当前构造时常量，见 §1.2）。
+- 主模型 / 摘要模型 各自的 本地/云端 provider 路由：本地走现有 llama.cpp（7060），云端走 OpenAI 兼容 `/v1` 接口（API 地址 / Key / 模型名）—— 后端需确认 summary 槽位也能独立指定云端 endpoint（当前 summary 是否独立于 agent 走云端尚未核实，留后端对话确认）。
+
+### 12.4 待闭环
+
+- 等用户验收 v6 → 回灌 `services/webui/static/`。
+- 顺带：本文件 §10.4 ② 方案预设已标移除、§11 已去掉「预设」引用。

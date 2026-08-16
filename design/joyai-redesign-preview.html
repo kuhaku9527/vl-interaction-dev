@@ -393,6 +393,8 @@
   }
   .subform-wrap{position:relative;min-height:60px;}
   .subform-wrap.collapsing{overflow:visible;}
+  /* v5-lite: 模型本/云子表单纵向堆叠 + 间距（display 由 JS 切换，类默认 flex 以兜底） */
+  .subform.model-sub{display:flex;flex-direction:column;gap:8px;}
   /* v4-lite: 子表单淡入（切换时出现侧有动画） */
   @keyframes subformFadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
   .fade-in{animation:subformFadeIn .2s ease;}
@@ -609,36 +611,67 @@
         <!-- =================== 模型 =================== -->
         <section class="section active" data-section="model">
           <div class="group">
-            <div class="gl"><label>方案预设</label><span class="desc">一键套用 6 槽位组合（后端已就绪）</span></div>
-            <div class="seg" id="preset-seg">
-              <button class="on" onclick="applyPreset('privacy',this)">隐私优先 · 全本地</button>
-              <button onclick="applyPreset('cloud',this)">云端加速</button>
-              <button onclick="applyPreset('hybrid',this)">混合</button>
-            </div>
-            <div class="hint" id="presetHint">当前：隐私优先 —— LLM / 摘要 / TTS / 嵌入 全部本地，仅 KWS 走自训。切换会套用到下方各槽位表单（预览为静态示意，真实写入走 <code>/api/services/config</code>）。</div>
-          </div>
-          <div class="group">
-            <div class="gl"><label>后端服务地址</label><span class="desc">llama.cpp HTTP 服务</span></div>
+            <div class="gl"><label>后端服务地址</label><span class="desc">llama.cpp HTTP 服务（本地模型共享此端口）</span></div>
             <input class="inp" value="http://127.0.0.1:7060">
-            <div class="hint">主模型与摘要模型共享此端口（各自挂载 path 不同）。</div>
+            <div class="hint">主模型与摘要模型本地模式共享此端口（各自挂载 path 不同）。</div>
           </div>
+
+          <!-- 主模型：本地 / 云端 各自独立切换 -->
           <div class="group">
-            <div class="row">
-              <label>主模型</label>
-              <div class="ctrl-wrap"><input class="inp" value="JoyAI-VL-7B (Q4_K_M)"></div>
+            <div class="gl"><label>主模型</label><span class="desc">本地 / 云端 独立切换</span></div>
+            <div class="seg" data-current="local">
+              <span class="seg-indicator pos-0" aria-hidden="true"></span>
+              <button class="on" onclick="switchModel('main','local',this)">本地</button>
+              <button onclick="switchModel('main','cloud',this)">云端</button>
             </div>
-            <div class="row">
-              <label>摘要模型</label>
-              <div class="ctrl-wrap"><input class="inp" value="summary-mini (Q8_0)"></div>
+            <div class="subform model-sub" id="main-local-form">
+              <div class="row"><label>模型名称</label><div class="ctrl-wrap"><input class="inp" value="JoyAI-VL-7B (Q4_K_M)"></div></div>
+              <div class="hint">走后端服务地址本地推理（llama.cpp）。</div>
             </div>
-            <div class="row">
-              <label>上下文长度</label>
-              <div class="ctrl-wrap"><input class="inp" value="8192 tokens"></div>
+            <div class="subform model-sub" id="main-cloud-form" style="display:none;">
+              <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label><input class="inp" value="https://api.openai.com/v1"></div>
+              <div class="row"><label>API Key</label>
+                <div class="key-wrap" data-key="mask">
+                  <input class="inp" type="password" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" data-mask="sk-xx…xxxx" readonly>
+                  <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="row"><label>模型</label><input class="inp" value="gpt-oss-120b" placeholder="云端 LLM 模型名"></div>
             </div>
-            <div class="row">
-              <label>并行槽数</label>
-              <div class="ctrl-wrap"><input class="inp" value="2"></div>
+          </div>
+
+          <!-- 摘要模型：本地 / 云端 各自独立切换 -->
+          <div class="group">
+            <div class="gl"><label>摘要模型</label><span class="desc">本地 / 云端 独立切换</span></div>
+            <div class="seg" data-current="local">
+              <span class="seg-indicator pos-0" aria-hidden="true"></span>
+              <button class="on" onclick="switchModel('summary','local',this)">本地</button>
+              <button onclick="switchModel('summary','cloud',this)">云端</button>
             </div>
+            <div class="subform model-sub" id="summary-local-form">
+              <div class="row"><label>模型名称</label><div class="ctrl-wrap"><input class="inp" value="summary-mini (Q8_0)"></div></div>
+              <div class="hint">本地轻量摘要模型，用于长对话压缩。</div>
+            </div>
+            <div class="subform model-sub" id="summary-cloud-form" style="display:none;">
+              <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label><input class="inp" value="https://api.openai.com/v1"></div>
+              <div class="row"><label>API Key</label>
+                <div class="key-wrap" data-key="mask">
+                  <input class="inp" type="password" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" data-mask="sk-xx…xxxx" readonly>
+                  <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="row"><label>模型</label><input class="inp" value="gpt-oss-20b" placeholder="云端摘要模型名"></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="row"><label>上下文长度</label><div class="ctrl-wrap"><input class="inp" value="16384 tokens"></div></div>
+            <div class="row"><label>输出长度</label><div class="ctrl-wrap"><input class="inp" value="2048 tokens"></div></div>
+            <div class="hint">上下文长度建议 ≥ 16384，过短易触发截断与推理错误；输出长度限制单次回复 token 上限。</div>
           </div>
         </section>
 
@@ -940,15 +973,6 @@
             <div class="hint">轻档：仅名字 + 系统提示词，<b>不绑定音色</b>（音色请在「语音」tab 自行设置）。保存后作为 system message 注入每次对话。后端需新增 persona 槽位 + 保存/重置接口（见 handoff §10）。</div>
             <div class="row" style="gap:8px;"><button class="btn-ghost" onclick="resetPersona()">重置为默认</button></div>
           </div>
-
-          <div class="group">
-            <div class="gl"><label>密钥显示策略</label><span class="desc">全局默认（每字段可单独覆盖）</span></div>
-            <div class="seg" id="keymask-seg">
-              <button class="on" onclick="setKeyMask('mask',this)">掩码 <small style="opacity:.6;">默认</small></button>
-              <button onclick="setKeyMask('reveal',this)">完整</button>
-            </div>
-            <div class="hint">显示加密仅作用于此 UI，文件落盘仍按现有明文 + chmod 0600。</div>
-          </div>
         </section>
 
         <!-- =================== 外观 =================== -->
@@ -1074,12 +1098,12 @@
     var sec = document.querySelector('.section[data-section="'+name+'"]');
     if(sec) sec.classList.add('active');
     var meta = {
-      model:      ['模型',           '本地 LLM 服务地址 / 模型'],
+      model:      ['模型',           '本地 / 云端 LLM · 服务地址 / 模型'],
       voice:      ['语音',           'TTS 本地 / 云端 · 提供方切换'],
       input:      ['输入 & 唤醒',    '麦克风 / ASR / KWS 唤醒词'],
       memory:     ['记忆',           '长期记忆 & 嵌入提供方'],
       wiki:       ['知识库',         '本地 RAG 召回'],
-      advanced:   ['高级',           '推理参数 · 人物设定 · 密钥策略'],
+      advanced:   ['高级',           '推理参数 · 人物设定'],
       appearance: ['外观',           '主题 / 强调色 / HUD'],
       about:      ['关于',           '版本信息 & 维护操作']
     };
@@ -1158,11 +1182,6 @@
     }
   }
 
-  function setKeyMask(mode, btn){
-    btn.parentElement.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
-    btn.classList.add('on');
-  }
-
   /* ---------- v5: 人物设定 轻档（字数计 + 重置） ---------- */
   var PERSONA_MAX = 2000;
   var PERSONA_DEFAULT = '你是 JoyAI，一个本地优先、陪伴式的实时多模态 AI 助手。语气亲切自然，像朋友一样聊天；回答简洁，不堆砌术语；遇到不确定内容坦诚说明。你支持语音对话与视频理解。';
@@ -1179,16 +1198,19 @@
     updatePersonaCount();
   }
 
-  /* ---------- v5: 方案预设（handoff §3 启发：6 槽位一键组合；预览静态示意） ---------- */
-  var PRESETS = {
-    privacy: '隐私优先 —— LLM / 摘要 / TTS / 嵌入 全部本地，仅 KWS 走自训。',
-    cloud:   '云端加速 —— LLM / 摘要 / 嵌入 走云端 provider，TTS 走 MiniMax，本地仅作 fallback。',
-    hybrid:  '混合 —— LLM/摘要 本地，TTS/嵌入 云端（兼顾隐私与质量）。'
-  };
-  function applyPreset(mode, btn){
-    btn.parentElement.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
+  /* ---------- v5-lite: 主模型 / 摘要模型 各自独立的 本地/云端 切换 ---------- */
+  function switchModel(modelId, mode, btn){
+    var seg = btn.parentElement;
+    if(seg.dataset.current === mode) return;
+    seg.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    document.getElementById('presetHint').innerHTML = '当前：' + PRESETS[mode] + ' 切换会套用到下方各槽位表单（预览为静态示意，真实写入走 <code>/api/services/config</code>）。';
+    moveIndicator(seg, btn);
+    seg.dataset.current = mode;
+    var local = document.getElementById(modelId + '-local-form');
+    var cloud = document.getElementById(modelId + '-cloud-form');
+    local.style.display = (mode === 'local') ? '' : 'none';
+    cloud.style.display = (mode === 'cloud') ? '' : 'none';
+    fadeForm(mode === 'local' ? local : cloud);
   }
 
   /* init */
