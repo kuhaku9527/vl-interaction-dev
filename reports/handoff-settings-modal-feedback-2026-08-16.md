@@ -462,3 +462,37 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 
 - 等用户验收 v6 → 回灌 `services/webui/static/`。
 - 顺带：本文件 §10.4 ② 方案预设已标移除、§11 已去掉「预设」引用。
+
+---
+
+## 13. 17:xx 用户反馈 v6-lite（3 张截图）→ 主视图状态收纳与重组
+
+> 用户反馈原话（@image 标号）：
+> - `@image#1`：**「只用填写数值，不需要后面的 tokens。」** → 模型 tab 的 `上下文长度` `输出长度` 输入框：去掉后缀 `tokens`，只填数字（值不变：16384 / 2048）。单位由 hint 文案承载「上下文长度建议 ≥ 16384，过短易触发截断与推理错误」。
+> - `@image#2`：**「也应该收纳进去。」** → 顶栏 `prov-chip`（agent: hermes · embed: bge-m3）+ 视频卡左上 `live-chip`（实时工程 LIVE）两个**散落的状态元素**统一收纳到「健康菜单」下拉的「折叠项」分组，不再在 header/视频卡裸露。
+> - `@image#3`：**「该展示再外面的是这个三个。」** → 三个核心状态 `KWS·唤醒词` / `Jarvis·常驻` / `Live·常驻模式` 从下拉里**提到主视图常驻显示**——以「系统状态」新卡片形式铺满 `.main` 顶部（`grid-column:1/-1`），点卡片右上「更多」按钮可展开完整健康菜单。
+
+### 13.1 设计决策（落地预览）
+
+| 项 | 改动 | 理由 |
+|---|---|---|
+| 上下文长度 / 输出长度 | 去 `tokens` 后缀，只填数字 | 用户明确「不需要」；单位由 label/hint 承载更干净 |
+| 状态收纳 | prov-chip + live-chip → 健康菜单「折叠项」分组 | 散落的两个 chip 信息密度低、视觉噪音，折叠更清爽 |
+| 三状态外提 | KWS / Jarvis / Live svc 行 → 主视图新「系统状态」卡片（满铺 grid） | 这是用户「运行中最关心的三个」——应**一目了然**，不该埋在下拉里 |
+| 健康菜单 | 移除 3 个 svc（已上提），保留 LLM/TTS/记忆/Wiki/连接 + 新增「折叠项」组 | 主菜单聚焦次要状态 + 收纳项 |
+| 死代码 | 删 `.prov-chip`、`.live-chip` CSS 块（无引用） | 约法三章增新删旧 |
+
+### 13.2 JS / CSS 改动
+
+- 新增 CSS：`.status-card{grid-column:1/-1;padding:0;}` + `.status-card .status-list{padding:6px 10px;}` + `.status-card .head-actions .ghost-btn{font-size:12px;padding:5px 10px;}`
+- 无 JS 改动（结构层）。
+- 校验：`node --check` JS 语法 OK；`<section>` 11/11、`<div>` 198/198、`<span>` 102/102、`<button>` 45/45 全平衡；grep `live-chip|prov-chip|16384 tokens|2048 tokens` 零残留。
+
+### 13.3 与既有原则的一致性
+
+- 状态分层：**主视图常驻 = 关键运行态**（KWS/Jarvis/Live），**健康菜单 = 次要健康态**（LLM/TTS/记忆/Wiki/连接），**折叠项 = 装饰性指示**（provider / LIVE 录制）。三档分得很清，符合 4 章节「前端」对主界面信息密度的要求。
+- 与 §10.4 handoff §3 启发一致：「主界面无 provider 状态」一句话当时仍留着 — 现在通过「折叠项」的方式**依然让用户在需要时能找到**，但默认不打扰。
+
+### 13.4 待闭环
+
+- 等用户验收 v6-lite → 回灌 `services/webui/static/`。
