@@ -43,7 +43,7 @@
 
 > 表格列：UI 元素（视觉） | 真实后端字段 / 落地方式 | 备注
 
-> **实装状态（v6-lite.12，已落地）**：本 §2 全部 UI 元素已落到真实 `services/webui/src/joy_interaction_webui/static/`（`styles.css` + `index.html` + `config_services.js#wireSegProvider`），**零后端改动**；契约测试全绿。6 槽位本云 Seg 全到位；Provider 控件落 main/summary/asr/agent/embedding（tts 按 spec 仅 seg，Provider 化留下轮）；实装分支 `ui/redesign-preview`。
+> **实装状态（v6-lite.12，已落地）**：本 §2 全部 UI 元素已落到真实 `services/webui/src/joy_interaction_webui/static/`（`styles.css` + `index.html` + `config_services.js#wireSegProvider`），**零后端改动**；契约测试全绿。6 槽位本云 Seg 全到位；Provider 控件落全部 6 槽位（含 tts，v6-lite.18 补全前端一致性——tts 仅 api_base，预设管理命名 api_base 端点；model/voice 等完整参数化仍待后端扩展 tts 字段，见 注6）。实装分支 `ui-redesign-preview`（扁平名）。
 
 ### 2.0 Provider 命名预设控件（v6-lite.10，每个云端 subform 顶部 — 前端 localStorage）
 
@@ -158,6 +158,7 @@
 
 ### 变更日志（本对接清单自身）
 
+- **v6-lite.18（2026-08-17）** — TTS 槽位补 Provider 命名预设控件（补全 6 槽位统一）：tts 槽位加入 `provider-mgr`（名称 input + 保存整套 + 历史下拉 + 删除），与 main/summary/asr/agent/embedding 一致；去掉 `wireSegProvider` 中 `if (slot === 'tts') return` 提前返回。tts 仅有 `api_base`（无 model/provider 字段），预设管理命名 api_base 端点，`_pApply` 对缺失输入 null 守卫自动 no-op，接现有 `PUT /api/services/config` 落盘。纯加法；保留既有 `svc-tts-*` id 与契约；契约测试全绿（44 JS + 25 Python）。§2 实装状态 banner 更新（tts 现已含 Provider 控件）；注6（tts 完整参数化仍需后端扩展 tts 字段）维持开放。
 - **v6-lite.17（2026-08-17）** — 轴 5 实装落地真实 `static/`：侧栏 Video Source 面板就地改为按需浮层——新增 `#captureFabBtn` 悬浮按钮（`--accent-color` + `:active` 缩放）+ `#captureOverlay` 模态（背景遮罩 + 卡片 + 关闭按钮，触发纯 `classList.toggle`，无 `window.confirm`）。三个 `.capture-block`（Webcam/RTSP/Screen）结构与全部 DOM id（`cameraSelect`/`webcamStartBtn`/`rtsp*`/`screen*`/`processEvery`/`framesPerBatch` 等）原样保留，底层 `capture_webcam.js`/`screen_capture.js`/`capture_rtsp.js` 接线与 start/stop 事件绑定零改动；补 `.capture-block`/`.capture-block-header` 卡片化重皮肤（8px 栅格 + 真实令牌 `--bg-tertiary`/`--border-color`/`--text-primary`），与轴2 表面语言一致。纯加法；HTML 标签平衡校验通过；契约测试全绿（44 JS + 25 Python）。映射蓝图 `webui-redesign-mapping.md` §5 标注「已落地」；§5 注3 标记为已落地。
 - **v6-lite.16（2026-08-17）** — 轴 6 实装落地真实 `static/`：输入栏 `speechBtn`（`.speech-control`）激活态由 `speech_input.js:20` 的 `.recording` 类驱动——在其上新增 `--accent-color` outline（offset 2px）+ `micActivePulse` 脉冲红环（box-shadow 0→7px 扩散淡出，1.5s 循环）；发送按钮 `promptSendBtn`（`.chat-prompt-action.send`）新增 `:active` `scale(0.92)` 按压反馈（复用基类 transform 0.2s 过渡）。纯 CSS 加法：零 JS、零 id / 令牌 / `data-i18n` key 改动、保留全部点击绑定；契约测试全绿（44 JS + 25 Python）。映射蓝图 `webui-redesign-mapping.md` §6 标注「已落地」。
 - **v6-lite.14（2026-08-16）** — 轴 2 + 轴 7 实装落地真实 `static/`：① 轴 2 纯 CSS 8px 栅格规范化（`.settings-section-title`/`.settings-item`/`.form-group`/`.panel-header` 间距 12/14→16px，`.settings-close` 圆角 4→6px 与表单控件统一；边框/圆角层级不变）；② 轴 7 设置模态 10 个高级 `.settings-section` 默认 `collapsed`（核心「API Status」常驻），标题 `::after` 箭头 + `onclick` 切换父段（`classList.toggle`，无新函数、无 `window.confirm`）。零 JS 逻辑改动、零 id/令牌/`data-i18n` key 改动；契约测试全绿（23 JS + 25 Python）。映射蓝图 `webui-redesign-mapping.md` §2/§7 标注「已落地」。
