@@ -497,15 +497,21 @@ limitations under the License.
         <div class="sidebar" id="sidebar">
             <div class="sidebar-panels" id="sidebarPanels">
             <!-- Video Source: 3 independent capture modules (v3.38). -->
-            <div class="panel">
-                <div class="panel-header" onclick="togglePanel('videoSourceConfig')">
-                    <div class="panel-title">
-                        <span class="panel-icon"><i data-lucide="video"></i></span>
-                        <span class="panel-title-text" data-i18n>Video Source</span>
+            <!-- Axis 5 (v6-lite.17): Video Source capture moved to an on-demand
+                 floating overlay (FAB + modal). The three .capture-block
+                 structures and all their DOM ids / start-stop bindings are
+                 preserved verbatim; only the trigger changed from an inline
+                 sidebar panel to a floating action button. No JS changed. -->
+            <button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="document.getElementById('captureOverlay').classList.toggle('hidden')">
+                <i data-lucide="video"></i>
+            </button>
+            <div class="capture-overlay hidden" id="captureOverlay" role="dialog" aria-modal="true" aria-label="Video Source" onclick="if(event.target===this)this.classList.add('hidden')">
+                <div class="capture-overlay-card">
+                    <div class="capture-overlay-header">
+                        <span class="capture-overlay-title"><i data-lucide="video"></i> <span data-i18n>Video Source</span></span>
+                        <button class="capture-overlay-close" id="captureOverlayClose" type="button" aria-label="Close" title="Close" onclick="document.getElementById('captureOverlay').classList.add('hidden')"><i data-lucide="x"></i></button>
                     </div>
-                    <span class="panel-toggle collapsed" id="videoSourceConfigToggle">▼</span>
-                </div>
-                <div class="panel-content collapsed" id="videoSourceConfig">
+                    <div class="capture-overlay-body">
                     <!-- Webcam capture -->
                     <div class="capture-block">
                         <div class="capture-block-header"><i data-lucide="video"></i> <span data-i18n>Webcam Capture</span></div>
@@ -565,6 +571,7 @@ limitations under the License.
                                 <span id="screenStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

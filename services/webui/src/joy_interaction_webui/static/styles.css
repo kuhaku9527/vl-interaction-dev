@@ -1147,6 +1147,133 @@
             display: block;
         }
 
+        /* Axis 5 (v6-lite.17): Video Source capture as on-demand floating
+           overlay (FAB + modal). Reuses the existing .capture-block markup
+           (all DOM ids / start-stop bindings preserved); only the trigger
+           changed. Real tokens only; no new color values. */
+        .capture-fab {
+            position: fixed;
+            right: 16px;
+            bottom: 96px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: var(--accent-color);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(143, 17, 26, 0.35);
+            z-index: 9990;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .capture-fab:hover {
+            box-shadow: 0 10px 24px rgba(143, 17, 26, 0.42);
+        }
+
+        .capture-fab:active {
+            transform: scale(0.92);
+        }
+
+        .capture-fab .lucide {
+            width: 22px;
+            height: 22px;
+            stroke: #fff;
+        }
+
+        .capture-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+        }
+
+        .capture-overlay.hidden {
+            display: none;
+        }
+
+        .capture-overlay-card {
+            width: min(380px, calc(100vw - 32px));
+            max-height: calc(100vh - 64px);
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+            padding: 16px;
+            box-sizing: border-box;
+        }
+
+        .capture-overlay-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .capture-overlay-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .capture-overlay-close {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .capture-overlay-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .capture-overlay-close .lucide {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Re-skin the capture blocks as grouped cards (8px-grid language,
+           consistent with axis 2). No DOM / id changes. */
+        .capture-block {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: var(--bg-tertiary);
+        }
+
+        .capture-block:last-child {
+            margin-bottom: 0;
+        }
+
+        .capture-block-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
         video.mirrored {
             transform: scaleX(-1);
         }
