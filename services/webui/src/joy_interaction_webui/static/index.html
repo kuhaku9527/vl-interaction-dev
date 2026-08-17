@@ -168,7 +168,7 @@ limitations under the License.
         <div class="settings-body">
             <!-- [Local Wiki] F2: API Status panel (top of settings, ADR-0012 §5) -->
             <div class="settings-section" style="grid-column: 1 / -1;">
-                <div class="settings-section-title" data-i18n>API Status</div>
+                <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>API Status</div>
                 <div class="api-status-grid" id="apiStatusGrid">
                     <div class="api-status-item"><span class="status-dot" id="status-main_llm"></span><span class="api-status-name" data-i18n>Main LLM</span><span class="api-status-meta" id="meta-main_llm">--</span></div>
                     <div class="api-status-item"><span class="status-dot" id="status-summarizer"></span><span class="api-status-name" data-i18n>Summarizer</span><span class="api-status-meta" id="meta-summarizer">--</span></div>
@@ -181,8 +181,8 @@ limitations under the License.
 
             <!-- Radio Silence (draft-radio-silence.md §3/§7): 静默设置面板。
                  存在但隐身：不推理不播报，只留唤醒通道。全部设置项带说明文字。 -->
-            <div class="settings-section full-width" id="radioSilenceSection">
-                <div class="settings-section-title">无线电静默</div>
+            <div class="settings-section full-width collapsed" id="radioSilenceSection">
+                <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">无线电静默</div>
                 <div class="input-hint" style="margin-bottom: 4px;">存在但隐身：不推理不播报，视觉继续，只留唤醒通道（KWS / 组合键 / 语音）。</div>
 
                 <div class="settings-item">
@@ -253,8 +253,8 @@ limitations under the License.
 
             <!-- Column 1: Layout & Visual Effects -->
                 <div>
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Layout</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Layout</div>
 
                         <div class="settings-item">
                             <div>
@@ -280,8 +280,8 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Visual Effects</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Visual Effects</div>
 
                         <div class="settings-item">
                             <div>
@@ -320,8 +320,8 @@ limitations under the License.
 
                 <!-- Column 2: Input Colors & WebRTC -->
                 <div>
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Visual Style</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Visual Style</div>
 
                         <div class="settings-item">
                             <div>
@@ -335,8 +335,8 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="settings-section-title">WebRTC</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">WebRTC</div>
 
                         <div class="settings-item">
                             <div style="flex: 1; min-width: 0;">
@@ -347,8 +347,8 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Audio Output</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Audio Output</div>
 
                         <div class="settings-item">
                             <div>
@@ -363,8 +363,8 @@ limitations under the License.
                     </div>
 
                     <!-- [ASR promotion] ASR辅助唤醒 toggle (joyai-asr-promotion-ui) -->
-                    <div class="settings-section">
-                        <div class="settings-section-title">Wake / ASR</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">Wake / ASR</div>
 
                         <div class="settings-item">
                             <div style="flex: 1; min-width: 0;">
@@ -381,8 +381,8 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Background Model</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Background Model</div>
 
                         <div class="settings-item">
                             <div>
@@ -412,8 +412,8 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Debug</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Debug</div>
 
                         <div class="settings-item">
                             <div>
@@ -450,8 +450,8 @@ limitations under the License.
                     </div>
 
                     <!-- [Local Wiki] F1: Network Proxy block (ADR-0012 §4, config-only for v1) -->
-                    <div class="settings-section">
-                        <div class="settings-section-title" data-i18n>Network Proxy</div>
+                    <div class="settings-section collapsed">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Network Proxy</div>
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Enable proxy</div>

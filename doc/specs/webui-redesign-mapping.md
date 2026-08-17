@@ -41,6 +41,7 @@
 - **目标**：统一圆角 / 边框(`--border-color`) / 留白到 8px 栅格，消除参差。
 - **落地**：复用既有卡片类，补统一间距工具（8 的倍数），不新造表面元件。
 - **契约**：纯 CSS／结构，无。　**阶段**：1。
+- **实装状态（v6-lite.14，2026-08-16 审计+落地）**：纯 CSS 规范化 `.settings-section-title`/`.settings-item`/`.form-group`/`.panel-header` 间距对齐 8px 栅格（12/14px→16px），`.settings-close` 圆角 4px→6px 与表单控件统一；边框已统一用 `--border-color`、圆角层级（容器 12 / 卡片 8 / 控件 6）保持不变。零 JS、零 id/令牌改动，契约测试 23/23 + 25/25 全绿。
 
 ### 轴 3 · 状态语义统一（chip + 圆点）
 - **现状**：`service-badge`(ok/err) + 各处散落徽章，语义不统一。
@@ -73,6 +74,7 @@
 - **目标**：高级 / provider 细节默认收起，主视图只留核心。
 - **落地**：调 `settings-section` 默认 collapsed 态；核心服务状态常驻可见。
 - **契约**：无。　**阶段**：1。
+- **实装状态（v6-lite.14，2026-08-16）**：设置模态内 10 个高级 `.settings-section`（除核心「API Status」外）默认加 `collapsed`；标题加 `::after` 箭头（旋转指示）+ `onclick` 切换父段 `collapsed`（纯 `classList.toggle`，无新函数、无 `window.confirm`）；CSS `.settings-section.collapsed > *:not(.settings-section-title){display:none}` 隐藏内容。侧栏 `servicesConfig`（provider 细节）本就默认 `collapsed`，主视图核心状态常驻。零契约影响。
 
 ---
 
