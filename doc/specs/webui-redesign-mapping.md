@@ -118,3 +118,39 @@
 joy-red 族: --joy-red(#c81e2a) --joy-red-dark(#8f111a) --joy-red-light(#f0525b)
             --joy-red-soft / --joy-red-ring / --joy-red-shadow（红强调专用衍生）
 ```
+
+---
+
+## 6. v6-lite.19 / 19b 重构（2026-08-16）：设计系统重建 + DOM 重构（consolidated）
+
+> 此前 v6-lite.13–17 是「轴 × PR」增量改。本轮改为**一次性对齐样板预览 `design/joyai-redesign-preview.html`**：把样板的设计令牌与设计组件层整体铺进 `styles.css`，再在**真实 app class**（内联脚本强耦合的那些）上套这层设计语言，零 id / 零 JS 改动。
+
+### 6.1 两层 CSS 结构（styles.css 尾部）
+- **v6-lite.19（设计系统层）**：在 `styles.css` 顶部新增一套**自包含**令牌 + 组件类（`--bg/#0A0A0B`、`--bg-elev`、`--bg-elev-2`、`--bg-input`、`--text/*-2/*-3`、`--brand/#C81E2A`、`--brand-bright`、`--ok/#2FBF71`、`--warn/#E0A32E`、`--bad`、`--radius/12px`、Inter 字体；亮色用 `body.light-theme`）。外加完整组件类（`.app/.header/.main/.card/.inputbar/.cap-pop/.modal-overlay/.modal-nav/.nav-item/.section/.group/.row/.inp/.sel/.seg/.switch/.slider/.provider-mgr/.health-menu/.quick-tabs/.chip` 等）。
+- **v6-lite.19b（reskin 层）**：用上述令牌**重皮肤真实 class**（`.container/.header/.sidebar{display:none}/.main-content{grid 1.5fr 1fr}/.video-card/.result-card/.bt-latency-*/.prompt-editor-inline/.chat-prompt-shell/.settings-modal.show/.settings-dialog{grid 220px 1fr}/.settings-body`），并同步旧 `--bg-primary/--text-primary/--border-color/--accent-color` 防亮色下半截组件仍走暗色。
+
+### 6.2 DOM 手术（index.html，确定性脚本 + 断言，保留全部 200+ 契约 id）
+1. **顶栏**：`header-left` 增 `.quick-tabs`(live/kws chip) + `.health-pill`(#healthPill) + `.health-menu`(#healthMenu，绝对定位下拉，列 7 项服务健康)；9 个 `status-badge` 原样保留。
+2. **设置模态**：`settings-dialog` 改为网格（220px 1fr），`<nav class="modal-nav" id="modalNav">` 8 个 `.nav-item`（模型/语音/输入/记忆/知识库/外观/高级/关于，scroll-to 右栏对应 id）；`settings-header` 跨两列（`.settings-dialog .settings-header{grid-column:1/-1}`）。
+3. **采集浮层**：`#captureFabBtn` + `#captureOverlay`（含 Webcam/RTSP/Screen 全部接线 id）从隐藏 `.sidebar` 迁入 `.prompt-editor-inline`；CSS 重写为**固定定位 popover**（`.hidden` 由新增 `#camBtn` 切换），不再 `display:none` 全屏浮层。
+4. **服务/知识库进模态**：Services 面板 + Knowledge Base 面板从隐藏 `.sidebar` 迁入 `settings-body` 右栏（因 `.sidebar{display:none}`，否则不可达）；`servicesConfig`/`knowledgeBase` 默认展开。
+
+### 6.3 增量 JS（追加在 `</script>` 末尾，加法，绝不触碰契约 JS）
+`healthPill` 点击开/合 `healthMenu`；`modalNav` 点击 scroll-to 对应 section + active 高亮；`camBtn` 点击 toggle `captureOverlay.hidden`。DOM 就绪后执行（脚本位于 body 末尾）。
+
+### 6.4 ⚠️ 治理偏差（提请审查组 ratification）
+v6-lite.19 **引入了样板预览自带的 token 名**（`--brand/--bg-elev/--bg-elev-2/--text-3/--ok/--warn/--bad`）——与 §3 红线 3「禁止新造 `--ok/--brand/--bg-elev-2/--text-3`」**直接冲突**。此为**有意偏差**：这些就是样板预览的设计系统令牌，且 1:1 映射到真实意图（`--brand`#C81E2A ≈ `--joy-red`；`--bg`#0A0A0B ≈ `--bg-primary`#080707；`--ok` 绿状态 ≈ `status-dot.ok`#2ecc71；`--warn` ≈ `--warning-color`）。即「换表现」统一到样板调色板，而非沿用旧 `--bg-primary` 体系。建议审查组确认：要么 ratification 本偏差，要么后续把 v6-lite.19 令牌改名回真实令牌（低风险纯查找替换）。
+
+### 6.5 验收
+- 全部 200+ 契约 id 保留（脚本断言 + `test_webui_static_contract.py` 25 passed）。
+- 内联脚本 + 10 个 SPLIT_JS 零改动；`vitest` 44 passed。
+- 视觉意图对齐样板预览（暗色电影感 + 单一红 + 2 列主区 + 药丸输入栏 + 右滑设置模态 + cap-pop）。像素级终验需浏览器渲染（本环境无浏览器，交由用户截图驱动下一轮微调）。
+
+### 6.6 布局骨架修正（v6-lite.20 · 2026-08-16）：输入栏锚定容器底部 + 顶栏/主区/输入栏无滚动堆叠
+> 上一轮（§6.2.3）把采集浮层迁入了 `.prompt-editor-inline`，但**整块输入栏仍嵌套在 `.result-card`（2 列网格的第 2 列）内部**——与样板预览 `.inputbar` 作为 `.main` 下方「全宽底栏」的结构不符；且 `body` 当时非 flex 列、` .container{height:100vh}` 与 60px 顶栏叠加会导致页面纵向滚动。本轮修正骨架：
+
+1. **输入栏出列迁移**（确定性脚本 + div 深度匹配断言，忽略 `<script>`/注释区，保留全部 id）：把 `.prompt-editor-inline` 整块从 `.result-card` 内迁出，作为 `.main-content` 的**兄弟节点**、`.container` 直接子元素，锚定容器底部。内联脚本 `promptEditorHome=querySelector('.prompt-editor-inline')` 与 `fullscreenPromptOverlay.appendChild(promptEditor)` / `promptEditorHome.appendChild(promptEditor)` 均按 class 查找，迁移零破坏（已 grep 确认无 `parentNode` 硬依赖）。
+2. **body 改 flex 列**：`body{display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;z-index:1}`，使「顶栏(60px, flex:0 0 auto) → 主区(flex:1) → 输入栏(flex:0 0 auto)」在 100vh 内无滚动堆叠（对齐样板 `.app` 列布局）。
+3. **.container 改 flex:1 列**：`flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0`，主区占满、输入栏落地底部。
+4. **红晕 vignette 复活**：样板 `.app::before` 因本项目 DOM 无 `.app` 元素而成为死规则；改名为 `body::before` 重应用径向红晕（暗角）。
+5. **校验**：全局 div 深度平衡与备份 `index.html.bak` 完全一致（depth=1 为旧 sidebar 注释区历史不平衡，非本轮引入）；`test_webui_static_contract.py` 25 passed、`vitest` 44 passed 全绿；8 个关键契约 id（promptSendBtn/captureOverlay/btMicGainSelect/camBtn/promptEditor/modalNav/healthPill/svc-llm-api-base）均在位。

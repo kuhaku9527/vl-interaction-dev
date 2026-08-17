@@ -131,8 +131,27 @@ limitations under the License.
             <div class="title-section">
                 <h1>JoyAI VL Live</h1>
             </div>
+            <div class="quick-tabs">
+                <button class="chip mode-chip active" data-mode="live" type="button"><span class="cdot"></span>live</button>
+                <button class="chip mode-chip" data-mode="kws" type="button"><span class="cdot"></span>kws</button>
+            </div>
+            <div class="health-pill" id="healthPill" title="Service health · click for details">
+                <span class="dot"></span>
+                <span id="healthPillText">All systems nominal</span>
+                <i data-lucide="chevron-down"></i>
+            </div>
         </div>
         <div class="header-right">
+            <div class="health-menu" id="healthMenu">
+                <h4>Service Health</h4>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Main LLM</span><span class="svc-state" id="hm-main_llm">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Summarizer</span><span class="svc-state" id="hm-summarizer">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Embedding</span><span class="svc-state" id="hm-embedding">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Memory Store</span><span class="svc-state" id="hm-memory_store">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>TTS</span><span class="svc-state" id="hm-tts">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>ASR</span><span class="svc-state" id="hm-asr">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Agent</span><span class="svc-state" id="hm-agent">--</span></div>
+            </div>
             <span class="status-badge disconnected" id="connectionStatus" role="status" aria-live="polite" data-i18n>Disconnected</span>
             <span class="status-badge llm-unknown" id="llmServiceStatus" title="LLM (llama-server) reachability -- polled every 3s">LLM ?</span>
             <span class="status-badge llm-unknown" id="ttsServiceStatus" title="TTS (voice_clone_api) reachability -- polled every 3s">TTS ?</span>
@@ -165,6 +184,18 @@ limitations under the License.
                 <button class="settings-close" id="settingsClose" aria-label="Close settings">×</button>
 
             </div>
+            <nav class="modal-nav" id="modalNav">
+                <h3>Settings</h3>
+                <button class="nav-item active" data-target="servicesConfig" type="button"><i data-lucide="cpu"></i> 模型 Model</button>
+                <button class="nav-item" data-target="ttsEnabledToggle" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
+                <button class="nav-item" data-target="maxLatency" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
+                <button class="nav-item" data-target="memoryStoreSub" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
+                <button class="nav-item" data-target="knowledgeBase" type="button"><i data-lucide="book-open"></i> 知识库 Wiki</button>
+                <button class="nav-item" data-target="layoutOrder" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
+                <button class="nav-item" data-target="backgroundEnabledToggle" type="button"><i data-lucide="layers"></i> 高级 Advanced</button>
+                <button class="nav-item" data-target="proxyEnabledToggle" type="button"><i data-lucide="info"></i> 关于 About</button>
+                <div class="nav-foot"><span class="ver">JoyAI VL · v6-lite.19b</span></div>
+            </nav>
         <div class="settings-body">
             <!-- [Local Wiki] F2: API Status panel (top of settings, ADR-0012 §5) -->
             <div class="settings-section" style="grid-column: 1 / -1;">
@@ -482,100 +513,6 @@ limitations under the License.
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-
-    <!-- TTS playback for LLM replies (auto-played when llm_reply WS event fires) -->
-    <audio id="btTtsPlayer" preload="auto" playsinline></audio>
-    <audio id="btListenPlayer" autoplay playsinline></audio>
-    <!-- 无线电静默唤醒音频（B3 silence_wake WS）：独立元素，避免打断 LLM 逐句回复队列 -->
-    <audio id="silenceWakePlayer" preload="auto" playsinline></audio>
-
-    <div class="container">
-        <!-- Left Sidebar -->
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-panels" id="sidebarPanels">
-            <!-- Video Source: 3 independent capture modules (v3.38). -->
-            <!-- Axis 5 (v6-lite.17): Video Source capture moved to an on-demand
-                 floating overlay (FAB + modal). The three .capture-block
-                 structures and all their DOM ids / start-stop bindings are
-                 preserved verbatim; only the trigger changed from an inline
-                 sidebar panel to a floating action button. No JS changed. -->
-            <button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="document.getElementById('captureOverlay').classList.toggle('hidden')">
-                <i data-lucide="video"></i>
-            </button>
-            <div class="capture-overlay hidden" id="captureOverlay" role="dialog" aria-modal="true" aria-label="Video Source" onclick="if(event.target===this)this.classList.add('hidden')">
-                <div class="capture-overlay-card">
-                    <div class="capture-overlay-header">
-                        <span class="capture-overlay-title"><i data-lucide="video"></i> <span data-i18n>Video Source</span></span>
-                        <button class="capture-overlay-close" id="captureOverlayClose" type="button" aria-label="Close" title="Close" onclick="document.getElementById('captureOverlay').classList.add('hidden')"><i data-lucide="x"></i></button>
-                    </div>
-                    <div class="capture-overlay-body">
-                    <!-- Webcam capture -->
-                    <div class="capture-block">
-                        <div class="capture-block-header"><i data-lucide="video"></i> <span data-i18n>Webcam Capture</span></div>
-                        <div class="form-group">
-                            <label data-i18n>Camera Selection</label>
-                            <select id="cameraSelect"><option value="" data-i18n>Detecting cameras...</option></select>
-                        </div>
-                        <div class="form-group">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <button class="icon-btn" id="webcamStartBtn" title="Start webcam capture" type="button" aria-label="Start webcam capture" data-i18n-title="Start webcam capture" data-i18n-aria="Start webcam capture"><i data-lucide="play"></i></button>
-                                <button class="icon-btn" id="webcamStopBtn" title="Stop webcam capture" type="button" disabled aria-label="Stop webcam capture" data-i18n-title="Stop webcam capture" data-i18n-aria="Stop webcam capture"><i data-lucide="square"></i></button>
-                                <span id="webcamStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
-                            </div>
-                            <div class="input-hint" style="margin-top: 8px;">Local preview + WebRTC to backend. VLM runs automatically while streaming.</div>
-                        </div>
-                    </div>
-
-                    <!-- RTSP capture -->
-                    <div class="capture-block">
-                        <div class="capture-block-header"><i data-lucide="cast"></i> <span data-i18n>RTSP Stream</span> <span class="beta-badge">BETA</span></div>
-                        <div class="form-group">
-                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
-                                <label style="margin-bottom: 0; flex: 1;" data-i18n>RTSP Stream URL</label>
-                                <button class="icon-btn" id="testRtspBtn" title="Test Connection" aria-label="Test Connection"><i data-lucide="test-tube-diagonal"></i></button>
-                            </div>
-                            <input type="text" id="rtspUrl" placeholder="rtsp://192.168.1.100:554/stream">
-                            <div id="rtspStatus" class="input-hint" style="margin-top: -4px; margin-bottom: 8px; display: none;"></div>
-                        </div>
-                        <div class="form-group">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <button class="icon-btn" id="rtspStartBtn" title="Start RTSP capture" type="button" aria-label="Start RTSP capture" data-i18n-title="Start RTSP capture" data-i18n-aria="Start RTSP capture"><i data-lucide="play"></i></button>
-                                <button class="icon-btn" id="rtspStopBtn" title="Stop RTSP capture" type="button" disabled aria-label="Stop RTSP capture" data-i18n-title="Stop RTSP capture" data-i18n-aria="Stop RTSP capture"><i data-lucide="square"></i></button>
-                                <span id="rtspCaptureStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
-                            </div>
-                            <div id="rtspBetaWarning" class="input-hint" style="margin-top: 8px; color: var(--warning-color);"><strong>Beta:</strong> Tested with Reolink RLC-811A.</div>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n>Processing Interval</label>
-                            <input type="number" id="processEvery" value="1" min="0.1" max="60" step="0.1">
-                            <div class="input-hint">Seconds between each VLM inference (default: 1s)</div>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label data-i18n>Frames per Batch</label>
-                            <input type="number" id="framesPerBatch" value="1" min="1" max="30" step="1">
-                            <div class="input-hint">Number of frames batched per inference (default: 1)</div>
-                        </div>
-                    </div>
-
-                    <!-- Screen capture -->
-                    <div class="capture-block">
-                        <div class="capture-block-header"><i data-lucide="monitor"></i> <span data-i18n>Screen Capture</span></div>
-                        <div class="form-group">
-                            <div class="input-hint" style="margin-bottom: 8px;">Browser-native getDisplayMedia, 1 fps JPEG frames.</div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <button class="icon-btn" id="screenStartBtn" title="Start screen capture" type="button" aria-label="Start screen capture" data-i18n-title="Start screen capture" data-i18n-aria="Start screen capture"><i data-lucide="play"></i></button>
-                                <button class="icon-btn" id="screenStopBtn" title="Stop screen capture" type="button" disabled aria-label="Stop screen capture" data-i18n-title="Stop screen capture" data-i18n-aria="Stop screen capture"><i data-lucide="square"></i></button>
-                                <span id="screenStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
-                            </div>
-                        </div>
-                    </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Services (4 API selectors, v3.38) -->
             <div class="panel">
                 <div class="panel-header" onclick="togglePanel('servicesConfig')">
@@ -585,7 +522,7 @@ limitations under the License.
                     </div>
                     <span class="panel-toggle collapsed" id="servicesConfigToggle">▼</span>
                 </div>
-                <div class="panel-content collapsed" id="servicesConfig">
+                <div class="panel-content" id="servicesConfig">
                     <div class="input-hint" style="margin-bottom: 12px;">Six pluggable backends. Save applies at runtime; no service restart.</div>
                     <div class="service-row" data-service="llm" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="brain"></i><span>LLM</span><span class="service-badge" id="badge-llm">--</span></div>
@@ -783,7 +720,7 @@ limitations under the License.
                     </div>
                     <span class="panel-toggle collapsed" id="knowledgeBaseToggle">▼</span>
                 </div>
-                <div class="panel-content collapsed" id="knowledgeBase">
+                <div class="panel-content" id="knowledgeBase">
                     <div class="input-hint" style="margin-bottom: 8px;">Local wiki corpora (per game). Sync a <code>wiki/&lt;game&gt;</code> folder into a vector namespace.</div>
                     <div id="namespaceList" class="namespace-list"></div>
                     <div id="namespaceEmpty" class="input-hint" style="display: none;" data-i18n>No knowledge bases yet.</div>
@@ -813,6 +750,29 @@ limitations under the License.
                     <div id="wikiStatus" class="input-hint" style="margin-top: 8px;"></div>
                 </div>
             </div>
+        </div>
+    </div>
+
+
+    <!-- TTS playback for LLM replies (auto-played when llm_reply WS event fires) -->
+    <audio id="btTtsPlayer" preload="auto" playsinline></audio>
+    <audio id="btListenPlayer" autoplay playsinline></audio>
+    <!-- 无线电静默唤醒音频（B3 silence_wake WS）：独立元素，避免打断 LLM 逐句回复队列 -->
+    <audio id="silenceWakePlayer" preload="auto" playsinline></audio>
+
+    <div class="container">
+        <!-- Left Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-panels" id="sidebarPanels">
+            <!-- Video Source: 3 independent capture modules (v3.38). -->
+            <!-- Axis 5 (v6-lite.17): Video Source capture moved to an on-demand
+                 floating overlay (FAB + modal). The three .capture-block
+                 structures and all their DOM ids / start-stop bindings are
+                 preserved verbatim; only the trigger changed from an inline
+                 sidebar panel to a floating action button. No JS changed. -->
+            </div>
+
+
 
             </div><!-- /.sidebar-panels -->
 
@@ -944,89 +904,165 @@ limitations under the License.
                         <pre id="longTermMemoryContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-all;"></pre>
                     </details>
                 </div>
-                <div class="prompt-editor-inline">
-                    <div class="chat-prompt-shell" id="promptEditor">
-                        <button class="chat-prompt-action" id="promptPresetBtn" title="快速预设" type="button" aria-label="快速预设">
-                            <i data-lucide="sparkles"></i>
-                        </button>
-                        <div class="prompt-popover hidden" id="promptPresetMenu">
-                            <button class="prompt-preset-option" type="button" data-label="请实时解说我的表情和动作" data-prompt="请实时解说我的表情和动作">
-                                <span class="prompt-preset-copy">
-                                    <span class="zh">请实时解说我的表情和动作</span>
-                                    <span class="en">Describe my facial expressions and movements in real time</span>
-                                </span>
-                                <span class="check">✓</span>
-                            </button>
-                            <button class="prompt-preset-option" type="button" data-label="结合画面内容，生成一张水彩风格的图像" data-prompt="结合画面内容，生成一张水彩风格的图像">
-                                <span class="prompt-preset-copy">
-                                    <span class="zh">结合画面内容，生成一张水彩风格的图像</span>
-                                    <span class="en">Generate a watercolor-style image based on the scene</span>
-                                </span>
-                                <span class="check">✓</span>
-                            </button>
-                            <button class="prompt-preset-option" type="button" data-label="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我" data-prompt="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我">
-                                <span class="prompt-preset-copy">
-                                    <span class="zh">现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我</span>
-                                    <span class="en">Let's play a rapid-fire Q&amp;A game for 30 seconds; answer quickly and remind me when it ends</span>
-                                </span>
-                                <span class="check">✓</span>
-                            </button>
-                            <button class="prompt-preset-option" type="button" data-label="每当一个瓶子出现时，介绍它的样子" data-prompt="每当一个瓶子出现时，介绍它的样子">
-                                <span class="prompt-preset-copy">
-                                    <span class="zh">每当一个瓶子出现时，介绍它的样子</span>
-                                    <span class="en">Whenever a bottle appears, describe what it looks like</span>
-                                </span>
-                                <span class="check">✓</span>
-                            </button>
-                        </div>
-                        <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="输入文字，或点麦克风语音识别后发送给 BT-7274"></textarea>
-                        <div class="mode-group" role="radiogroup" aria-label="交互模式（Jarvis 唤醒 / Live 常驻，单选互斥）">
-                            <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
-                                <i data-lucide="radio"></i>
-                                <span class="listen-label">Jarvis 唤醒</span>
-                            </button>
-                            <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="Live 常驻模式（持续聆听）">
-                                <i data-lucide="radio-tower"></i>
-                                <span class="live-label">Live 常驻</span>
-                            </button>
-                        </div>
-                        <div class="live-enroll-row" id="liveEnrollRow">
-                            <button class="chat-prompt-action live-enroll" id="liveEnrollBtn" title="注册你的声音（Addressee 过滤：只响应你）" type="button" aria-label="注册声音" disabled>
-                                <i data-lucide="user-check"></i>
-                                <span class="live-enroll-label">注册声音</span>
-                            </button>
-                            <span class="live-enroll-hint" id="liveEnrollHint" role="status" aria-live="polite"></span>
-                        </div>
-                        <div class="live-video-row" id="liveVideoRow">
-                            <button class="chat-prompt-action live-video" id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled>
-                                <i data-lucide="video"></i>
-                                <span class="live-video-label">开画面</span>
-                            </button>
-                            <select class="live-video-source" id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled>
-                                <option value="screen" data-i18n>屏幕</option>
-                                <option value="camera" data-i18n>摄像头</option>
-                            </select>
-                            <label class="live-proactive-toggle" title="主动搭话：无用户语音时周期性看画面，有值得说的就开口">
-                                <input type="checkbox" id="liveProactiveToggle" aria-label="主动搭话" disabled>
-                                <span class="live-proactive-label">主动搭话</span>
-                            </label>
-                            <span class="live-video-hint" id="liveVideoHint" role="status" aria-live="polite"></span>
-                            <span class="live-proactive-hint" id="liveProactiveHint" role="status" aria-live="polite"></span>
-                        </div>
-                        <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
-                            <i class="mic-icon" data-lucide="mic"></i>
-                            <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-                            <span class="speech-label">按住说话</span>
-                        </button>
-                        <button class="chat-prompt-action send" id="promptSendBtn" title="发送给 BT-7274" type="button" aria-label="发送给 BT-7274">
-                            <i data-lucide="send"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
 
         </div>
     </div>
+
+        <!-- 输入栏：锚定 .container 底部，全宽，与样板 .inputbar 对齐 -->
+    <div class="prompt-editor-inline">
+<button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="document.getElementById('captureOverlay').classList.toggle('hidden')">
+    <i data-lucide="video"></i>
+</button>
+<div class="capture-overlay hidden" id="captureOverlay" role="dialog" aria-modal="true" aria-label="Video Source" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="capture-overlay-card">
+        <div class="capture-overlay-header">
+            <span class="capture-overlay-title"><i data-lucide="video"></i> <span data-i18n>Video Source</span></span>
+            <button class="capture-overlay-close" id="captureOverlayClose" type="button" aria-label="Close" title="Close" onclick="document.getElementById('captureOverlay').classList.add('hidden')"><i data-lucide="x"></i></button>
+        </div>
+        <div class="capture-overlay-body">
+        <!-- Webcam capture -->
+        <div class="capture-block">
+            <div class="capture-block-header"><i data-lucide="video"></i> <span data-i18n>Webcam Capture</span></div>
+            <div class="form-group">
+                <label data-i18n>Camera Selection</label>
+                <select id="cameraSelect"><option value="" data-i18n>Detecting cameras...</option></select>
+            </div>
+            <div class="form-group">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="icon-btn" id="webcamStartBtn" title="Start webcam capture" type="button" aria-label="Start webcam capture" data-i18n-title="Start webcam capture" data-i18n-aria="Start webcam capture"><i data-lucide="play"></i></button>
+                    <button class="icon-btn" id="webcamStopBtn" title="Stop webcam capture" type="button" disabled aria-label="Stop webcam capture" data-i18n-title="Stop webcam capture" data-i18n-aria="Stop webcam capture"><i data-lucide="square"></i></button>
+                    <span id="webcamStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
+                </div>
+                <div class="input-hint" style="margin-top: 8px;">Local preview + WebRTC to backend. VLM runs automatically while streaming.</div>
+            </div>
+        </div>
+
+        <!-- RTSP capture -->
+        <div class="capture-block">
+            <div class="capture-block-header"><i data-lucide="cast"></i> <span data-i18n>RTSP Stream</span> <span class="beta-badge">BETA</span></div>
+            <div class="form-group">
+                <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
+                    <label style="margin-bottom: 0; flex: 1;" data-i18n>RTSP Stream URL</label>
+                    <button class="icon-btn" id="testRtspBtn" title="Test Connection" aria-label="Test Connection"><i data-lucide="test-tube-diagonal"></i></button>
+                </div>
+                <input type="text" id="rtspUrl" placeholder="rtsp://192.168.1.100:554/stream">
+                <div id="rtspStatus" class="input-hint" style="margin-top: -4px; margin-bottom: 8px; display: none;"></div>
+            </div>
+            <div class="form-group">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="icon-btn" id="rtspStartBtn" title="Start RTSP capture" type="button" aria-label="Start RTSP capture" data-i18n-title="Start RTSP capture" data-i18n-aria="Start RTSP capture"><i data-lucide="play"></i></button>
+                    <button class="icon-btn" id="rtspStopBtn" title="Stop RTSP capture" type="button" disabled aria-label="Stop RTSP capture" data-i18n-title="Stop RTSP capture" data-i18n-aria="Stop RTSP capture"><i data-lucide="square"></i></button>
+                    <span id="rtspCaptureStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
+                </div>
+                <div id="rtspBetaWarning" class="input-hint" style="margin-top: 8px; color: var(--warning-color);"><strong>Beta:</strong> Tested with Reolink RLC-811A.</div>
+            </div>
+            <div class="form-group">
+                <label data-i18n>Processing Interval</label>
+                <input type="number" id="processEvery" value="1" min="0.1" max="60" step="0.1">
+                <div class="input-hint">Seconds between each VLM inference (default: 1s)</div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label data-i18n>Frames per Batch</label>
+                <input type="number" id="framesPerBatch" value="1" min="1" max="30" step="1">
+                <div class="input-hint">Number of frames batched per inference (default: 1)</div>
+            </div>
+        </div>
+
+        <!-- Screen capture -->
+        <div class="capture-block">
+            <div class="capture-block-header"><i data-lucide="monitor"></i> <span data-i18n>Screen Capture</span></div>
+            <div class="form-group">
+                <div class="input-hint" style="margin-bottom: 8px;">Browser-native getDisplayMedia, 1 fps JPEG frames.</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="icon-btn" id="screenStartBtn" title="Start screen capture" type="button" aria-label="Start screen capture" data-i18n-title="Start screen capture" data-i18n-aria="Start screen capture"><i data-lucide="play"></i></button>
+                    <button class="icon-btn" id="screenStopBtn" title="Stop screen capture" type="button" disabled aria-label="Stop screen capture" data-i18n-title="Stop screen capture" data-i18n-aria="Stop screen capture"><i data-lucide="square"></i></button>
+                    <span id="screenStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <div class="chat-prompt-shell" id="promptEditor">
+            <button class="chat-prompt-action" id="camBtn" title="Video source" type="button" aria-label="Video source"><i data-lucide="video"></i></button>
+            <button class="chat-prompt-action" id="promptPresetBtn" title="快速预设" type="button" aria-label="快速预设">
+                <i data-lucide="sparkles"></i>
+            </button>
+            <div class="prompt-popover hidden" id="promptPresetMenu">
+                <button class="prompt-preset-option" type="button" data-label="请实时解说我的表情和动作" data-prompt="请实时解说我的表情和动作">
+                    <span class="prompt-preset-copy">
+                        <span class="zh">请实时解说我的表情和动作</span>
+                        <span class="en">Describe my facial expressions and movements in real time</span>
+                    </span>
+                    <span class="check">✓</span>
+                </button>
+                <button class="prompt-preset-option" type="button" data-label="结合画面内容，生成一张水彩风格的图像" data-prompt="结合画面内容，生成一张水彩风格的图像">
+                    <span class="prompt-preset-copy">
+                        <span class="zh">结合画面内容，生成一张水彩风格的图像</span>
+                        <span class="en">Generate a watercolor-style image based on the scene</span>
+                    </span>
+                    <span class="check">✓</span>
+                </button>
+                <button class="prompt-preset-option" type="button" data-label="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我" data-prompt="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我">
+                    <span class="prompt-preset-copy">
+                        <span class="zh">现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我</span>
+                        <span class="en">Let's play a rapid-fire Q&amp;A game for 30 seconds; answer quickly and remind me when it ends</span>
+                    </span>
+                    <span class="check">✓</span>
+                </button>
+                <button class="prompt-preset-option" type="button" data-label="每当一个瓶子出现时，介绍它的样子" data-prompt="每当一个瓶子出现时，介绍它的样子">
+                    <span class="prompt-preset-copy">
+                        <span class="zh">每当一个瓶子出现时，介绍它的样子</span>
+                        <span class="en">Whenever a bottle appears, describe what it looks like</span>
+                    </span>
+                    <span class="check">✓</span>
+                </button>
+            </div>
+            <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="输入文字，或点麦克风语音识别后发送给 BT-7274"></textarea>
+            <div class="mode-group" role="radiogroup" aria-label="交互模式（Jarvis 唤醒 / Live 常驻，单选互斥）">
+                <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
+                    <i data-lucide="radio"></i>
+                    <span class="listen-label">Jarvis 唤醒</span>
+                </button>
+                <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="Live 常驻模式（持续聆听）">
+                    <i data-lucide="radio-tower"></i>
+                    <span class="live-label">Live 常驻</span>
+                </button>
+            </div>
+            <div class="live-enroll-row" id="liveEnrollRow">
+                <button class="chat-prompt-action live-enroll" id="liveEnrollBtn" title="注册你的声音（Addressee 过滤：只响应你）" type="button" aria-label="注册声音" disabled>
+                    <i data-lucide="user-check"></i>
+                    <span class="live-enroll-label">注册声音</span>
+                </button>
+                <span class="live-enroll-hint" id="liveEnrollHint" role="status" aria-live="polite"></span>
+            </div>
+            <div class="live-video-row" id="liveVideoRow">
+                <button class="chat-prompt-action live-video" id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled>
+                    <i data-lucide="video"></i>
+                    <span class="live-video-label">开画面</span>
+                </button>
+                <select class="live-video-source" id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled>
+                    <option value="screen" data-i18n>屏幕</option>
+                    <option value="camera" data-i18n>摄像头</option>
+                </select>
+                <label class="live-proactive-toggle" title="主动搭话：无用户语音时周期性看画面，有值得说的就开口">
+                    <input type="checkbox" id="liveProactiveToggle" aria-label="主动搭话" disabled>
+                    <span class="live-proactive-label">主动搭话</span>
+                </label>
+                <span class="live-video-hint" id="liveVideoHint" role="status" aria-live="polite"></span>
+                <span class="live-proactive-hint" id="liveProactiveHint" role="status" aria-live="polite"></span>
+            </div>
+            <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
+                <i class="mic-icon" data-lucide="mic"></i>
+                <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+                <span class="speech-label">按住说话</span>
+            </button>
+            <button class="chat-prompt-action send" id="promptSendBtn" title="发送给 BT-7274" type="button" aria-label="发送给 BT-7274">
+                <i data-lucide="send"></i>
+            </button>
+        </div>
+    </div>
+</div>
         </div>
 
     <!-- Batch-3 split: monolith decoupling (pure move, zero logic change).
@@ -2761,6 +2797,41 @@ limitations under the License.
         </script>
 </body>
 </html>
-
-
+    <!-- v6-lite.19b incremental wiring: additive only; never touches contract JS -->
+    <script>
+    (function () {
+        var pill = document.getElementById('healthPill');
+        var menu = document.getElementById('healthMenu');
+        if (pill && menu) {
+            pill.addEventListener('click', function (e) { e.stopPropagation(); menu.classList.toggle('open'); });
+            document.addEventListener('click', function (e) {
+                if (menu.classList.contains('open') && !menu.contains(e.target) && e.target !== pill && !pill.contains(e.target)) {
+                    menu.classList.remove('open');
+                }
+            });
+        }
+        var nav = document.getElementById('modalNav');
+        var body = document.querySelector('.settings-body');
+        if (nav && body) {
+            nav.querySelectorAll('.nav-item').forEach(function (it) {
+                it.addEventListener('click', function () {
+                    nav.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+                    it.classList.add('active');
+                    var t = document.getElementById(it.getAttribute('data-target'));
+                    if (t && t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            });
+        }
+        var cam = document.getElementById('camBtn');
+        var cap = document.getElementById('captureOverlay');
+        if (cam && cap) {
+            cam.addEventListener('click', function (e) { e.stopPropagation(); cap.classList.toggle('hidden'); });
+            document.addEventListener('click', function (e) {
+                if (cap && !cap.classList.contains('hidden') && !cap.contains(e.target) && e.target !== cam && !cam.contains(e.target)) {
+                    cap.classList.add('hidden');
+                }
+            });
+        }
+    })();
+    </script>
 
