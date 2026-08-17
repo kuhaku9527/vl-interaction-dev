@@ -69,6 +69,7 @@
 - **目标**：mic 嵌发送按钮旁 + 激活红光(`--accent-color`) + 发送 `:active` 缩放反馈。
 - **落地**：复用既有 mic/send 元素，加 `.active` 态与 glow ring。
 - **契约**：保留现有点击绑定。　**阶段**：2。
+- **实装状态（v6-lite.16，2026-08-17）**：纯 CSS 加法。`speechBtn`（`.speech-control`）激活态本就由 `speech_input.js:20` 的 `.recording` 类驱动——在其上新增 `--accent-color` outline（offset 2px）+ `micActivePulse` 脉冲红环（box-shadow 0→7px 扩散淡出，1.5s 循环），使录音/聆听激活醒目；发送按钮 `promptSendBtn`（`.chat-prompt-action.send`）新增 `:active` `scale(0.92)` 按压反馈，复用基类 transform 0.2s 过渡。零 JS、零 id / 令牌改动、保留全部点击绑定；契约测试 44 JS + 25 Python 全绿。
 
 ### 轴 7 · 少即是多（默认收起高级细节）
 - **现状**：设置为折叠 `settings-section`，但默认展开过多／错位，"看不懂找不到"。

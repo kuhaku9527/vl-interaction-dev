@@ -158,6 +158,7 @@
 
 ### 变更日志（本对接清单自身）
 
+- **v6-lite.16（2026-08-17）** — 轴 6 实装落地真实 `static/`：输入栏 `speechBtn`（`.speech-control`）激活态由 `speech_input.js:20` 的 `.recording` 类驱动——在其上新增 `--accent-color` outline（offset 2px）+ `micActivePulse` 脉冲红环（box-shadow 0→7px 扩散淡出，1.5s 循环）；发送按钮 `promptSendBtn`（`.chat-prompt-action.send`）新增 `:active` `scale(0.92)` 按压反馈（复用基类 transform 0.2s 过渡）。纯 CSS 加法：零 JS、零 id / 令牌 / `data-i18n` key 改动、保留全部点击绑定；契约测试全绿（44 JS + 25 Python）。映射蓝图 `webui-redesign-mapping.md` §6 标注「已落地」。
 - **v6-lite.14（2026-08-16）** — 轴 2 + 轴 7 实装落地真实 `static/`：① 轴 2 纯 CSS 8px 栅格规范化（`.settings-section-title`/`.settings-item`/`.form-group`/`.panel-header` 间距 12/14→16px，`.settings-close` 圆角 4→6px 与表单控件统一；边框/圆角层级不变）；② 轴 7 设置模态 10 个高级 `.settings-section` 默认 `collapsed`（核心「API Status」常驻），标题 `::after` 箭头 + `onclick` 切换父段（`classList.toggle`，无新函数、无 `window.confirm`）。零 JS 逻辑改动、零 id/令牌/`data-i18n` key 改动；契约测试全绿（23 JS + 25 Python）。映射蓝图 `webui-redesign-mapping.md` §2/§7 标注「已落地」。
 - **⚠️ 分支名变更（环境限制，v6-lite.14）** — 本沙箱 git 无法持久化**嵌套引用**（带 `/` 的 `ui/redesign-preview` 引用写入即丢失，提交后引用被抹、索引重置为全仓库暂存基线）。故实装分支改用**扁平名 `ui-redesign-preview`**（提交对象/代码与约定名完全一致；后续可 `git branch -m` 改回）。映射蓝图 §2/§7/§4 等处的 `ui/redesign-preview` 指称均对应此扁平分支。
 - **v6-lite.12（2026-08-17）** — 轴 4 实装落地真实 `services/webui/src/joy_interaction_webui/static/`：6 槽位本云 Seg（纯 CSS 无 confirm）+ Provider 控件（main/summary/asr/agent/embedding；tts 仅 seg）经 `config_services.js#wireSegProvider` 接线，套用调现有 `PUT /api/services/config`；零后端改动；契约测试全绿（config_services / i18n / webui_static_contract）。§2 标注「已落地」。
