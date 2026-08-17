@@ -51,6 +51,7 @@
 ### 3.2 Provider 槽位本云 idiom（统一选择器语言）
 
 - 所有 provider 槽位顶层一律 `本地/云端` 二选一 Seg（`.seg` + `.seg-indicator` + `.subform`）。
+- **后端契约对齐（重要）**：真实后端（`unified-api-config-ui.md` <正式>）为**扁平** `services.<slot>.{api_base,model,api_key,provider}`（slot：llm/summary/tts/asr/agent/embedding），**无 `cloud.*` / `local.*` / `mode` 子结构**。`本地/云端` 是 **UI 派生**（本地＝清空/填本地默认 `api_base`，后端「空 api_base=用默认/本地」语义），**非新增后端字段**。字段映射与「纯前端落地策略」详见 `reports/integration-webui-ui-2026-08-17.md` §1 / §4。
 - **云端 subform 顶部必带 Provider 控件**（v6-lite.10 补回，自命名 + +保存整套 + 历史下拉）：
   - **结构**（一行内 flex）：左侧「名称 input」+ 中间「**+** 按钮」+ 右侧「历史下拉」。下方跟一行 actions：删除该名字 / msg（保存/错误反馈，单行小字）。
   - **行为**：
@@ -59,7 +60,7 @@
     3. 历史下拉选中某个名字 → 自动回填名称 + api_base + model（**api_key 保留当前输入，不覆盖**——真实 key 仅后端落盘，前后端都不外传），并提示「已套用：xxx」；
     4. 「删除该名字」→ 从持久化池中移除当前 input 中的名字 + 重填 datalist + select。
   - **持久化**：浏览器 `localStorage`（key=`joyai.providers.<slot>`，值为 `[{name, api_base, model}, ...]`）；**api_key 不入 localStorage**（仅后端落盘 chmod 0600，见 `unified-api-config-ui.md` 数据契约）。storage 不可用时退化本会话内存并红字提示「浏览器禁用了本地存储，仅本会话生效」。
-  - **后端契约（待对接）**：建议同步开放 `GET/POST/DELETE /api/providers/<slot>` 让用户保存的整套进 settings.json；端点字段与 name input 标签字段一致即可。
+  - **后端契约（可选增强，非 v6-lite 必需）**：默认前端 `localStorage` 即满足「以名字存整套 + 下拉选回」；apply 时把 `api_base`/`model`(+`provider`) 填进 `svc-<slot>-*` 后调**现有** `PUT /api/services/config` 落盘，**不新增端点**。仅当用户要求跨设备同步时，才考虑后端加 `providers[]` 数组 + `GET/POST/DELETE /api/providers/<slot>`（详见对接清单 §4 策略 B）。
 - **本地** = env 自动探测 pill（绿点 + VAR + value，`.env-pill .pill`）+ 自填端口/路径字段，不暴露 api_key，**不带 Provider 控件**（本地无「多套提供商」语义）。
 - **云端 endpoint 建议**：`API 地址` input 接 `<datalist>` 端点建议（OpenAI / SiliconFlow / NVIDIA / DashScope / 火山方舟 …），可自由填；下拉 `/ 历史` = Provider 池，与 endpoint 建议互不替代。
   - **历史下拉与 endpoint datalist 关系**：历史下拉 = 整套（含模型）；endpoint datalist = 单字段（地址）建议。
@@ -77,7 +78,7 @@
 
 - 触发入口：底部工具栏摄像头按钮 → 弹出 `.cap-pop` 浮层（**非主视图平铺**）。
 - 浮层内 `.seg.seg-3` 三段（摄像头 / 屏幕 / RTSP 流）1:1 映射 `capture_webcam.js` / `screen_capture.js` / `capture_rtsp.js`；仅显示当前源子表单（设备 / 分辨率、帧率 / 间隔 / 每批帧数、RTSP 地址 / 分辨率）。
-- 状态 chip 实时显示当前源 + 本地/网络归属（本地 `--ok` 绿、RTSP `--warn` 黄）。浮层开合独立保留 subform 选择状态。
+- 状态 chip 实时显示当前源 + 本地/网络归属（本地 `.ok` 绿、RTSP `--warning-color` 黄）。浮层开合独立保留 subform 选择状态。
 
 ### 3.5 输入栏
 
@@ -94,7 +95,7 @@
 
 - **可复现工作流**：
   - 前端契约对照：`design/joyai-redesign-preview.html` ↔ `services/webui/static/styles.css` + `index.html` + `config_services.js` + `capture_*.js`。
-  - 回灌自查清单（按 D1–D5）：元件是否全来自白名单；状态色是否复用 `--ok/--warn/--brand/--err`；有无裸文字状态标签；间距是否 8px 网格；字体是否 `--font`。
+  - 回灌自查清单（按 D1–D5）：元件是否全来自白名单；状态色是否复用真实令牌（`--warning-color`/`--error-color`/`--joy-red` + `.ok`/`.warn`/`.err` 语义类，禁造 `--ok`/`--warn`/`--brand`）；有无裸文字状态标签；间距是否 8px 网格；字体是否 `--font`。
 - **验证仪式（回灌 / 回归必跑，真实预览点击，非静态校验）**：
   1. 各 Seg（模型本云 / 嵌入本云 / KWS 三段 / 视频三段）滑动指示器跟随正确，无 `confirm` 依赖。
   2. 状态 chip 颜色/文字清晰（本地绿、RTSP 黄；激活绿点、未激活灰点）。
