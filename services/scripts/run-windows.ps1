@@ -65,8 +65,6 @@ $VenvPy        = if ($env:JOYAI_VENV_PY)  { $env:JOYAI_VENV_PY }  else { Join-Pa
 
 $MainGguf       = Join-Path $ModelsRoot "main\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\joyai-vl-interaction-preview-iq4_nl-imat.gguf"
 $MainMmproj     = Join-Path $ModelsRoot "main\mmproj\mmproj-joyai-vl-interaction-preview-f16.gguf"
-$SummaryGguf    = Join-Path $ModelsRoot "summary\Qwen2.5-VL-3B-Instruct-GGUF\Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
-$SummaryMmproj  = Join-Path $ModelsRoot "summary\Qwen2.5-VL-3B-Instruct-GGUF\Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf"
 $AsrModel       = Join-Path $ModelsRoot "asr\ggml-large-v3-turbo-q5_0.bin"
 
 # run-windows.env (real config); falls back to run-windows.env.example template if absent
@@ -97,13 +95,10 @@ $VenvPy        = if ($env:JOYAI_VENV_PY)     { $env:JOYAI_VENV_PY }     else { J
 
 $MainGguf       = Join-Path $ModelsRoot "main\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\joyai-vl-interaction-preview-iq4_nl-imat.gguf"
 $MainMmproj     = Join-Path $ModelsRoot "main\mmproj\mmproj-joyai-vl-interaction-preview-f16.gguf"
-$SummaryGguf    = Join-Path $ModelsRoot "summary\Qwen2.5-VL-3B-Instruct-GGUF\Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf"
-$SummaryMmproj  = Join-Path $ModelsRoot "summary\Qwen2.5-VL-3B-Instruct-GGUF\Qwen2.5-VL-3B-Instruct-mmproj-f16.gguf"
 $AsrModel       = Join-Path $ModelsRoot "asr\ggml-large-v3-turbo-q5_0.bin"
 
 $P = @{
     Main        = if ($env:MAIN_MODEL_PORT)       { [int]$env:MAIN_MODEL_PORT }       else { 7060 }
-    Summary     = if ($env:SUMMARY_PORT)          { [int]$env:SUMMARY_PORT }          else { 8065 }
     Webinfer    = if ($env:ADAPTER_PORT)          { [int]$env:ADAPTER_PORT }          else { 8070 }
     BgAgent     = if ($env:CODEX_API_PORT)        { [int]$env:CODEX_API_PORT }        else { 8079 }
     Webui       = if ($env:WEBUI_PORT)            { [int]$env:WEBUI_PORT            } else { 8099 }
@@ -132,7 +127,6 @@ function Test-Command {
 # ---------------------------------------------------------------------------
 $PortMap = @{
     "llama-main"        = $P.Main
-    "llama-summary"     = $P.Summary
     "whisper"           = $P.AsrModel
     "voice-clone"       = $P.VoiceClone
     "hermes-gateway"    = $P.Hermes
@@ -434,27 +428,43 @@ function Start-Hermes {
 }
 
 function Start-BackgroundAgent {
-    Write-Sec "background-agent hermes shim  (port $($P.BgAgent))"
+    $provider = if ($env:BACKGROUND_AGENT_PROVIDER) { $env:BACKGROUND_AGENT_PROVIDER.ToLower() } else { "codex" }
+    Write-Sec "background-agent $provider provider  (port $($P.BgAgent))"
     if (-not (Test-Path $VenvPy)) { throw "venv python missing: $VenvPy" }
     Stop-ByName "background-agent"
+    # AgentProvider 插件化（2026-08-14）：统一入口 agent_app，按 env 选 provider
+    # （同 ASR 工厂模式）；未知 provider 名由工厂 fail-loud 炸出，不静默回退。
+    $module = "agent_app:app"
     $args = @(
-        "-m", "uvicorn", "hermes_api.main:app",
+        "-m", "uvicorn", $module,
         "--host", "127.0.0.1",
         "--port", "$($P.BgAgent)"
     )
     if ($env:BG_AGENT_EXTRA_ARGS) { $args += @($env:BG_AGENT_EXTRA_ARGS -split " ") }
     $envs = @{
+        "BACKGROUND_AGENT_PROVIDER"  = $provider
         "CODEX_API_HOST"             = "127.0.0.1"
         "CODEX_API_PORT"             = "$($P.BgAgent)"
-        "HERMES_GATEWAY_HOST"        = "127.0.0.1"
-        "HERMES_GATEWAY_PORT"        = "$($P.Hermes)"
-        "HERMES_API_URL"             = "http://127.0.0.1:$($P.Hermes)/v1"
         "CODEX_API_MAX_SUBAGENTS"    = if ($env:CODEX_API_MAX_SUBAGENTS) { $env:CODEX_API_MAX_SUBAGENTS } else { "6" }
         "BACKGROUND_AGENT_API_URL"   = "http://127.0.0.1:$($P.BgAgent)"
-        # hermes wiki-recall shim now points at the real memory-store backend (8997) on the default launch path instead of the deprecated empty-shell 8996
+        # Local Wiki recall 契约（D-049）经共享层指向真实 memory-store（8997）
         "MEMORY_STORE_URL"          = if ($env:MEMORY_STORE_URL) { $env:MEMORY_STORE_URL } else { "http://127.0.0.1:8997" }
     }
-    if ($env:HERMES_API_KEY) { $envs["HERMES_API_KEY"] = $env:HERMES_API_KEY; $envs["API_SERVER_KEY"] = $env:HERMES_API_KEY }
+    if ($provider -eq "hermes") {
+        $envs["HERMES_GATEWAY_HOST"] = "127.0.0.1"
+        $envs["HERMES_GATEWAY_PORT"] = "$($P.Hermes)"
+        $envs["HERMES_API_URL"]      = "http://127.0.0.1:$($P.Hermes)/v1"
+        if ($env:HERMES_API_KEY) { $envs["HERMES_API_KEY"] = $env:HERMES_API_KEY; $envs["API_SERVER_KEY"] = $env:HERMES_API_KEY }
+    } else {
+        # Codex path: reuse the user's ~/.codex (auth + config.toml) so the shim
+        # needs no per-project auth copy. CODEX_HOME must be a Windows-style path.
+        $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE ".codex" }
+        $envs["CODEX_HOME"] = $codexHome
+        # codex workspace (run.sh creates it on Linux; do the same here)
+        $workspace = if ($env:CODEX_API_WORKSPACE) { $env:CODEX_API_WORKSPACE } else { Join-Path (Resolve-Path (Join-Path $ServicesDir "..")).Path "agent-workspace" }
+        if (-not (Test-Path $workspace)) { New-Item -ItemType Directory -Path $workspace -Force | Out-Null }
+        $envs["CODEX_API_WORKSPACE"] = $workspace
+    }
     return (Start-Background "background-agent" $VenvPy $args `
         -Workdir (Join-Path $ServicesDir "background-agent") `
         -LogBase (Join-Path $LogDir "background-agent") `
@@ -474,10 +484,12 @@ function Start-Webinfer {
         "--adapter-model", "streaming-infer-adapter",
         "--main-api-base", "http://127.0.0.1:$($P.Main)/v1",
         "--main-model", "joyai-vl-interaction-preview",
-        "--summarizer-api-base", "http://127.0.0.1:$($P.Main)/v1",
-        "--summarizer-model", "joyai-vl-interaction-preview",
-        "--longterm-api-base", "http://127.0.0.1:$($P.Main)/v1",
-        "--longterm-model", "joyai-vl-interaction-preview",
+        # 2026-08-15: summarizer 不再由启动链路硬编码到本地主模型 7060
+        # （v3.24 single-model mode 的遗留偏离）。摘要模型默认走云端
+        # MiniMax-M3（spec 4-API config：services_config.py summary 槽位），
+        # 由 webui /api/services/config 热切换 + /v1/summarizer/route 生效；
+        # 启动用默认 8065 占位（memory_summarizer 默认值），services_config
+        # 传播时 POST /v1/summarizer/route 切到云端。
         "--frame-save-dir", $frameSaveDir
     )
     if ($env:WEBINFER_EXTRA_ARGS) { $args += @($env:WEBINFER_EXTRA_ARGS -split " ") }
@@ -486,7 +498,8 @@ function Start-Webinfer {
         "ADAPTER_HOST" = "127.0.0.1"
         "ADAPTER_PORT" = "$($P.Webinfer)"
         "MAIN_API_BASE" = "http://127.0.0.1:$($P.Main)/v1"
-        "SUMMARIZER_API_BASE" = "http://127.0.0.1:$($P.Main)/v1"
+        # 2026-08-15: SUMMARIZER_API_BASE 不再覆盖成主模型 7060——摘要走
+        # services_config 云端默认（MiniMax-M3）+ /v1/summarizer/route 热切换。
         # v0.3 (2026-07-29): webinfer live adapter connects to the REAL memory-store
         # backend via memory_store_client.py (reads MEMORY_STORE_URL, NOT JOYAI_ prefix).
         # Fallback is HARDCODED 8997 (the bge-m3 backend) — NOT $P.MemoryStore, because
@@ -602,18 +615,24 @@ function Plan-For {
             $plan["llama-main"] = $true
             $plan["webinfer"]   = $true
             $plan["webui"]      = $true
+            # background-agent（委派后端）2026-08-15 起进 plan：Codex 已是默认
+            # 委派 provider，栈启动必须带上，否则 webui delegate 不可用
+            # （此前只在 -Restart background-agent 时才起，属遗留缺口）。
+            $plan["background-agent"] = $true
         }
         "voice" {
             $plan["llama-main"]  = $true
             $plan["voice-clone"] = $true
             $plan["webinfer"]    = $true
             $plan["webui"]       = $true
+            $plan["background-agent"] = $true
         }
         default {
             $plan["llama-main"]       = $true
             $plan["voice-clone"]      = $true
             $plan["webinfer"]         = $true
             $plan["webui"]            = $true
+            $plan["background-agent"] = $true
         }
     }
     return $plan
@@ -646,11 +665,10 @@ foreach ($k in $plan.Keys) {
     $port = if ($PortMap.ContainsKey($k)) { $PortMap[$k] } else { "-" }
     $src = switch ($k) {
         "llama-main"       { "llama.cpp ($LlamaServer)" }
-        "llama-summary"    { "llama.cpp ($LlamaServer)" }
         "whisper"          { "whisper.cpp ($WhisperServer)" }
         "voice-clone"      { "uvicorn voice_clone_api" }
         "hermes-gateway"   { "hermes.cmd gateway ($HermesExe)" }
-        "background-agent" { "uvicorn hermes_api" }
+        "background-agent" { if ($env:BACKGROUND_AGENT_PROVIDER -and $env:BACKGROUND_AGENT_PROVIDER.ToLower() -eq 'hermes') { "uvicorn agent_app (hermes)" } else { "uvicorn agent_app (codex)" } }
         "webinfer"         { "live_adapter.py" }
         "asr-adapter"      { "joyvl_asr_adapter serve" }
         "webui"            { "joy_interaction_webui.server" }
@@ -683,7 +701,6 @@ if ($Restart) {
     Write-Sec "Restart requested: $Restart"
     $map = @{
         "llama-main"       = "Start-LlamaMain"
-        "llama-summary"    = "Start-Llama-Summary"
         "whisper"          = "Start-Whisper"
         "voice-clone"      = "Start-VoiceClone"
         "hermes-gateway"   = "Start-Hermes"
@@ -704,7 +721,6 @@ if ($Restart) {
     }
     $readyMap = @{
         "llama-main"       = "http://127.0.0.1:$($P.Main)/v1/models"
-        "llama-summary"    = "http://127.0.0.1:$($P.Summary)/v1/models"
         "whisper"          = "http://127.0.0.1:$($P.AsrModel)/v1/models"
         "voice-clone"      = "http://127.0.0.1:$($P.VoiceClone)/health"
         "hermes-gateway"   = "http://127.0.0.1:$($P.Hermes)/health"
@@ -782,13 +798,12 @@ if (-not $DriftGatePy) {
 
 try {
     Emit-Event launcher start -Extra @{ launch_time = $script:LaunchTime; mode = $script:LaunchMode }
-    $ordered = @("llama-main", "llama-summary", "whisper", "voice-clone",
+    $ordered = @("llama-main", "whisper", "voice-clone",
                  "hermes-gateway", "background-agent", "webinfer", "asr-adapter", "webui",
                  "memory-store"
     )
     $orderMap = @{
         "llama-main"       = "Start-LlamaMain"
-        "llama-summary"    = "Start-Llama-Summary"
         "whisper"          = "Start-Whisper"
         "voice-clone"      = "Start-VoiceClone"
         "hermes-gateway"   = "Start-Hermes"
@@ -800,7 +815,6 @@ try {
     }
     $readyMap = @{
         "llama-main"       = "http://127.0.0.1:$($P.Main)/v1/models"
-        "llama-summary"    = "http://127.0.0.1:$($P.Summary)/v1/models"
         "whisper"          = "http://127.0.0.1:$($P.AsrModel)/v1/models"
         "voice-clone"      = "http://127.0.0.1:$($P.VoiceClone)/health"
         "hermes-gateway"   = "http://127.0.0.1:$($P.Hermes)/health"

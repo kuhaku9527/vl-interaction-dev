@@ -227,6 +227,7 @@ TEST_SET: list[tuple[str, str, str, str, str]] = [
     ("D25", "Stop playing music", "directed", "command", "指令 EN"),
     # ---- 非面向 (应 not-for-me / silence) ---------------------------------
     ("N01", "这关怎么这么难啊", "nondirected", "self-talk", "自言自语"),
+    ("N01b", "哎呀，这关怎么那么难", "nondirected", "self-talk", "自言自语(真机失败句 08-13)"),
     ("N02", "唉，好累", "nondirected", "exclamation", "感叹"),
     ("N03", "对，我也觉得", "nondirected", "reply-other", "回应旁人"),
     ("N04", "你把那个拿过来", "nondirected", "talk-other", "与他人对话(歧义)"),

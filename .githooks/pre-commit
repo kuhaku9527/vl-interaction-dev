@@ -1,0 +1,106 @@
+#!/bin/bash
+# =============================================================================
+# JoyAI-VL-Interaction — DeepSec Shield pre-commit guardrail
+# =============================================================================
+# WHAT IT DOES
+#   Materializes the exact STAGED file set and scans it with DeepSec Shield
+#   (L1 regex+entropy, L2 tree-sitter AST, L3 local heuristic). By DEFAULT this
+#   runs 100% LOCALLY — no source leaves the machine, no token cost.
+#
+#   Opt-in remote L3 (MiniMax-M3 LLM false-positive reduction) per commit:
+#       DEEPSEC_HOOK_REMOTE_L3=1 git commit ...
+#   When enabled, staged source IS sent to MiniMax cloud and incurs token cost.
+#
+# BLOCKING POLICY
+#   DeepSec exit 2 (critical/high findings) -> BLOCK the commit (exit 1).
+#   DeepSec crash / unexpected error        -> fail-OPEN (warn, allow commit).
+#   Clean (exit 0)                          -> allow commit.
+#
+# BYPASS (not recommended): git commit --no-verify
+# =============================================================================
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+DEEPSEC_BIN="${DEEPSEC_BIN:-D:/AI/envs/deepsec/Scripts/deepsec.exe}"
+CONFIG_DIR="${DEEPSEC_CONFIG_DIR:-$REPO_ROOT/.cache/deepsec}"
+mkdir -p "$REPO_ROOT/.cache/deepsec"
+STAGING_DIR="$(mktemp -d "$REPO_ROOT/.cache/deepsec/hook-staging.XXXXXX")"
+REPORT="$STAGING_DIR/findings.json"
+
+cleanup() { rm -rf "$STAGING_DIR"; }
+trap cleanup EXIT
+
+if [ ! -x "$DEEPSEC_BIN" ]; then
+  echo "[deepsec-hook] WARNING: deepsec binary not found at '$DEEPSEC_BIN'." >&2
+  echo "[deepsec-hook] Set DEEPSEC_BIN or install DeepSec. Commit NOT blocked." >&2
+  exit 0
+fi
+
+# --- Collect staged, added/copied/modified (non-deleted) files -----------------
+mapfile -t STAGED < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACM)
+if [ "${#STAGED[@]}" -eq 0 ]; then
+  echo "[deepsec-hook] no staged source files; skipping scan."
+  exit 0
+fi
+
+# --- Materialize staged blobs (mirrors repo layout) ----------------------------
+SKIPPED=0
+for f in "${STAGED[@]}"; do
+  if ! git -C "$REPO_ROOT" cat-file -e ":$f" 2>/dev/null; then SKIPPED=$((SKIPPED+1)); continue; fi
+  size="$(git -C "$REPO_ROOT" cat-file -s ":$f" 2>/dev/null || echo 0)"
+  if [ "${size:-0}" -gt 1048576 ]; then SKIPPED=$((SKIPPED+1)); continue; fi
+  # skip git-detected binary files (numstat first column == '-')
+  if git -C "$REPO_ROOT" diff --cached --numstat -- "$f" 2>/dev/null | awk '{print $1}' | grep -qx -- '-'; then
+    SKIPPED=$((SKIPPED+1)); continue
+  fi
+  dest="$STAGING_DIR/$f"
+  mkdir -p "$(dirname "$dest")"
+  if ! git -C "$REPO_ROOT" show ":$f" > "$dest" 2>/dev/null; then SKIPPED=$((SKIPPED+1)); continue; fi
+done
+
+if [ "$SKIPPED" -eq "${#STAGED[@]}" ]; then
+  echo "[deepsec-hook] all $SKIPPED staged file(s) skipped (binary/too-large); nothing to scan."
+  exit 0
+fi
+
+# --- Build & run scan ----------------------------------------------------------
+CMD=("$DEEPSEC_BIN" shield scan "$STAGING_DIR" --layer all --format json --output "$REPORT")
+# 2026-08-17：项目级 .deepsecignore（YAML rule_ids/files）——存在则传给 scan，
+# 否则误报只能靠 --no-verify 绕过（hook 提示里写了 .deepsecignore 但没实现传参）。
+if [ -f "$REPO_ROOT/.deepsecignore" ]; then
+  CMD+=(--ignore-file "$REPO_ROOT/.deepsecignore")
+fi
+if [ "${DEEPSEC_HOOK_REMOTE_L3:-0}" = "1" ]; then
+  echo "[deepsec-hook] remote L3 ENABLED — staged source sent to MiniMax-M3 (token cost applies)."
+  CMD+=(--remote-l3)
+  export DEEPSEC_LLM_API_KEY="${MINIMAX_API_KEY:-${MINIMAX_CN_API_KEY:-}}"
+  if [ -z "${DEEPSEC_LLM_API_KEY:-}" ]; then
+    echo "[deepsec-hook] WARNING: DEEPSEC_HOOK_REMOTE_L3=1 but MINIMAX_API_KEY not set; remote L3 will fail." >&2
+  fi
+fi
+export DEEPSEC_CONFIG_DIR="$CONFIG_DIR"
+
+echo "[deepsec-hook] scanning ${#STAGED[@]} staged file(s) (skipped $SKIPPED) with DeepSec local L1/L2/L3..."
+"${CMD[@]}"
+RC=$?
+
+if [ "$RC" -eq 0 ]; then
+  echo "[deepsec-hook] clean — no critical/high findings. Proceeding."
+  exit 0
+elif [ "$RC" -eq 2 ]; then
+  echo "" >&2
+  echo "==================================================================" >&2
+  echo "  DEEPSEC GUARDRAIL BLOCKED THIS COMMIT" >&2
+  echo "  Reason: critical/high-severity findings in staged files" >&2
+  echo "==================================================================" >&2
+  echo "  Report : $REPORT" >&2
+  echo "  Inspect: deepsec report \"$REPORT\" --format markdown" >&2
+  echo "  Dismiss false positives via .deepsecignore, then re-stage & commit." >&2
+  echo "  Force (NOT recommended): git commit --no-verify" >&2
+  echo "" >&2
+  exit 1
+else
+  echo "[deepsec-hook] WARNING: deepsec exited with code $RC (tool error). Commit NOT blocked." >&2
+  echo "[deepsec-hook] Re-run manually: ${CMD[*]}" >&2
+  exit 0
+fi

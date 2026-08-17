@@ -267,6 +267,59 @@ D:\Workspace\hermes-data\
 - [x] shim 只做协议转换（`/v1/solve` ↔ hermes OpenAI API）
 - [x] 用户用 `hermes model` 切换 provider，shim 自动跟随
 - [x] webui 端 `/v1/solve` 契约不变
+- [x] **2026-08-13：background-agent 默认后端切 Codex**（Hermes 保留可切回）——见 §12
+
+---
+
+## 12. Codex 桥接（2026-08-13 起默认后端）
+
+> **状态**：已实现 + 单测/端到端验证，待真机验收（2026-08-14 验收计划 C1-C6）。
+> 关联 spec：`doc/specs/draft-background-agent-codex-bridge.md`；代码：`services/background-agent/codex_api/main.py`。
+
+### 为什么切
+
+- Hermes 桥接从未真机使用过；用户对 Hermes 环境（`D:\Workspace\hermes-data`）被历史 agent 搞乱过有顾虑，不想冒险。
+- 原项目自带 `codex_api`（Codex CLI shim）实现完整，本地 `codex-cli 0.142.4` 已装、已 ChatGPT 登录——切 Codex **完全绕开 Hermes 环境**，风险为零。
+
+### 架构（AgentProvider 插件化，2026-08-14 升级；与 Hermes 并存，env 选择）
+
+```
+webui ── :8079 ──► agent_app:app（统一入口）
+                     └─ create_agent_provider(BACKGROUND_AGENT_PROVIDER)
+                          ├─ codex（默认）：CodexProvider → codex CLI（CODEX_HOME=~/.codex）
+                          └─ hermes（可选）：HermesProvider → hermes gateway :8642
+                     └─ 共享契约层 agent_provider.py（models/recall D-049/prompt/工具）
+```
+
+- **端口**：`:8079` 不变（`CODEX_API_PORT`），webui 零改动。
+- **选择开关**：`BACKGROUND_AGENT_PROVIDER=codex|hermes`（默认 **codex**）——语义是**插件选择**不是主/备回退；未知名 fail-loud。
+- **CODEX_HOME**：指向用户 `~/.codex`（复用 config.toml + auth.json，**不复制敏感文件进工作区**）。
+- **工作区**：`<repo>/agent-workspace`（启动时自动创建）。
+- **模型源**：用户本地 relay `127.0.0.1:57321`（MiniMax-M3 等，用户自启动）。
+- **Local Wiki recall（D-049）**：共享层 `agent_provider._enrich_with_memory`（fail-open + WARNING 日志）——两个 provider 共用一份实现，契约保留。
+
+### 关键改动（2026-08-13 + 2026-08-14 插件化）
+
+| 文件 | 内容 |
+|---|---|
+| `services/background-agent/agent_provider.py`（新） | AgentProvider ABC + 工厂 + 共享契约层（models/recall D-049/prompt/工具） |
+| `services/background-agent/agent_app.py`（新） | 统一 FastAPI 入口（/health + /v1/solve），按 env 选 provider |
+| `services/background-agent/codex_api/main.py` | 重构为 CodexProvider（CLI 子进程 + Windows 兼容 taskkill） |
+| `services/background-agent/hermes_api/main.py` | 重构为 HermesProvider（gateway HTTP 转发） |
+| `services/scripts/run-windows.ps1` | uvicorn 固定 `agent_app:app` + 注入 `BACKGROUND_AGENT_PROVIDER` |
+| `tests/test_agent_provider_factory.py`（新） | 工厂/契约类型 guard（5 项） |
+
+### 验证（2026-08-13 实测 + 2026-08-14 插件化冒烟）
+
+- codex exec 直连：relay 在线时 MiniMax-M3 正常回复（含系统命令/联网搜索能力实测）
+- 统一入口 `agent_app` `/health`：provider=codex、codex 0.142.4、config_exists 正常
+- `/v1/solve` 端到端：2026-08-13 status=completed（35s 带回 `<summary>`）；08-14 冒烟时 relay 未在线（环境依赖）
+- 测试：background-agent 24/24 绿（含工厂 guard 5 项）
+
+### 已知依赖
+
+- **relay 57321 必须在线**（用户启动）；掉线 → 委派失败（shim fail-open 不阻塞主对话）。
+- codex 能力依赖 relay 模型工具调用支持；若模型不支持工具调用会退化（"不知道今天几号"），属模型层依赖。
 
 ---
 
@@ -275,6 +328,8 @@ D:\Workspace\hermes-data\
 - `doc/subsystems/jarvis-mode.md §6`（决策 token `</delegate>` 触发）
 - `doc/tech-local.md §3.6`（shim 实现）
 - `services/background-agent/hermes_api/main.py`（代码）
+- `services/background-agent/codex_api/main.py`（Codex shim 代码，2026-08-13 起默认）
+- `doc/specs/draft-background-agent-codex-bridge.md`（Codex 桥接 spec 草稿）
 - 外部：https://hermes-agent.nousresearch.com/docs/
 
 ---
@@ -306,3 +361,4 @@ D:\Workspace\hermes-data\
 | 2026-07-13 | v3.27 | 落地接入：`$env:LOCALAPPDATA\hermes\bin\hermes.cmd` wrapper（venv python → `python -m hermes_cli.main`）解决 `bin\hermes.cmd` 不存在的问题；`Start-Hermes` 用 `API_SERVER_HOST/PORT/KEY` env；`services\background-agent\background-agent.env` 与 `services\scripts\run-windows.env` 同步 `HERMES_API_KEY`；gateway `/health` 200 OK、`/v1/models` 返回 `hermes-agent`、shim `/health` 透出 `hermes_gateway:200`；smoke 调用 `/v1/solve` 返回中文"烟测通过。" | Codex |
 | 2026-07-13 | v3.28 | 闭环触发：`prompts/bt-7274.txt` 加 **Delegation Protocol (P-D)** 章节（外部查才触发、tag 必须结尾、foreground 短句、self-contained 问题、3 个中英示例）；`jarvis_session.py::_make_llm_callback` 在 broadcast 后调 `BackgroundModelService.handle_foreground_response(text, metrics)`，从 `sessions[session_id]["background_service"]` 拿实例。E2E：4-case 行为烟测（chitchat/已知识 → 不触发、外查/天气/cyberpunk → 触发并自动改写）+ 真实查询 11s 拿到 MiniMax M2 整理后的攻略。不破坏 hermes env：`HERMES_API_KEY` env 文件不动，shim/gateway 用同 key 由 env 注入 | Codex |
 | 2026-07-23 | v3.29 | Hermes 位置统一为 D:\Workspace\hermes-data（修正前 agent 环境污染）；[Local Wiki] 委派前 recall 落地进 hermes_api shim；psql 复用记忆路线取消（ADR-001，避免污染 hermes 原记忆） | Architect |
+| 2026-08-13 | v3.38+ | 新增 §12 Codex 桥接（默认后端切 codex，Hermes 保留）；`codex_api` 移植 Local Wiki recall（D-049）+ Windows 兼容；`run-windows.ps1` 加 `BACKGROUND_AGENT_PROVIDER` 开关 | workbuddy |

@@ -1,0 +1,8 @@
+# DeepSec ignore rules（YAML）
+# 2026-08-17：hook 扫描 staged 文件时，
+# `ASR_API_KEY_ENV = "ASR_API_KEY"` 这类【环境变量名常量】被 L1 规则
+# hardcoded_secret_assignment 误报为 key 泄漏（值不是 secret，是 env 名）。
+# 项目纪律禁硬编码 key（一律 os.environ 读取），此规则无真实价值，
+# 全局忽略；真 key 泄漏仍由 L2/L3 与其他 L1 规则覆盖。
+rule_ids:
+  - hardcoded_secret_assignment

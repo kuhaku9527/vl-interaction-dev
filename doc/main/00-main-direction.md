@@ -80,12 +80,25 @@
 - **#3 memory-store v0.2 hooks（2026-07-13 v3.26）**：services/webinfer/live_adapter.py 落地 5 处钩子——get_session fire-and-forget warmup、_session_cleanup_loop 与 handle_reset end-of-session push（pushed 字段回执）、_build_main_http_messages 经 _build_memory_prompt 注入 [Local Wiki] / [本地知识库] 上下文、handle_health 暴露 memory_store 健康字段、on_cleanup 调用 stop_background_tasks 关闭 httpx pool；新增 memory_store_client.py + system_prompts.compose_system_prompt_with_memory；27/27 webinfer 测试通过（含 _memory_warmup / _memory_recall / _memory_push / _build_memory_prompt）。--no-memory-store 可关闭，fail-soft 永不阻塞主请求路径。详见 memory-architecture.md §6 + specs/memory-store-skeleton-spec.md D-9。
 - **#1 Screen Capture + #6 hermes-agent 接入（2026-07-13 v3.27）**：(a) `static/screen_capture.js` 去 ES module 改全局 (`window.startScreenCapture / stopScreenCapture / isScreenCapturing`)，新增 fallback 走 `<video>` + drawImage 应对 ImageCapture 不可用；`static/index.html` Video Source 加 Screen Capture tab + `screenControls` div，start()/stop() 加 `inputSource === 'screen'` 分支；`server.py` `websocket_handler` 加 `elif t == "frame"`（base64 → PIL → `vlm_service.process_frame` → `get_session_callback` 广播 vlm_response）；79/79 webui 测试通过，模拟帧端到端 5.5s 拿到 llama-server 回复。(b) hermes-gateway(8642) + background-agent shim(8079) 接入链路打通：补 `$env:LOCALAPPDATA\hermes\bin\hermes.cmd` wrapper（venv python → `python -m hermes_cli.main`），`Start-Hermes` 用 `API_SERVER_HOST/PORT/KEY` env，`background-agent.env` + `scripts/run-windows.env` 同步 `HERMES_API_KEY`；/health（gateway 200/shim 200） + /v1/solve smoke test 返回中文"烟测通过。"(prompt_tokens=24157/5.9s)；详见 `screen-capture.md` §11 + `hermes-integration.md` §11。
 - **#1 delegation 触发闭环（2026-07-13 v3.28）**：`prompts/bt-7274.txt` 加 **Delegation Protocol (P-D)** 章节，明示 `</delegation>` 用法（外部查才触发、Tag 必须结尾、background 短句、问题要 self-contained）+ 3 个中英示例；`jarvis_session.py::_make_llm_callback` 在广播 `llm_reply` 之后顺手调 `BackgroundModelService.handle_foreground_response(text, metrics)`，将 `</delegation>` 拆出来 POST `/v1/solve` → shim → hermes → `background_result_ready` WS 广播。LLM 4-case 烟测：chitchat/已知识 → 不触发，`RTX 5060 Ti 显存基准` / `今天天气` / `Cyberpunk 螳螂帮 boss` → 触发并将英文问题自动改写为中文 self-contained 任务。端到端 e2e：`Scanning external sources.</delegation> 查 Cyberpunk 2077 螳螂帮 boss` → 11s 后 `background_result_ready` 拿到 MiniMax M2 + web_extract 整理后的攻略（含 Royce boss、掉落、支线）。79/79 webui 测试通过。详见 `doc/subsystems/jarvis-mode.md` §13.2 + `hermes-integration.md` §10。
+### §4.0b 新立项（2026-08-13 拍板）
+
+> 以下为 2026-08-13 用户拍板的新立项，状态均为**已立项**，详细见关联文档。
+
+| # | 项 | 优先级 | 状态 | 关联文档 |
+|---|---|---|---|---|
+| **N1** | **background-agent 切 Codex 桥接**（`BACKGROUND_AGENT_PROVIDER=codex` 默认，Hermes 保留可切回） | **P1** | ✅ 代码完成（codex_api 移植 Local Wiki recall + run-windows.ps1 开关）→ **待 2026-08-14 真机验收** | `doc/specs/draft-background-agent-codex-bridge.md` |
+| **N2** | **call 模式"不知道就委派"轻量委派检测**（call 模式 prompt 禁 `</delegation>`，模型直接答"不知道"时后端自动触发一次后台查证再补答） | P2 | 待设计（未开工） | — |
+| **N3** | **TTS 链路延迟优化**（打断效果 OK 但 TTS 链路变慢，加入后续优化） | P2 | 待排期（未开工） | `doc/specs/tts-streaming-optimization.md` |
+| **N4** | **官方量化模型评估结论**（INT4/NVFP4 compressed-tensors 13-14GB 显存占满 16GB 卡 → **维持社区 IQ4_NL GGUF + mmproj F16**，官方量化不再评估） | — | ✅ 已闭环（结论：16GB 显存约束下社区量化是当前最优） | `决策/VLM架构与模型组成.md` |
+| **N5** | **TTS 插件化**（`TTSSynthesizer` ABC + 工厂，`TTS_PROVIDER` 选择；MiniMax 为第一实现——voice-clone 的 provider 分支已留好） | P2 | ✅ 已实现（2026-08-14，`services/tts/tts_provider.py` + 工厂测试 5 项） | `doc/specs/draft-tts-provider-unified.md` |
+| **N6** | **Embedding 现状确认**（`EMBEDDING_PROVIDER=siliconflow` 云端召回已实证：`BAAI/bge-m3` / dim 1024 / 686ms；本地 bge-m3 仅 bulk ingest 备用） | — | ✅ 已闭环（2026-08-14 实证，配置即云端，非本地） | `services/memory-store/src/memory_store/embedder.py` |
+| **N7** | **Provider 模式收敛**（公共 `services/provider_base.py` `ProviderRegistry`：name normalize / env 默认 / 未知名 fail-loud 统一；agent/tts/asr 三个 ABC+工厂 模块迁移到注册表；embedder 因单类分派不迁移） | P2 | ✅ 已实现（2026-08-15，注册表测试 11 项，四服务全绿） | `services/provider_base.py` + `doc/specs/draft-provider-convergence.md` |
+
 ### §4.1 优先级说明
 
 - **P0（必须）**：v3.2 的核心交付物，决定项目是否进入"产品形态"
 - **P1（重要）**：体验性提升，没有也能用，有了显著加分
 - **P2（按需）**：特殊场景才需要，先做也不亏
-
 ### §4.2 状态定义
 
 - **设计完整**：文档已写完整，可作为实施依据
@@ -109,4 +122,4 @@
 - **v3.35 Paper-Plane 多模态 (2026-07-13)**: 让 BT-7274 通过"纸飞机"被问"你看到什么"时能看到当前屏幕。`index.html sendBtPrompt` 加 `captureBtFrameB64`(从 `getScreenCaptureVideo` / `<video id="videoElement">` 抓 JPEG,最大宽 800,q=0.7),`server.py llm_message` + `jarvis_mode._send_to_llm` 接受 `image_b64` 并把 user message 改成 OpenAI multimodal content 数组(需要 7060 llama-server 已启用 `--mmproj`,默认如此)。视觉管线 / 8070 webinfer / 4 进程编排 / 端口协议全部零改动。空源自动 fallback 到纯文本。详见 `doc/voice-ui.md` §3.6 + `doc/screen-capture.md` §11 v3.35。
 - **v3.35a 隐藏 llama-server 控制台窗口 (2026-07-13)**: `install/windows/start-llama-server.ps1` 拉起 `llama-server.exe` 时 `Start-Process` 缺 `-WindowStyle Hidden`,会弹黑色控制台窗口,被误点 X 就 kill PID。补上参数后 7060 静默后台运行,只剩 PID 文件 + 时间戳日志可见。`run-windows.ps1` 本身用 `$psi.WindowStyle="Hidden"`,`start-all-services.ps1` 的 voice_clone_api 分支已带 `-WindowStyle Hidden`,均无需改动。零代码逻辑变化,纯启动参数。
 
-> 文档版本：v3.35a 配套  |  最近更新：2026-07-13（隐藏 llama-server 控制台窗口）  |  作者：Codex
+> 文档版本：v3.35a 配套 + 2026-08-13 新立项（N1-N4）  |  最近更新：2026-08-13（新立项）  |  作者：Codex / workbuddy

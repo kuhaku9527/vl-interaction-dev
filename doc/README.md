@@ -84,6 +84,9 @@
 | [`specs/webui-kws-listening-chain.md`](specs/webui-kws-listening-chain.md) | ✅ 已实施 | WebUI KWS 监听链 |
 | [`specs/2026-07-14-loose-coupling-services.md`](specs/2026-07-14-loose-coupling-services.md) | ✅ 已实施 | 4-API config + 单 webinfer 主路 + 3 独立 capture 模块（Phase 2A/B 实施合同） |
 | [`specs/2026-07-14-project-audit.md`](specs/2026-07-14-project-audit.md) | ✅ 代码事实层现状 | 项目审查（HEAD=021f429）整体+模块流程图 + 风险表 + 疑问解答 |
+| [`specs/draft-background-agent-codex-bridge.md`](specs/draft-background-agent-codex-bridge.md) | 🔧 草稿（代码完成待真机） | background-agent 切 Codex 桥接（N1，2026-08-13） |
+| [`specs/draft-call-mode-unknown-delegation.md`](specs/draft-call-mode-unknown-delegation.md) | 🔧 草稿（代码完成待真机） | call 模式"不知道就委派"（N2，2026-08-13） |
+| [`specs/draft-live-empathy-tuning.md`](specs/draft-live-empathy-tuning.md) | 🔧 草稿（代码完成待 benchmark） | 四态共情类误响应调优（2026-08-14） |
 
 ### 架构决策记录（`adr/`）
 
