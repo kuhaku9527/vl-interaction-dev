@@ -846,6 +846,54 @@
             white-space: nowrap;
         }
 
+        /* Service-row status chip (badge-<slot>): mirrors .status-badge
+           chip+dot semantics — 绿=OK/激活、灰=未激活、橙=警告、红=错误。
+           复用 JS 已设的 .ok/.err 类；真实令牌，禁造 --ok/--warn。 */
+        .service-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            min-height: 22px;
+            padding: 3px 9px;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            box-sizing: border-box;
+            font-size: 11px;
+            line-height: 1;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+        }
+
+        .service-badge::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            flex-shrink: 0;
+        }
+
+        .service-badge.ok {
+            color: #2ecc71;
+            background: rgba(46, 204, 113, 0.16);
+            border-color: rgba(46, 204, 113, 0.45);
+        }
+
+        .service-badge.err {
+            color: var(--error-color);
+            background: rgba(239, 83, 80, 0.16);
+            border-color: rgba(239, 83, 80, 0.45);
+        }
+
+        .service-badge.warning {
+            color: var(--warning-color);
+            background: rgba(255, 167, 38, 0.16);
+            border-color: rgba(255, 167, 38, 0.45);
+        }
+
         .status-badge.connected {
             background: rgba(255, 255, 255, 0.2);
             color: var(--joy-ffffff);

@@ -48,6 +48,7 @@
 - **目标**：统一到 `voice-ui.md §9` status-badge 语义（绿=OK/激活、灰=未激活、橙=警告、红=错误），去裸文字状态。
 - **落地**：复用 `--warning-color`/`--error-color` + §9 含义，**禁造 `--ok`/`--warn`**；引入文案须走 `data-i18n`。
 - **契约**：新增 UI 文案须补 `i18n_ui_string.test.js`。　**阶段**：2。
+- **实装状态（v6-lite.15，2026-08-17）**：补 `.service-badge` 样式（此前 CSS 缺失，`badge-<slot>` 为裸文字）。新增 chip+点：`.service-badge` 基准灰（`--text-muted`/`--bg-tertiary`/`--border-color`）+ `::before` 圆点（`currentColor`）；`.ok` 绿（沿用 `status-dot.ok` 的 `#2ecc71`）、`.err` 红（`--error-color`）、`.warning` 橙（`--warning-color`）。复用 JS 已在设的 `.ok`/`.err` 类，真实令牌、零 `--ok`/`--warn`；不动 JS/id/标记。契约测试全绿（23 JS + 25 Python）。
 
 ### 轴 4 · provider 分段选择块（**头号痛点**，用户原话："下拉太丑、错位、看不懂找不到"）
 - **现状**：每槽位 `<select id="svc-<slot>-provider">` + `api-base` + `api-key` 输入框（id `svc-<slot>-api-base`/`-api-key`）平铺、错位。`config_services.js` 有 `SUMMARY_PRESETS` 联动（N8：切 provider 自动填默认 api_base/model、清空 api_key）。
