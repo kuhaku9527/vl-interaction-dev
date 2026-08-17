@@ -63,6 +63,7 @@
 - **目标**：收成按需浮层/折叠 + 重皮肤，不在主视图全平铺。
 - **落地**：复用 `.capture-block` 结构，改触发为浮层；保留底层采集接线。
 - **契约**：保留现有 start/stop 事件绑定。　**阶段**：3。
+- **实装状态（v6-lite.17，2026-08-17）**：侧栏 Video Source 面板就地改为按需浮层——新增 `#captureFabBtn` 悬浮按钮（`--accent-color` + `:active` 缩放）+ `#captureOverlay` 模态（背景遮罩 + 卡片 + 关闭按钮，触发纯 `classList.toggle`，无 `window.confirm`）。三个 `.capture-block`（Webcam/RTSP/Screen）结构与全部 DOM id（`cameraSelect`/`webcamStartBtn`/`rtsp*`/`screen*`/`processEvery`/`framesPerBatch` 等）原样保留，底层 `capture_webcam.js`/`screen_capture.js`/`capture_rtsp.js` 接线与 start/stop 事件绑定零改动；补 `.capture-block`/`.capture-block-header` 卡片化重皮肤（8px 栅格 + 真实令牌 `--bg-tertiary`/`--border-color`/`--text-primary`），与轴2 表面语言一致。纯加法；HTML 标签平衡已校验；契约测试 44 JS + 25 Python 全绿。
 
 ### 轴 6 · 输入栏麦克风（嵌发送旁 + 激活反馈）
 - **现状**：mic + send 按钮已存在。
