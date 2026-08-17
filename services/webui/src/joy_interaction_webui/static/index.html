@@ -137,7 +137,7 @@ limitations under the License.
             </div>
             <div class="health-pill" id="healthPill" title="Service health · click for details">
                 <span class="dot"></span>
-                <span id="healthPillText">All systems nominal</span>
+                <span id="healthPillText">系统正常</span>
                 <i data-lucide="chevron-down"></i>
             </div>
         </div>
@@ -982,6 +982,7 @@ limitations under the License.
         </div>
         </div>
     </div>
+    </div>
 
     <div class="chat-prompt-shell" id="promptEditor">
             <button class="chat-prompt-action" id="camBtn" title="Video source" type="button" aria-label="Video source"><i data-lucide="video"></i></button>
@@ -1061,7 +1062,6 @@ limitations under the License.
                 <i data-lucide="send"></i>
             </button>
         </div>
-    </div>
 </div>
         </div>
 
@@ -1789,8 +1789,8 @@ limitations under the License.
             // User has manually set a preference - use it
             applyTheme(savedTheme);
         } else {
-            // No manual preference saved - follow OS preference
-            applyTheme('auto');
+            // No manual preference saved - default to dark (sample preview is dark-themed; user can toggle to Light/Auto)
+            applyTheme('dark');
         }
 
         // Listen for OS preference changes when in 'auto' mode

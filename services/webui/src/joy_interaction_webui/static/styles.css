@@ -4751,6 +4751,11 @@
         /* 主区 → 样板 2 列（视频 1.5fr + 实时输出 1fr） */
         .main-content{flex:1;display:grid;grid-template-columns:1.5fr 1fr;gap:16px;padding:16px;min-height:0;overflow:hidden;position:relative;z-index:1;}
         @media (max-width:900px){.main-content{grid-template-columns:1fr;grid-template-rows:1fr 1fr;}.tag{display:none;}}
+        /* 卡片顺序：样板是「视频左 1.5fr / 结果右 1fr」；DOM 是 result→video，用 order 换位不动 DOM */
+        .video-card{order:1;}
+        .result-card{order:2;}
+        /* 顶栏 9 个 .status-badge 在重设计预览中隐藏：无后端时全错+撑高顶栏导致输入栏被挤出视口；设置面板的 .service-badge 不受影响 */
+        .header .status-badge{display:none;}
 
         .video-card{background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:0;position:relative;}
         .video-card video{width:100%;height:100%;object-fit:cover;background:#000;}
