@@ -274,6 +274,14 @@ async def test_get_returns_current_config(persist_path):
         async with aiohttp.ClientSession() as session, session.get(url) as resp:
             assert resp.status == 200
             body = await resp.json()
-        assert set(body.keys()) == {"llm", "summary", "tts", "asr"}
+        assert set(body.keys()) == {
+            "llm",
+            "summary",
+            "tts",
+            "asr",
+            "agent",
+            "embedding",
+            "silence",
+        }
     finally:
         await runner.cleanup()

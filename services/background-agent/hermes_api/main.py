@@ -1,13 +1,11 @@
-"""StreamingHarness background-agent shim that fronts the NousResearch hermes-agent gateway.
+"""Hermes-agent gateway provider for StreamingHarness background tasks（AgentProvider 插件）。
 
-This module mirrors the HTTP contract previously implemented by ``codex_api/main.py`` so
-the webui can keep talking to ``POST /v1/solve`` unchanged. Internally we translate the
-incoming request into an OpenAI-compatible chat completion call to a local
-hermes-agent HTTP gateway (default ``http://127.0.0.1:8642/v1``).
+2026-08-14 重构：契约层（SolveRequest/SolveResponse/recall/prompt/工具）已抽到
+``agent_provider.py``（AgentProvider 统一抽象）；本模块保留 Hermes 特有的
+HTTP 转发逻辑（OpenAI 兼容 chat.completions → SolveResponse），实现 HermesProvider。
 
-The contract preserved here (field names, types, status enum) MUST stay in lock-step
-with ``codex_api/main.py`` and the webui client in
-``services/webui/src/joy_interaction_webui/background_model.py``.
+``app`` 仍暴露 FastAPI（/health + /v1/solve）以便直接 ``uvicorn hermes_api.main:app``
+启动；正式链路经 ``agent_app`` 统一入口按 BACKGROUND_AGENT_PROVIDER 选择。
 """
 
 from __future__ import annotations
@@ -18,19 +16,21 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+
+from agent_provider import (
+    AgentProvider,
+    FrameInput,
+    SolveRequest,
+    SolveResponse,
+)
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Environment configuration (kept CODEX_API_* names to remain drop-in compatible
-# with the webui, which already discovers the service via BACKGROUND_AGENT_API_URL
-# and only reads CODEX_API_* knobs as legacy fallbacks).
-# ---------------------------------------------------------------------------
+# 环境配置（保留 CODEX_API_* 名字以兼容 webui legacy 探测）。
 DEFAULT_HOST = os.environ.get("CODEX_API_HOST", "127.0.0.1")
 DEFAULT_PORT = int(os.environ.get("CODEX_API_PORT", "8079"))
 DEFAULT_MAX_SUBAGENTS = int(os.environ.get("CODEX_API_MAX_SUBAGENTS", "6"))
@@ -38,7 +38,7 @@ DEFAULT_MAX_CONCURRENT_RUNS = int(os.environ.get("CODEX_API_MAX_CONCURRENT_RUNS"
 DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("CODEX_API_TIMEOUT_SECONDS", "600"))
 DEFAULT_MAX_FRAMES = int(os.environ.get("CODEX_API_MAX_FRAMES", "50"))
 
-# hermes-agent gateway (NousResearch/hermes-agent v0.17.0+).
+# hermes-agent gateway（NousResearch/hermes-agent v0.17.0+）。
 HERMES_API_URL = os.environ.get("HERMES_API_URL", "http://127.0.0.1:8642/v1").rstrip("/")
 HERMES_API_KEY = os.environ.get("HERMES_API_KEY") or os.environ.get("API_SERVER_KEY", "")
 HERMES_MODEL = os.environ.get("HERMES_MODEL", "hermes-agent")
@@ -46,283 +46,161 @@ HERMES_GATEWAY_HOST = os.environ.get("HERMES_GATEWAY_HOST", "127.0.0.1")
 HERMES_GATEWAY_PORT = int(os.environ.get("HERMES_GATEWAY_PORT", "8642"))
 HERMES_GATEWAY_URL = f"http://{HERMES_GATEWAY_HOST}:{HERMES_GATEWAY_PORT}"
 
-# memory-store (Local Wiki source). Recall-only; any failure is non-blocking so
-# the hermes gateway simply falls back to live web search.
-MEMORY_STORE_URL = os.environ.get("MEMORY_STORE_URL", "http://127.0.0.1:8997").rstrip("/")
-# [Local Wiki] recall scope (ADR-0012): only blocks under these namespaces are
-# injected — conversation memory (per-session) never leaks into wiki recall.
-# Comma-separated, e.g. "wiki:elden-ring" or "wiki:*" for all wiki corpora.
-WIKI_RECALL_NAMESPACES = os.environ.get("WIKI_RECALL_NAMESPACES", "wiki:*")
-
-# Concurrency guard. We do not want the shim to drown the hermes-agent gateway.
-_run_semaphore = asyncio.Semaphore(max(1, DEFAULT_MAX_CONCURRENT_RUNS))
+# 后向兼容 re-export（tests / webui 引用 agent_provider 的符号走这两个包名）
+from agent_provider import (  # noqa: E402
+    FrameInput as FrameInput,
+    SolveRequest as SolveRequest,
+    SolveResponse as SolveResponse,
+)
+from agent_provider import _enrich_with_memory as _enrich_with_memory  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
-# Request / response models. Field names match the original codex_api shim and
-# the webui dict accessors verbatim. Do not rename without also updating:
-#   - services/background-agent/codex_api/main.py
-#   - services/webui/src/joy_interaction_webui/background_model.py
-# ---------------------------------------------------------------------------
-class FrameInput(BaseModel):
-    image_url: str = Field(..., description="JPEG data URL")
-    timestamp: float | None = None
-    timestamp_kind: str | None = None
-    pts: int | None = None
+class HermesProvider(AgentProvider):
+    """后台 agent 插件：本地 hermes-agent HTTP gateway（OpenAI 兼容 chat.completions）。"""
 
+    name = "hermes"
 
-class SolveRequest(BaseModel):
-    session_id: str
-    task_id: str
-    question: str
-    foreground_text: str = ""
-    frames: list[FrameInput] = Field(default_factory=list)
-    max_subagents: int | None = None
-    timeout_seconds: float | None = None
+    def __init__(self) -> None:
+        self._semaphore = asyncio.Semaphore(max(1, DEFAULT_MAX_CONCURRENT_RUNS))
 
-
-class SolveResponse(BaseModel):
-    status: Literal["completed", "failed", "timeout"]
-    text: str
-    thread_id: str | None = None
-    usage: dict[str, Any] | None = None
-    duration_ms: float
-    events_digest: dict[str, Any] = Field(default_factory=dict)
-    error: str | None = None
-
-
-app = FastAPI(title="StreamingHarness Hermes API", version="0.1.0")
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-@app.get("/health")
-async def health() -> dict[str, Any]:
-    """Probe hermes-agent gateway. Keep the ``codex_api`` key for webui compatibility."""
-    gateway_status = 0
-    gateway_model = ""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{HERMES_GATEWAY_URL}/health")
-            gateway_status = response.status_code
-            if response.headers.get("content-type", "").startswith("application/json"):
-                payload = response.json()
-                if isinstance(payload, dict):
-                    gateway_model = str(
-                        payload.get("model")
-                        or payload.get("default_model")
-                        or payload.get("agent")
-                        or ""
-                    )
-    except Exception:
+    async def health(self) -> dict[str, Any]:
+        """Probe hermes-agent gateway. Keep the ``codex_api`` key for webui compatibility."""
         gateway_status = 0
-
-    return {
-        "codex_api": "ok",  # legacy field name; webui only checks HTTP 200
-        "hermes_gateway": gateway_status,
-        "model": gateway_model or HERMES_MODEL,
-        "api_url": HERMES_API_URL,
-    }
-
-
-@app.post("/v1/solve")
-async def solve(request: SolveRequest) -> SolveResponse:
-    """Background solve entry point. Preserves the legacy codex_api contract."""
-    max_subagents = _bounded_int(
-        request.max_subagents, default=DEFAULT_MAX_SUBAGENTS, minimum=1, maximum=64
-    )
-    timeout_seconds = _bounded_float(
-        request.timeout_seconds,
-        default=DEFAULT_TIMEOUT_SECONDS,
-        minimum=5.0,
-        maximum=24 * 60 * 60,
-    )
-    frames = _limit_frames(request.frames)
-    logger.info(
-        "hermes solve start session=%s task=%s question_len=%d frames=%d timeout=%.1fs",
-        request.session_id,
-        request.task_id,
-        len(request.question),
-        len(frames),
-        timeout_seconds,
-    )
-
-    local_wiki = await _enrich_with_memory(request.question)
-    prompt = _build_prompt(request, max_subagents, local_wiki=local_wiki)
-    user_content = _frames_to_content(prompt, frames)
-
-    body = {
-        "model": HERMES_MODEL,
-        "stream": False,
-        "messages": [{"role": "user", "content": user_content}],
-    }
-
-    headers = {
-        "Content-Type": "application/json",
-        "X-Hermes-Session-Id": request.session_id,
-        "X-Background-Task-Id": request.task_id,
-    }
-    if HERMES_API_KEY:
-        headers["Authorization"] = f"Bearer {HERMES_API_KEY}"
-
-    started = time.perf_counter()
-    logger.debug(
-        "hermes solve dispatch session=%s task=%s -> %s",
-        request.session_id,
-        request.task_id,
-        "/chat/completions",
-    )
-    async with _run_semaphore:
+        gateway_model = ""
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout_seconds + 30.0, connect=10.0)
-            ) as client:
-                response = await client.post(
-                    f"{HERMES_API_URL}/chat/completions",
-                    json=body,
-                    headers=headers,
-                )
-        except httpx.TimeoutException as err:
-            duration_ms = (time.perf_counter() - started) * 1000.0
-            logger.warning(
-                "hermes solve timeout session=%s task=%s duration_ms=%.1f err=%s",
-                request.session_id,
-                request.task_id,
-                duration_ms,
-                err,
-            )
-            return SolveResponse(
-                status="timeout",
-                text="",
-                thread_id=request.session_id,
-                usage=None,
-                duration_ms=duration_ms,
-                events_digest={"error": f"hermes gateway timeout: {err}"},
-                error=str(err),
-            )
-        except httpx.HTTPError as err:
-            duration_ms = (time.perf_counter() - started) * 1000.0
-            logger.error(
-                "hermes solve transport error session=%s task=%s duration_ms=%.1f err=%s",
-                request.session_id,
-                request.task_id,
-                duration_ms,
-                err,
-            )
-            return SolveResponse(
-                status="failed",
-                text="",
-                thread_id=request.session_id,
-                usage=None,
-                duration_ms=duration_ms,
-                events_digest={"error": f"hermes gateway transport error: {err}"},
-                error=str(err),
-            )
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{HERMES_GATEWAY_URL}/health")
+                gateway_status = response.status_code
+                if response.headers.get("content-type", "").startswith("application/json"):
+                    payload = response.json()
+                    if isinstance(payload, dict):
+                        gateway_model = str(
+                            payload.get("model")
+                            or payload.get("default_model")
+                            or payload.get("agent")
+                            or ""
+                        )
+        except Exception:
+            gateway_status = 0
 
-    duration_ms = (time.perf_counter() - started) * 1000.0
-    result = _build_solve_response(response, request, duration_ms)
-    logger.info(
-        "hermes solve done session=%s task=%s status=%s duration_ms=%.1f",
-        request.session_id,
-        request.task_id,
-        result.status,
-        duration_ms,
-    )
-    return result
+        return {
+            "provider": self.name,
+            "codex_api": "ok",  # legacy field name; webui only checks HTTP 200
+            "hermes_gateway": gateway_status,
+            "model": gateway_model or HERMES_MODEL,
+            "api_url": HERMES_API_URL,
+        }
 
+    async def solve(self, request: SolveRequest) -> SolveResponse:
+        """Background solve entry point. Preserves the legacy codex_api contract."""
+        from agent_provider import bounded_float, bounded_int, limit_frames
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-def _build_prompt(request: SolveRequest, max_subagents: int, *, local_wiki: str = "") -> str:
-    """Build the user-facing system-of-instructions block.
-
-    Kept byte-for-byte equivalent to the original codex_api prompt so the
-    downstream hermes-agent produces the same shape of answer (Chinese prose,
-    ``<summary>`` card, optional ``bar_chart`` JSON, optional HTML document).
-    """
-    frame_lines = []
-    for index, frame in enumerate(request.frames, start=1):
-        timestamp = frame.timestamp if frame.timestamp is not None else "unknown"
-        timestamp_kind = frame.timestamp_kind or "unknown"
-        pts = frame.pts if frame.pts is not None else "unknown"
-        frame_lines.append(
-            f"- Frame {index}: timestamp={timestamp} kind={timestamp_kind} pts={pts}"
+        max_subagents = bounded_int(
+            request.max_subagents, default=DEFAULT_MAX_SUBAGENTS, minimum=1, maximum=64
         )
-    frame_context = "\n".join(frame_lines) if frame_lines else "- No recent frames were provided."
-    prompt = f"""You are the background solver for a real-time video assistant.
+        timeout_seconds = bounded_float(
+            request.timeout_seconds,
+            default=DEFAULT_TIMEOUT_SECONDS,
+            minimum=5.0,
+            maximum=24 * 60 * 60,
+        )
+        frames = limit_frames(request.frames, DEFAULT_MAX_FRAMES)
+        logger.info(
+            "hermes solve start session=%s task=%s question_len=%d frames=%d timeout=%.1fs",
+            request.session_id,
+            request.task_id,
+            len(request.question),
+            len(frames),
+            timeout_seconds,
+        )
 
-Use Chinese by default for user-facing prose unless the user explicitly asks otherwise.
-Use live web search when current or external information is useful.
-You may spawn at most {max_subagents} parallel subagents. Do not exceed this limit.
-If you spawn subagents, wait for all of them and consolidate their useful results.
-The answer is isolated background UI output. Do not write files unless the user explicitly requested an artifact and it is necessary for analysis; return the final content in the response.
-For any visual deliverable request, including image generation, posters, illustrations, avatars, cartoon characters, or PPT/slides, default to imagegen / gpt-image-2 to generate real PNG/JPG assets; do not substitute Python/SVG/HTML/CSS drawings unless the user explicitly asks for code or vector output.
-If you create a user-visible file artifact, save it under the current working directory. In the final response, include the existing artifact file path as plain text, not in backticks or a code block, and do not return a directory path.
-At the very end of your final response, include a concise summary wrapped exactly as <summary>...</summary>. The text inside must be 1-2 Chinese sentences for the frontend summary card.
-If a chart is useful, include a fenced JSON block like {{"type":"bar_chart","title":"...","labels":[],"values":[]}}.
-If asked to recreate a visible webpage, return a complete static HTML document in a fenced html code block.
+        local_wiki = await self.enrich_with_memory(request.question)
+        prompt = self.build_prompt(request, max_subagents, local_wiki=local_wiki)
+        user_content = _frames_to_content(prompt, frames)
 
-Session: {request.session_id}
-Task: {request.task_id}
-Foreground note: {request.foreground_text}
-Delegated question:
-{request.question}
+        body = {
+            "model": HERMES_MODEL,
+            "stream": False,
+            "messages": [{"role": "user", "content": user_content}],
+        }
 
-Recent frame metadata:
-{frame_context}
-"""
-    if local_wiki:
-        prompt += f"\n[Local Wiki]\n{local_wiki}\n(优先用本地资料, 无关时才用 web search)\n"
-    return prompt
+        headers = {
+            "Content-Type": "application/json",
+            "X-Hermes-Session-Id": request.session_id,
+            "X-Background-Task-Id": request.task_id,
+        }
+        if HERMES_API_KEY:
+            headers["Authorization"] = f"Bearer {HERMES_API_KEY}"
+
+        started = time.perf_counter()
+        logger.debug(
+            "hermes solve dispatch session=%s task=%s -> %s",
+            request.session_id,
+            request.task_id,
+            "/chat/completions",
+        )
+        async with self._semaphore:
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(timeout_seconds + 30.0, connect=10.0)
+                ) as client:
+                    response = await client.post(
+                        f"{HERMES_API_URL}/chat/completions",
+                        json=body,
+                        headers=headers,
+                    )
+            except httpx.TimeoutException as err:
+                duration_ms = (time.perf_counter() - started) * 1000.0
+                logger.warning(
+                    "hermes solve timeout session=%s task=%s duration_ms=%.1f err=%s",
+                    request.session_id,
+                    request.task_id,
+                    duration_ms,
+                    err,
+                )
+                return SolveResponse(
+                    status="timeout",
+                    text="",
+                    thread_id=request.session_id,
+                    usage=None,
+                    duration_ms=duration_ms,
+                    events_digest={"error": f"hermes gateway timeout: {err}"},
+                    error=str(err),
+                )
+            except httpx.HTTPError as err:
+                duration_ms = (time.perf_counter() - started) * 1000.0
+                logger.error(
+                    "hermes solve transport error session=%s task=%s duration_ms=%.1f err=%s",
+                    request.session_id,
+                    request.task_id,
+                    duration_ms,
+                    err,
+                )
+                return SolveResponse(
+                    status="failed",
+                    text="",
+                    thread_id=request.session_id,
+                    usage=None,
+                    duration_ms=duration_ms,
+                    events_digest={"error": f"hermes gateway transport error: {err}"},
+                    error=str(err),
+                )
+
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        result = _build_solve_response(response, request, duration_ms)
+        logger.info(
+            "hermes solve done session=%s task=%s status=%s duration_ms=%.1f",
+            request.session_id,
+            request.task_id,
+            result.status,
+            duration_ms,
+        )
+        return result
 
 
-async def _enrich_with_memory(question: str) -> str:
-    """Recall local wiki blocks from memory-store before delegating to web search.
-
-    Scoped to wiki namespaces (ADR-0012) so per-session conversation memory
-    never pollutes the [Local Wiki] injection. Fails open: any error, empty
-    result, or missing service returns "" so the hermes gateway simply falls
-    back to live web search. Never blocks the solve.
-    """
-    if not question:
-        return ""
-    namespaces = [ns.strip() for ns in WIKI_RECALL_NAMESPACES.split(",") if ns.strip()]
-    if not namespaces:
-        return ""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
-                f"{MEMORY_STORE_URL}/v1/blocks/recall",
-                json={
-                    "query": question,
-                    "top_k": 5,
-                    "min_score": 0.4,
-                    "filter": {"namespaces": namespaces},
-                },
-            )
-            if resp.status_code >= 400:
-                return ""
-            payload = resp.json()
-            blocks = payload.get("blocks") if isinstance(payload, dict) else None
-            if not blocks:
-                return ""
-            lines = []
-            for b in blocks:
-                if not isinstance(b, dict) or not b.get("content"):
-                    continue
-                line = f"- {b['content']}"
-                images = b.get("images") or []
-                if images:
-                    line += f" (附图: {', '.join(images)})"
-                lines.append(line)
-            return "\n".join(lines)
-    except Exception as exc:  # fail open: any recall error falls back to web search
-        logger.warning("local wiki recall failed, falling back to web search: %s", exc)
-        return ""
-
-
+# ---------------------------------------------------------------------------
+# Hermes 特有辅助（HTTP 响应解析）
+# ---------------------------------------------------------------------------
 def _frames_to_content(prompt: str, frames: list[FrameInput]) -> list[dict[str, Any]]:
     """Convert frames into OpenAI multimodal content parts. Decodes base64 lazily so
     the gateway can stream them straight into its image_url slots.
@@ -354,28 +232,6 @@ def _normalize_frame_data_url(value: str, index: int) -> str:
             detail=f"frame {index} image_url is not a data URL or base64 string: {err}",
         ) from err
     return f"data:image/jpeg;base64,{value}"
-
-
-def _limit_frames(frames: list[FrameInput]) -> list[FrameInput]:
-    if DEFAULT_MAX_FRAMES <= 0:
-        return []
-    return list(frames or [])[-DEFAULT_MAX_FRAMES:]
-
-
-def _bounded_int(value: int | None, *, default: int, minimum: int, maximum: int) -> int:
-    try:
-        resolved = int(value if value is not None else default)
-    except (TypeError, ValueError):
-        resolved = default
-    return min(max(resolved, minimum), maximum)
-
-
-def _bounded_float(value: float | None, *, default: float, minimum: float, maximum: float) -> float:
-    try:
-        resolved = float(value if value is not None else default)
-    except (TypeError, ValueError):
-        resolved = default
-    return min(max(resolved, minimum), maximum)
 
 
 def _build_solve_response(
@@ -518,8 +374,22 @@ def _extract_error_message(upstream: httpx.Response) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# FastAPI app（直接启动入口；正式链路走 agent_app 统一入口）
 # ---------------------------------------------------------------------------
+app = FastAPI(title="StreamingHarness Hermes API", version="0.1.0")
+_provider = HermesProvider()
+
+
+@app.get("/health")
+async def health() -> dict[str, Any]:
+    return await _provider.health()
+
+
+@app.post("/v1/solve", response_model=SolveResponse)
+async def solve(request: SolveRequest) -> SolveResponse:
+    return await _provider.solve(request)
+
+
 def main() -> None:
     import uvicorn
 

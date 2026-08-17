@@ -423,23 +423,29 @@ class SummarizerModel:
         client: OpenAI = None,
         model_name: Optional[str] = None,
     ) -> str:
-        """Call the vLLM OpenAI API server."""
+        """Call the OpenAI-compatible API server."""
         client = client or self._client
         model_name = model_name or self.model_name
-        extra_body = {"greedy": False}
+        # vLLM 专属参数处理：greedy 是 vLLM 默认（False），OpenRouter 等
+        # OpenAI 兼容端点不识别它——实测传 greedy=false 会让 gemma-4-26b
+        # 输出整段 <pad>（2026-08-16）。去掉，行为等价。
+        # top_k / repetition_penalty 同为 vLLM 扩展，默认值不传；仅非默认才加。
+        extra_body: dict = {}
         if top_k > 0:
             extra_body["top_k"] = top_k
         if repetition_penalty != 1.0:
             extra_body["repetition_penalty"] = repetition_penalty
-        response = client.chat.completions.create(
+        kwargs = dict(
             model=model_name,
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
             presence_penalty=presence_penalty,
-            extra_body=extra_body,
         )
+        if extra_body:
+            kwargs["extra_body"] = extra_body
+        response = client.chat.completions.create(**kwargs)
         return response.choices[0].message.content.strip() if response.choices else ""
 
     def _get_tokenizer(self):

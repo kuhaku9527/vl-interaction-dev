@@ -23,7 +23,12 @@ from aiohttp import web
 
 from . import asr as asr_module
 from .asr_bridge import _asr_bridge_sync
-from .services_config import _persist_services_config, _services_config, _validate_and_apply_slot
+from .services_config import (
+    _SERVICES_CONFIG_DEFAULTS,
+    _persist_services_config,
+    _services_config,
+    _validate_and_apply_slot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +88,9 @@ async def _services_config_handler(request):
         loop = asyncio.get_running_loop()
         invalid: list[dict] = []
         applied_any = False
-        for slot in ("llm", "summary", "tts", "asr"):
+        # 遍历所有已知槽位（_SERVICES_CONFIG_DEFAULTS 含 N7.1 的 agent/embedding）；
+        # 未知槽位（不在默认表）一律忽略——不能注入运行时配置。
+        for slot in _SERVICES_CONFIG_DEFAULTS:
             incoming = payload.get(slot)
             if not isinstance(incoming, dict):
                 continue
@@ -160,8 +167,11 @@ async def _services_status_handler(request):
     summary_future = loop.run_in_executor(None, _server._probe_summary, summary_cfg)
     tts_future = loop.run_in_executor(None, _server._probe_tts, tts_url)
     asr_future = loop.run_in_executor(None, _server._probe_asr, asr_cfg)
-    llm_raw, summary_raw, tts_raw, asr_raw = await asyncio.gather(
-        llm_future, summary_future, tts_future, asr_future
+    # N7.1: agent / embedding 探活（async 直连后端，3s 超时；挂了不炸，返回 ERR）。
+    agent_future = _probe_agent_route()
+    embedding_future = _probe_embedding_health()
+    llm_raw, summary_raw, tts_raw, asr_raw, agent_raw, embedding_raw = await asyncio.gather(
+        llm_future, summary_future, tts_future, asr_future, agent_future, embedding_future
     )
     return web.json_response(
         {
@@ -177,8 +187,46 @@ async def _services_status_handler(request):
                 "endpoint": tts_raw.get("endpoint", tts_url),
             },
             "asr": asr_raw,
+            "agent": agent_raw,
+            "embedding": embedding_raw,
         }
     )
+
+
+async def _probe_agent_route() -> dict:
+    """Probe background-agent provider route (GET /v1/provider/route)."""
+    from . import server as _server
+
+    base = _server._bg_agent_base_url()
+    try:
+        async with (
+            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3.0)) as session,
+            session.get(base + "/v1/provider/route") as resp,
+        ):
+            if resp.status == 200:
+                body = await resp.json(content_type=None)
+                provider = (body or {}).get("provider", "")
+                return {"ok": True, "reason": f"provider={provider}"}
+            return {"ok": False, "reason": f"HTTP {resp.status}"}
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc)[:120]}
+
+
+async def _probe_embedding_health() -> dict:
+    """Probe memory-store provider health (GET /v1/providers/health)."""
+    from . import server as _server
+
+    base = _server.MEMORY_STORE_URL.rstrip("/")
+    try:
+        async with (
+            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3.0)) as session,
+            session.get(base + "/v1/providers/health") as resp,
+        ):
+            if resp.status == 200:
+                return {"ok": True, "reason": "memory-store reachable"}
+            return {"ok": False, "reason": f"HTTP {resp.status}"}
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc)[:120]}
 
 
 def _append_screen_latency(record: dict) -> None:
@@ -469,3 +517,47 @@ async def _propagate_services_to_runtime():
             loop.create_task(_server._webinfer_proxy_summarizer_routing(summary_cfg))
         # else: no live event loop here (e.g. unit test sync invocation);
         # the next PUT will retry the propagation.
+
+    # N7.1: agent provider 热推（webui -> background-agent :8079
+    # POST /v1/provider/route）。Fire-and-forget；background-agent 挂了则
+    # 下次 PUT 重试（proxy 内记 WARNING，已保存配置不受影响）。
+    agent_cfg = _services_config.get("agent", {})
+    if (agent_cfg.get("provider") or "").strip():
+        loop.create_task(_server._bg_agent_provider_routing(agent_cfg))
+
+    # N7.1: embedding provider 热推（webui -> memory-store :8997
+    # POST /v1/settings/embedding）。memory-store 自带 D-080 校验
+    # （未知 provider 400 / 探活失败 502 不换），这里 fire-and-forget。
+    embed_cfg = _services_config.get("embedding", {})
+    if (embed_cfg.get("provider") or "").strip():
+        loop.create_task(_push_embedding_provider(embed_cfg))
+
+
+async def _push_embedding_provider(embed_cfg: dict) -> None:
+    """Fire-and-forget: POST memory-store /v1/settings/embedding (N7.1).
+
+    memory-store rebuilds its in-process embedder on this endpoint; any
+    failure (unknown provider / unhealthy) is rejected there and logged here.
+    """
+    from . import server as _server
+
+    provider = (embed_cfg.get("provider") or "").strip()
+    if not provider:
+        return
+    base = _server.MEMORY_STORE_URL.rstrip("/")
+    payload = {
+        "provider": provider,
+        "api_key": embed_cfg.get("api_key") or None,
+    }
+    try:
+        async with (
+            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5.0)) as session,
+            session.post(base + "/v1/settings/embedding", json=payload) as resp,
+        ):
+            if resp.status not in (200, 201):
+                text = (await resp.text())[:200]
+                logger.warning(
+                    "memory-store embedding route rejected (%s): %s", resp.status, text
+                )
+    except Exception as exc:
+        logger.warning("memory-store embedding route push failed: %s", exc)

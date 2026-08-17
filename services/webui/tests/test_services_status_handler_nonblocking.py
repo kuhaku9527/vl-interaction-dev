@@ -59,10 +59,24 @@ def test_services_status_runs_probes_in_parallel(monkeypatch):
         time.sleep(SLOW)
         return {"ok": True, "model_dir": "x"}
 
+    async def fast_agent():
+        return {"ok": True, "reason": "provider=codex"}
+
+    async def fast_embedding():
+        return {"ok": True, "reason": "memory-store reachable"}
+
     monkeypatch.setattr(server, "_probe_llm", slow_llm)
     monkeypatch.setattr(server, "_probe_summary", slow_summary)
     monkeypatch.setattr(server, "_probe_tts", slow_tts)
     monkeypatch.setattr(server, "_probe_asr", slow_asr)
+    # N7.1: agent/embedding 探活是 async 直连 8079/8997，测试环境无后端——
+    # 打桩为快速 OK（不真连网）。
+    monkeypatch.setattr(
+        "joy_interaction_webui.admin_endpoints._probe_agent_route", fast_agent
+    )
+    monkeypatch.setattr(
+        "joy_interaction_webui.admin_endpoints._probe_embedding_health", fast_embedding
+    )
 
     request = _FakeRequest()
 
@@ -79,7 +93,7 @@ def test_services_status_runs_probes_in_parallel(monkeypatch):
         f"handler blocked too long: {elapsed:.3f}s (expected < {SLOW * 2:.3f}s)"
     )
     body = json.loads(resp.text)
-    assert set(body.keys()) == {"llm", "summary", "tts", "asr"}
+    assert set(body.keys()) == {"llm", "summary", "tts", "asr", "agent", "embedding"}
     for slot, item in body.items():
         assert item.get("ok") is True, f"{slot} not ok: {item}"
 
@@ -99,10 +113,22 @@ def test_services_status_surfaces_probe_errors(monkeypatch):
     def ok_asr(_cfg):
         return {"ok": True, "model_dir": "x"}
 
+    async def fast_agent():
+        return {"ok": True, "reason": "provider=codex"}
+
+    async def fast_embedding():
+        return {"ok": True, "reason": "memory-store reachable"}
+
     monkeypatch.setattr(server, "_probe_llm", err_llm)
     monkeypatch.setattr(server, "_probe_summary", ok_summary)
     monkeypatch.setattr(server, "_probe_tts", ok_tts)
     monkeypatch.setattr(server, "_probe_asr", ok_asr)
+    monkeypatch.setattr(
+        "joy_interaction_webui.admin_endpoints._probe_agent_route", fast_agent
+    )
+    monkeypatch.setattr(
+        "joy_interaction_webui.admin_endpoints._probe_embedding_health", fast_embedding
+    )
 
     request = _FakeRequest()
 

@@ -15,6 +15,7 @@ Run with:  python -m pytest services/background-agent/tests -o asyncio_mode=auto
 from __future__ import annotations
 
 import httpx
+import agent_provider
 import pytest
 from hermes_api import main as hapi
 
@@ -62,7 +63,7 @@ def capture():
 
 def _patch_client(monkeypatch, response, capture):
     monkeypatch.setattr(
-        hapi.httpx,
+        agent_provider.httpx,
         "AsyncClient",
         lambda *a, **k: _FakeClient(response, capture),
     )
@@ -95,7 +96,7 @@ async def test_enrich_renders_image_refs_for_wiki_blocks(monkeypatch, capture):
 
 async def test_enrich_returns_empty_when_namespaces_blank(monkeypatch, capture):
     """WIKI_RECALL_NAMESPACES="" disables wiki recall entirely (fail open)."""
-    monkeypatch.setattr(hapi, "WIKI_RECALL_NAMESPACES", "")
+    monkeypatch.setattr(agent_provider, "WIKI_RECALL_NAMESPACES", "")
     _patch_client(monkeypatch, _FakeResponse(200, {"blocks": [{"content": "x"}]}), capture)
     assert await hapi._enrich_with_memory("q") == ""
     assert "url" not in capture  # no network call made
@@ -133,7 +134,7 @@ async def test_enrich_returns_empty_when_network_raises(monkeypatch, capture):
         async def post(self, url, json=None):
             raise httpx.ConnectError("memory-store down")
 
-    monkeypatch.setattr(hapi.httpx, "AsyncClient", lambda *a, **k: _BoomClient())
+    monkeypatch.setattr(agent_provider.httpx, "AsyncClient", lambda *a, **k: _BoomClient())
     assert await hapi._enrich_with_memory("q") == ""
 
 

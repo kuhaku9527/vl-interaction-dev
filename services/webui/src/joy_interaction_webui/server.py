@@ -135,6 +135,15 @@ from .asr_bridge import (  # noqa: E402
 )
 from .audio_processor import MicAudioTrack  # noqa: E402
 from .background_model import BackgroundModelService  # noqa: E402
+
+# Facade re-exports from bg_agent_proxy (agent provider-route proxy, N7.1).
+from .bg_agent_proxy import _bg_agent_base_url as _bg_agent_base_url  # noqa: E402
+from .bg_agent_proxy import (  # noqa: E402
+    _bg_agent_provider_route_handler as _bg_agent_provider_route_handler,
+)
+from .bg_agent_proxy import (  # noqa: E402
+    _bg_agent_provider_routing as _bg_agent_provider_routing,
+)
 from .jarvis_mode import (  # noqa: E402
     JarvisState,
 )
@@ -160,6 +169,9 @@ from .service_probe import (  # noqa: E402
 )
 from .service_probe import llm_status as llm_status  # noqa: E402
 from .service_probe import tts_health as tts_health  # noqa: E402
+
+# Facade re-export from service_test (POST /api/services/test model-test button).
+from .service_test import _services_test_handler as _services_test_handler  # noqa: E402
 from .services_config import _SERVICES_CONFIG_DEFAULTS as _SERVICES_CONFIG_DEFAULTS  # noqa: E402
 from .services_config import _SERVICES_CONFIG_PATH as _SERVICES_CONFIG_PATH  # noqa: E402
 
@@ -181,6 +193,19 @@ from .services_config import (  # noqa: E402
 from .services_config import _services_config as _services_config  # noqa: E402
 from .services_config import _validate_and_apply_slot as _validate_and_apply_slot  # noqa: E402
 from .services_config import _validate_api_base as _validate_api_base  # noqa: E402
+
+# Facade re-exports from silence_proxy (radio-silence proxy, spec
+# draft-radio-silence.md §7). The webui persists the silence settings and
+# forwards the live suppressed toggle to webinfer /v1/live/silence.
+# NOTE: the in-process last-known ``_silence_suppressed`` bool is intentionally
+# NOT re-exported — a bool facade would be a stale snapshot (immutable type),
+# unlike the shared dict/set facades elsewhere. Read it via
+# ``silence_proxy._silence_suppressed`` when needed.
+from .silence_proxy import _silence_base_url as _silence_base_url  # noqa: E402
+from .silence_proxy import _silence_handler as _silence_handler  # noqa: E402
+from .silence_proxy import (  # noqa: E402
+    _silence_settings_snapshot as _silence_settings_snapshot,
+)
 from .tts import setup_tts_routes  # noqa: E402
 from .tts_endpoint import _tts_synthesize_handler as _tts_synthesize_handler  # noqa: E402
 from .tts_endpoint import _wav_chunk_header as _wav_chunk_header  # noqa: E402
@@ -507,6 +532,17 @@ async def on_startup(app):
     except Exception as exc:
         logger.warning("ASR bridge startup sync failed (continuing): %s", exc)
 
+    # 2026-08-15: 启动时把 persisted services_config 的 summary 槽位推给
+    # webinfer (POST /v1/summarizer/route) ——否则摘要模型停在启动占位
+    # (默认 8065 / key=EMPTY), 云端 MiniMax-M3 要等前端手动 PUT 才生效。
+    # 同 ASR 启动同步模式: fail-open, webinfer 未起/不可达只记 WARNING。
+    try:
+        summary_cfg = _services_config.get("summary", {}) or {}
+        if summary_cfg.get("api_base") or summary_cfg.get("model") or summary_cfg.get("api_key"):
+            await _webinfer_proxy_summarizer_routing(summary_cfg)
+    except Exception as exc:
+        logger.warning("summarizer startup route sync failed (continuing): %s", exc)
+
     async def warm_browser_asr():
         try:
             from .asr import _get_inproc_asr
@@ -630,6 +666,9 @@ def main():
     app.router.add_get("/api/services/config", _services_config_handler)
     app.router.add_put("/api/services/config", _services_config_handler)
     app.router.add_get("/api/services/status", _services_status_handler)
+    # Model-test button (task M1): live-test a candidate api_base/model/api_key
+    # triple with one minimal OpenAI-compatible chat request; never writes back.
+    app.router.add_post("/api/services/test", _services_test_handler)
     # [Local Wiki] frontend gateway (ADR-0012, tasks F1-F4). Provider health
     # (B3) and network settings (B4) are OWNED by the backend (#36); this
     # gateway only FORWARDS them to memory-store — no business logic here.
@@ -642,6 +681,14 @@ def main():
     app.router.add_delete("/v1/namespaces/{namespace}", _proxy_to_memory_store)
     app.router.add_get("/api/webinfer/summarizer/route", _webinfer_summarizer_route_handler)
     app.router.add_post("/api/webinfer/summarizer/route", _webinfer_summarizer_route_handler)
+    # N7.1: agent provider-route passthrough (webui -> background-agent :8079).
+    app.router.add_get("/api/bg-agent/provider/route", _bg_agent_provider_route_handler)
+    app.router.add_post("/api/bg-agent/provider/route", _bg_agent_provider_route_handler)
+    # Radio silence (spec draft-radio-silence.md §7): webui proxy for
+    # webinfer /v1/live/silence + persisted settings (services_config silence
+    # slot). Frontend combo-key / voice command both land on this single API.
+    app.router.add_get("/api/live/silence", _silence_handler)
+    app.router.add_post("/api/live/silence", _silence_handler)
 
     app.router.add_get("/ws", websocket_handler)
     setup_asr_routes(app)

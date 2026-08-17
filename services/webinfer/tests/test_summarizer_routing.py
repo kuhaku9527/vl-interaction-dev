@@ -28,6 +28,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -209,3 +210,82 @@ def test_post_returns_new_snapshot():
     assert snap["api_base"] == "https://api.minimaxi.com/v1/"
     assert snap["model_name"] == "MiniMax-VL-01"
     assert snap["api_key_set"] is True
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-15: _flush_chunk fail-open guard（云端摘要化的必要兜底）
+# ---------------------------------------------------------------------------
+
+def test_flush_chunk_fail_open_when_summary_raises(monkeypatch):
+    """摘要模型抛异常时 _flush_chunk 必须 WARNING + 跳过，不向调用方传播。
+
+    云端化（MiniMax-M3 等）后摘要可能抖动；_flush_chunk 在 infer_loop 主
+    模型调用之前执行，摘要异常绝不能把主对话 turn 带崩（回归锁）。
+    """
+    from live_adapter import StreamingInferAdapter
+    from summarizer_routing import SummarizerRoutingMixin
+
+    class _BoomSummarizer:
+        pass
+
+    state = SimpleNamespace(
+        session_id="fail-open-test",
+        current_chunk={"frame_count": 5},
+        mid_term_summaries=[],
+        mid_term_history=[],
+        turn_count=1,
+        async_summary_segment={},
+    )
+    adapter = StreamingInferAdapter.__new__(StreamingInferAdapter)
+    adapter.summarizer = _BoomSummarizer()
+    adapter.config = SimpleNamespace(compress_every_n_chunks=4)
+
+    async def _boom(state, chunk):
+        raise RuntimeError("cloud summarizer down")
+
+    # 打桩：_build_mid_term_summary_entry 抛异常（走 fail-open 分支）
+    monkeypatch.setattr(
+        SummarizerRoutingMixin, "_build_mid_term_summary_entry", staticmethod(_boom)
+    )
+
+    async def _run():
+        # fail-open：不 raise，chunk 照常推进（空摘要）
+        await adapter._flush_chunk(state, use_async_summary=False)
+        return True
+
+    assert asyncio.run(_run()) is True
+    # 异常被吞掉，没有 mid_term 摘要追加（跳过而非崩溃）
+    assert state.mid_term_summaries == []
+
+
+def test_flush_chunk_fail_open_on_async_commit(monkeypatch):
+    """异步摘要提交抛异常同样 fail-open（use_async_summary 路径）。"""
+    from live_adapter import StreamingInferAdapter
+    from summarizer_routing import SummarizerRoutingMixin
+
+    state = SimpleNamespace(
+        session_id="fail-open-async-test",
+        current_chunk={"frame_count": 5},
+        mid_term_summaries=[],
+        mid_term_history=[],
+        turn_count=1,
+        async_summary_segment={},
+    )
+    adapter = StreamingInferAdapter.__new__(StreamingInferAdapter)
+    adapter.summarizer = object()  # 非 None 即可走 summarizer 分支
+    adapter.config = SimpleNamespace(compress_every_n_chunks=4)
+
+    async def _boom(state, turn_count, non_blocking):
+        raise RuntimeError("async commit down")
+
+    monkeypatch.setattr(
+        SummarizerRoutingMixin,
+        "_commit_required_async_summaries",
+        staticmethod(_boom),
+    )
+
+    async def _run():
+        await adapter._flush_chunk(state, use_async_summary=True)
+        return True
+
+    assert asyncio.run(_run()) is True

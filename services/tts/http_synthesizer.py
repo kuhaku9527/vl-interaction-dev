@@ -5,9 +5,13 @@ MiniMax is the project's all-in-one provider (LLM + Agent + TTS + Voice Clone + 
 
 Docs: https://platform.minimax.chat/document/T2A%20V2
 
+N5 (2026-08-14): implements the ``TTSSynthesizer`` ABC from ``tts_provider.py``
+so it is a first-class plugin behind ``TTS_PROVIDER=minimax`` (factory selection,
+same pattern as AgentProvider / ASRProvider). Contract unchanged.
+
 Usage:
     from http_synthesizer import MiniMaxTTSSynthesizer
-    synth = MiniMaxTTSSynthesizer(api_key="eyJ...", group_id="...", voice_id="...")
+    synth = MiniMaxTTSSynthesizer(MiniMaxTTSConfig(api_key="eyJ...", group_id="...", voice_id="..."))
     async for audio_chunk in synth.synthesize("你好"):
         await client.send_bytes(audio_chunk)
 """
@@ -21,6 +25,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 import httpx
+
+from tts_provider import TTSSynthesizer
 
 logger = logging.getLogger("joyai.tts.minimax")
 
@@ -52,8 +58,10 @@ class MiniMaxTTSConfig:
     """0.1 - 2.0."""
 
 
-class MiniMaxTTSSynthesizer:
-    """Stream TTS via MiniMax Speech 2.8 SSE API."""
+class MiniMaxTTSSynthesizer(TTSSynthesizer):
+    """Stream TTS via MiniMax Speech 2.8 SSE API（TTS_PROVIDER=minimax 插件实现）。"""
+
+    name = "minimax"
 
     def __init__(self, config: MiniMaxTTSConfig):
         if not config.api_key:

@@ -33,17 +33,81 @@ _SERVICES_CONFIG_DEFAULTS: dict = {
         "model": "streaming-infer-adapter",
         "api_key": "",
     },
-    "summary": {"api_base": "https://api.minimaxi.com/v1", "model": "MiniMax-VL-01", "api_key": ""},
+    # 2026-08-16: 摘要模型默认改 OpenRouter 免费视觉模型（N8）——
+    # google/gemma-4-26b-a4b-it:free 实测图片摘要可用且 cost=0（真实免费），
+    # 不再用 MiniMax-M3（省钱：摘要吃帧图，M3 计费）。前端可 PUT provider
+    # 切回 minimax（api_base/model/api_key 联动覆盖）。
+    # api_key 默认继承 webui 进程环境的 OPENROUTER_API_KEY（User env）。
+    "summary": {
+        "provider": "openrouter",
+        "api_base": "https://openrouter.ai/api/v1",
+        "model": "google/gemma-4-26b-a4b-it:free",
+        "api_key": os.environ.get("OPENROUTER_API_KEY", ""),
+    },
     "tts": {"api_base": "http://127.0.0.1:8985/v1/synthesize", "model": "", "api_key": ""},
     "asr": {
         "api_base": "",
         "model": "D:/AI/models/sherpa-onnx/models/asr/streaming-paraformer-bilingual-zh-en",
         "api_key": "",
     },
+    # 2026-08-15 (N7.1)：agent / embedding 槽位——前端可切 provider（同 summary 热切模式）。
+    # agent: provider = codex|hermes（background-agent POST /v1/provider/route 热切，
+    #   未知名 fail-loud -> 400；api_base/api_key 预留远程 agent）。
+    "agent": {"provider": "codex", "api_base": "", "api_key": ""},
+    # embedding: provider = local|siliconflow|nvidia（memory-store POST
+    #   /v1/settings/embedding 热切）。默认 siliconflow = run-windows.env
+    #   EMBEDDING_PROVIDER（云端 BAAI/bge-m3 实测免费可用）。
+    "embedding": {
+        "provider": "siliconflow",
+        "api_base": "",
+        "model": "",
+        "api_key": "",
+    },
+    # 2026-08-17: 无线电静默 (Radio Silence) 设置槽位 (spec
+    # draft-radio-silence.md §3)。webui 持久化这 5 项设置到 services.json;
+    # webinfer 拥有 live `suppressed` 状态位与 T1/T2 超时计时器。重启默认回
+    # live 常驻--suppressed 位不持久化 (防"忘了开静默变哑巴", spec §2)。
+    # 字段类型映射见 _SILENCE_FIELDS (merge + validate 共用)。默认值与
+    # webinfer silence_control.DEFAULT_SILENCE_SETTINGS / 前端 radio_silence.js
+    # 对齐 (auto_wake_minutes=30)。
+    "silence": {
+        "hotkey": "Ctrl+Shift+S",
+        "asr_enabled": False,
+        "kws_enabled": True,
+        "timeout_hint_enabled": True,
+        "timeout_hint_minutes": 15,
+        "auto_wake_enabled": False,
+        "auto_wake_minutes": 30,
+    },
 }
+
+#: silence 槽位字段 -> 期望类型 (merge + validate 共用)。分钟字段显式排除
+#: bool (Python 里 bool 是 int 子类, True 不能当分钟数存)。
+_SILENCE_FIELDS: dict[str, type] = {
+    "hotkey": str,
+    "asr_enabled": bool,
+    "kws_enabled": bool,
+    "timeout_hint_enabled": bool,
+    "timeout_hint_minutes": int,
+    "auto_wake_enabled": bool,
+    "auto_wake_minutes": int,
+}
+
+#: silence 分钟字段的合法区间 (1 分钟 ~ 24 小时)。T1 静默提示 / T2 自动唤醒
+#: 两个计时器共用该区间; 超出即 400 (约法三章②: invalid 配置显式拒绝)。
+_SILENCE_MINUTES_MIN = 1
+_SILENCE_MINUTES_MAX = 1440
 
 # Live, mutable services config — the single source of truth the webui owns.
 _services_config: dict = copy.deepcopy(_SERVICES_CONFIG_DEFAULTS)
+
+#: provider 字段白名单（N7.1 + N8）：只有这些槽位接受 ``provider`` 选择字段，
+#: 且值必须 ∈ 集合（与各后端 provider 注册表可用名一致，D-080 提前拦截）。
+_PROVIDER_CHOICES: dict[str, tuple[str, ...]] = {
+    "agent": ("codex", "hermes"),
+    "embedding": ("local", "siliconflow", "nvidia"),
+    "summary": ("minimax", "openrouter"),
+}
 
 
 def _default_services_config_path() -> str:
@@ -62,10 +126,13 @@ _SERVICES_CONFIG_PATH = _default_services_config_path()
 def _merge_services_config_file(target: dict, path: str) -> bool:
     """Deep-merge the on-disk ``services.json`` over ``target`` (in place).
 
-    Only the known slots (``llm`` / ``summary`` / ``tts`` / ``asr``) and known
-    fields (``api_base`` / ``model`` / ``api_key``) are merged; anything else
-    is ignored so a partially-written or hand-edited file can never inject
-    unexpected keys into the runtime config.
+    Only the known slots and known fields are merged: the api slots
+    (``llm`` / ``summary`` / ``tts`` / ``asr`` / ``agent`` / ``embedding``)
+    accept ``api_base`` / ``model`` / ``api_key`` / ``provider`` strings, and
+    the ``silence`` slot accepts its 7 typed settings (see ``_SILENCE_FIELDS``,
+    coerced by ``_merge_silence_slot``). Anything else is ignored so a
+    partially-written or hand-edited file can never inject unexpected keys
+    into the runtime config.
 
     Returns
     -------
@@ -92,16 +159,48 @@ def _merge_services_config_file(target: dict, path: str) -> bool:
         logger.warning("services config file %s is not a JSON object; ignoring", path)
         return False
     for slot, slot_cfg in data.items():
-        if slot not in ("llm", "summary", "tts", "asr"):
+        if slot not in _SERVICES_CONFIG_DEFAULTS:
             continue
         if not isinstance(slot_cfg, dict):
             continue
         dst = target.setdefault(slot, {})
-        for key in ("api_base", "model", "api_key"):
+        if slot == "silence":
+            _merge_silence_slot(dst, slot_cfg)
+            continue
+        for key in ("api_base", "model", "api_key", "provider"):
             val = slot_cfg.get(key)
             if isinstance(val, str):
                 dst[key] = val
     return True
+
+
+def _merge_silence_slot(dst: dict, slot_cfg: dict) -> None:
+    """Merge the typed silence-slot fields from a persisted file (in place).
+
+    Only the 7 known fields are merged, coerced to their declared type so a
+    hand-edited file cannot inject a wrong-typed value. Invalid / out-of-range
+    values are ignored — the file load path is best-effort (PUT-time
+    validation in ``_validate_and_apply_silence_slot`` is the real gate; a bad
+    file just keeps the in-memory default).
+    """
+    for key, typ in _SILENCE_FIELDS.items():
+        val = slot_cfg.get(key)
+        if val is None:
+            continue
+        if typ is bool:
+            if isinstance(val, bool):
+                dst[key] = val
+        elif typ is int:
+            if isinstance(val, bool):
+                continue
+            try:
+                parsed = int(val)
+            except (TypeError, ValueError):
+                continue
+            if _SILENCE_MINUTES_MIN <= parsed <= _SILENCE_MINUTES_MAX:
+                dst[key] = parsed
+        elif isinstance(val, str):
+            dst[key] = val
 
 
 def _reload_services_config_from_file() -> None:
@@ -229,7 +328,8 @@ async def _validate_and_apply_slot(
     Parameters
     ----------
     slot: str
-        Service slot (``llm`` / ``summary`` / ``tts`` / ``asr``).
+        Service slot (``llm`` / ``summary`` / ``tts`` / ``asr`` /
+        ``agent`` / ``embedding`` / ``silence``).
     incoming: dict
         The ``{api_base, model, api_key}`` object for this slot from the PUT.
     loop: asyncio.AbstractEventLoop
@@ -245,9 +345,17 @@ async def _validate_and_apply_slot(
     """
     from . import server as _server
 
+    if slot == "silence":
+        # Typed settings slot (hotkey / bool toggles / minute ints) — no
+        # api_base / provider fields, no reachability probe. Validated through
+        # the same gate so invalid values are rejected, never persisted.
+        return await _validate_and_apply_silence_slot(incoming)
+
     cur = _services_config.setdefault(slot, {})
     changing = [
-        k for k in ("api_base", "model", "api_key") if k in incoming and incoming[k] != cur.get(k)
+        k
+        for k in ("api_base", "model", "api_key", "provider")
+        if k in incoming and incoming[k] != cur.get(k)
     ]
     if not changing:
         return None, False
@@ -263,6 +371,35 @@ async def _validate_and_apply_slot(
                     "slot": slot,
                     "field": "api_base",
                     "reason": fmt_err,
+                    "status": 400,
+                },
+                False,
+            )
+
+    # 1.5) Provider gate (N7.1): agent/embedding 的 provider 必须 ∈ 白名单。
+    #      各后端 provider 注册表本身也 fail-loud（D-080），这里提前 400
+    #      拦截非法名，避免把坏配置写进 services.json。
+    if "provider" in changing:
+        choices = _PROVIDER_CHOICES.get(slot)
+        if choices is None:
+            return (
+                {
+                    "error": f"slot {slot!r} does not support a provider field",
+                    "slot": slot,
+                    "field": "provider",
+                    "reason": "unsupported field",
+                    "status": 400,
+                },
+                False,
+            )
+        if incoming["provider"].strip().lower() not in choices:
+            return (
+                {
+                    "error": f"unknown {slot} provider {incoming['provider']!r}; "
+                    f"expected one of: {', '.join(choices)}",
+                    "slot": slot,
+                    "field": "provider",
+                    "reason": "unknown provider",
                     "status": 400,
                 },
                 False,
@@ -316,9 +453,11 @@ async def _validate_and_apply_slot(
     # 3) Valid -> apply the change and audit-log it (ADR-0014 redaction).
     changed_fields = []
     redacted = {}
-    for key in ("api_base", "model", "api_key"):
+    for key in ("api_base", "model", "api_key", "provider"):
         if key in incoming and incoming[key] != cur.get(key):
-            cur[key] = incoming[key]
+            # provider 规范化存储（strip + lower），保证内存态与白名单一致，
+            # 前端下拉回显不会出现 '  HERMES ' 这种不匹配 option 的值。
+            cur[key] = incoming[key].strip().lower() if key == "provider" else incoming[key]
             changed_fields.append(key)
             if key == "api_key":
                 redacted["api_key"] = "***set***" if incoming[key] else "***cleared***"
@@ -326,6 +465,92 @@ async def _validate_and_apply_slot(
                 redacted[key] = incoming[key]
     if changed_fields:
         _log_config_change(slot, changed_fields, redacted)
+    return None, bool(changed_fields)
+
+
+async def _validate_and_apply_silence_slot(incoming: dict) -> tuple[dict | None, bool]:
+    """Validate + apply one incoming silence-settings patch.
+
+    The silence slot carries 7 typed fields (hotkey string, 4 bool toggles,
+    2 minute ints). Per 约法三章②, a wrong-typed / out-of-range value is
+    rejected with an explicit structured 400 and is NEVER applied or
+    persisted. Only fields actually present in ``incoming`` are validated —
+    a partial patch (e.g. just ``{"kws_enabled": False}``) leaves the rest
+    untouched, matching the other slots' incremental semantics.
+
+    Parameters
+    ----------
+    incoming: dict
+        The ``{hotkey?, asr_enabled?, ...}`` object for the silence slot.
+
+    Returns
+    -------
+    tuple[dict | None, bool]
+        ``(invalid_entry, applied)`` — same contract as
+        ``_validate_and_apply_slot``: ``invalid_entry`` is the structured 4xx
+        body fragment when a field is rejected, else ``None``; ``applied`` is
+        ``True`` when at least one field was committed.
+    """
+    cur = _services_config.setdefault("silence", {})
+    changed_fields: list[str] = []
+    redacted: dict = {}
+    for key, typ in _SILENCE_FIELDS.items():
+        if key not in incoming:
+            continue
+        val = incoming[key]
+        # bool is an int subclass in Python; minutes must reject True/False.
+        if typ is int and isinstance(val, bool):
+            return (
+                {
+                    "error": f"silence.{key} must be an integer",
+                    "slot": "silence",
+                    "field": key,
+                    "reason": "expected int, got bool",
+                    "status": 400,
+                },
+                False,
+            )
+        if not isinstance(val, typ):
+            return (
+                {
+                    "error": f"silence.{key} must be a {typ.__name__}",
+                    "slot": "silence",
+                    "field": key,
+                    "reason": f"expected {typ.__name__}, got {type(val).__name__}",
+                    "status": 400,
+                },
+                False,
+            )
+        if typ is int and not (_SILENCE_MINUTES_MIN <= val <= _SILENCE_MINUTES_MAX):
+            return (
+                {
+                    "error": f"silence.{key} must be between {_SILENCE_MINUTES_MIN} and "
+                    f"{_SILENCE_MINUTES_MAX} minutes",
+                    "slot": "silence",
+                    "field": key,
+                    "reason": "minutes out of range",
+                    "status": 400,
+                },
+                False,
+            )
+        if key == "hotkey" and not val.strip():
+            return (
+                {
+                    "error": "silence.hotkey must be a non-empty hotkey string",
+                    "slot": "silence",
+                    "field": key,
+                    "reason": "empty hotkey",
+                    "status": 400,
+                },
+                False,
+            )
+        if val == cur.get(key):
+            continue
+        cur[key] = val.strip() if key == "hotkey" else val
+        changed_fields.append(key)
+        redacted[key] = val
+    if changed_fields:
+        _log_config_change("silence", changed_fields, redacted)
     return None, bool(changed_fields)
 
 

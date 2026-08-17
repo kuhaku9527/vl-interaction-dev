@@ -26,9 +26,10 @@ from __future__ import annotations
 import logging
 
 import httpx
+import agent_provider
 from hermes_api import main as hapi
 
-LOGGER_NAME = "hermes_api.main"
+LOGGER_NAME = "agent_provider"
 
 
 class _BoomPostClient:
@@ -75,7 +76,7 @@ def _assert_warned_recall_failure(caplog) -> None:
 async def test_enrich_logs_warning_when_network_raises(monkeypatch, caplog):
     """A ConnectError during recall must be logged, while still failing open."""
     monkeypatch.setattr(
-        hapi.httpx,
+        agent_provider.httpx,
         "AsyncClient",
         lambda *a, **k: _BoomPostClient(httpx.ConnectError("memory-store down")),
     )
@@ -88,7 +89,7 @@ async def test_enrich_logs_warning_when_network_raises(monkeypatch, caplog):
 async def test_enrich_logs_warning_when_client_entry_raises(monkeypatch, caplog):
     """An exception raised while opening the client must also be logged."""
     monkeypatch.setattr(
-        hapi.httpx,
+        agent_provider.httpx,
         "AsyncClient",
         lambda *a, **k: _BoomEnterClient(),
     )

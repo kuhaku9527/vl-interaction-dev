@@ -161,6 +161,16 @@ _BUGFIX_DIVERGED = {
         "upstream (new _probe_asr_cloud helper); the local (default) branch "
         "remains the pre-split body verbatim."
     ),
+    # N7.1 (2026-08-15, doc/specs/draft-provider-convergence.md): services_config
+    # 从 4 槽位扩到 6（+agent/embedding）——以下函数因功能演进有意偏离基线：
+    # provider 白名单校验、PUT 遍历 _SERVICES_CONFIG_DEFAULTS、status 增加
+    # agent/embedding 探活、传播增加 agent/embedding 热推分支。均为纯增量
+    # （无 WS 消息分支被删——这些函数本就不含 WS 分支，弱断言恒通过）。
+    "_merge_services_config_file": "N7.1: merge 白名单扩 provider 字段",
+    "_validate_and_apply_slot": "N7.1: provider 字段白名单校验 + 应用时规范化",
+    "_services_config_handler": "N7.1: PUT 遍历全部 6 槽位",
+    "_services_status_handler": "N7.1: 增加 agent/embedding 探活",
+    "_propagate_services_to_runtime": "N7.1: 增加 agent/embedding 热推分支",
 }
 
 

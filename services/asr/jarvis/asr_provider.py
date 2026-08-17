@@ -29,6 +29,18 @@ import os
 
 from .asr_upstream import pcm16_to_wav_bytes, transcribe_wav_bytes
 
+# N7 provider 收敛：注册表（选择逻辑）在 services/provider_base.py，本模块只
+# 注册实现。跨服务共享需把仓库根注入 sys.path（本文件上溯 3 层到仓库根）——
+# 必须在 import services 之前完成（bootstrap，同 webui _ensure_repo_root_on_path 先例）。
+import sys as _sys
+from pathlib import Path as _Path
+
+_REPO_ROOT = _Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+
+from services.provider_base import ProviderRegistry  # noqa: E402
+
 logger = logging.getLogger("joyai.asr.provider")
 
 #: Env gate selecting the jarvis/live ASR provider (default ``local``).
@@ -314,6 +326,24 @@ class CloudBatchProvider(ASRProvider):
         return False
 
 
+#: ASR provider 注册表（N7 收敛）。choice 缺省时读 ``JARVIS_ASR_PROVIDER``（默认 local）。
+_ASR_REGISTRY = ProviderRegistry(
+    "ASR provider", env_name=JARVIS_ASR_PROVIDER_ENV, default="local"
+)
+
+
+def _lazy_local(**kwargs: object) -> ASRProvider:
+    return LocalStreamingProvider(**kwargs)
+
+
+def _lazy_cloud(**kwargs: object) -> ASRProvider:
+    return CloudBatchProvider(**kwargs)
+
+
+_ASR_REGISTRY.register("local", _lazy_local)
+_ASR_REGISTRY.register("cloud", _lazy_cloud)
+
+
 def create_asr_provider(
     *,
     provider: str | None = None,
@@ -352,22 +382,20 @@ def create_asr_provider(
         ``provider`` is neither ``local`` nor ``cloud`` — explicit, never a
         silent local fallback.
     """
-    choice = (provider or os.environ.get(JARVIS_ASR_PROVIDER_ENV, "local")).strip().lower()
+    choice = _ASR_REGISTRY.resolve_name(provider)
     if choice == "local":
         return LocalStreamingProvider(model_dir=model_dir, num_threads=num_threads)
-    if choice == "cloud":
-        url = upstream_url or os.environ.get(ASR_UPSTREAM_URL_ENV, "").strip()
-        key = api_key or os.environ.get(ASR_API_KEY_ENV, "").strip()
-        mdl = model
-        if mdl is None:
-            mdl = os.environ.get(ASR_MODEL_ENV, "").strip() or DEFAULT_CLOUD_MODEL
-        return CloudBatchProvider(
-            upstream_url=url,
-            api_key=key,
-            model=mdl,
-            max_buffer_seconds=max_buffer_seconds,
-        )
-    raise ValueError(f"invalid JARVIS_ASR_PROVIDER: {choice!r} (expected 'local' or 'cloud')")
+    url = upstream_url or os.environ.get(ASR_UPSTREAM_URL_ENV, "").strip()
+    key = api_key or os.environ.get(ASR_API_KEY_ENV, "").strip()
+    mdl = model
+    if mdl is None:
+        mdl = os.environ.get(ASR_MODEL_ENV, "").strip() or DEFAULT_CLOUD_MODEL
+    return CloudBatchProvider(
+        upstream_url=url,
+        api_key=key,
+        model=mdl,
+        max_buffer_seconds=max_buffer_seconds,
+    )
 
 
 def allow_local_failover() -> bool:

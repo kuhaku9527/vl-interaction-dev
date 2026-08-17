@@ -64,18 +64,37 @@ class SummarizerRoutingMixin:
         if current_chunk["frame_count"] <= 0:
             return
 
+        # 2026-08-15: 摘要 fail-open（云端化后的必要兜底）。摘要模型已可切到
+        # 云端 MiniMax-M3 / 其他提供方——云端抖动或 key 失效时，摘要失败
+        # 绝不能把主对话 turn 一起带崩（_flush_chunk 在 infer_loop 主模型
+        # 调用之前执行）。异常记 WARNING、跳过本 chunk 摘要、chunk 照常推进。
         if self.summarizer is not None and use_async_summary:
-            await self._commit_required_async_summaries(
-                state,
-                state.turn_count,
-                non_blocking=False,
-            )
+            try:
+                await self._commit_required_async_summaries(
+                    state,
+                    state.turn_count,
+                    non_blocking=False,
+                )
+            except Exception as exc:  # noqa: BLE001 - fail open
+                LOGGER.warning(
+                    "[%s] async summary commit failed (fail-open, skipped): %s",
+                    state.session_id,
+                    exc,
+                )
         elif self.summarizer is not None:
-            mid_term_entry, summary_time = await asyncio.to_thread(
-                self._build_mid_term_summary_entry,
-                state,
-                copy.deepcopy(current_chunk),
-            )
+            try:
+                mid_term_entry, summary_time = await asyncio.to_thread(
+                    self._build_mid_term_summary_entry,
+                    state,
+                    copy.deepcopy(current_chunk),
+                )
+            except Exception as exc:  # noqa: BLE001 - fail open
+                LOGGER.warning(
+                    "[%s] mid-term summary failed (fail-open, skipped): %s",
+                    state.session_id,
+                    exc,
+                )
+                return
             state.mid_term_summaries.append(mid_term_entry)
             state.mid_term_history.append(mid_term_entry)
             LOGGER.info(
@@ -88,7 +107,14 @@ class SummarizerRoutingMixin:
                 self.config.compress_every_n_chunks,
             )
             if len(state.mid_term_summaries) >= self.config.compress_every_n_chunks:
-                await asyncio.to_thread(self._compress_mid_terms, state)
+                try:
+                    await asyncio.to_thread(self._compress_mid_terms, state)
+                except Exception as exc:  # noqa: BLE001 - fail open
+                    LOGGER.warning(
+                        "[%s] mid-term compression failed (fail-open, skipped): %s",
+                        state.session_id,
+                        exc,
+                    )
 
     def _build_mid_term_summary_entry(
         self,

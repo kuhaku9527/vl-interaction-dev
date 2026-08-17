@@ -7,12 +7,17 @@ Two FastAPI shims live in this package, both preserving the exact same
 
 | shim | module | runtime | best for |
 | --- | --- | --- | --- |
-| **Hermes API (recommended)** | `hermes_api/main.py` | a local [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) HTTP gateway (OpenAI-compatible, port 8642) | Windows hosts and any user who wants the modern agent + delegation toolchain |
-| **Codex API (legacy)** | `codex_api/main.py` | a system `codex` CLI subprocess | existing Linux deployments that already depend on the original `codex exec --json` wrapper |
+| **Codex API (default)** | `codex_api/main.py` → `CodexProvider` | a system `codex` CLI subprocess (reuses `~/.codex` auth/config) | Windows + Linux; the current default backend since 2026-08-13 (see `doc/specs/draft-background-agent-codex-bridge.md`) |
+| **Hermes API (retained)** | `hermes_api/main.py` → `HermesProvider` | a local [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) HTTP gateway (OpenAI-compatible, port 8642) | switchable; set `BACKGROUND_AGENT_PROVIDER=hermes` to select |
 
-The webui (`services/webui/src/joy_interaction_webui/background_model.py`) only
-talks to `POST {BACKGROUND_AGENT_API_URL}/v1/solve`, so flipping between shims
-is just a matter of which one is bound to that port.
+> **Plugin architecture (2026-08-14)**: both shims implement the shared
+> `AgentProvider` interface (`services/background-agent/agent_provider.py`) and
+> are served by the single `agent_app:app` entry. `BACKGROUND_AGENT_PROVIDER`
+> (`codex` default | `hermes`) *selects the plugin* — it is a choice, not a
+> fallback; an unknown name fails loudly. The webui
+> (`services/webui/src/joy_interaction_webui/background_model.py`) only talks to
+> `POST {BACKGROUND_AGENT_API_URL}/v1/solve`, so any agent implementing the
+> interface is plug-and-play on port 8079.
 
 ## Which one is running?
 
@@ -20,14 +25,13 @@ is just a matter of which one is bound to that port.
 curl http://127.0.0.1:8079/health
 ```
 
-- The Hermes shim returns `{ "codex_api": "ok", "hermes_gateway": <int>, "model": "..." }`
+- The Codex shim returns `{ provider: "codex", codex_path, codex_version, config_path, config_exists, workspace, ... }`.
+- The Hermes shim returns `{ provider: "hermes", "codex_api": "ok", "hermes_gateway": <int>, "model": "..." }`
   (the `codex_api` key is kept for backward-compatibility).
-- The Codex shim returns a JSON object with `codex_cli` and a probe of the
-  `codex` binary.
 
 ---
 
-## Hermes 接入 (recommended on Windows)
+## Hermes 接入 (retained fallback; `BACKGROUND_AGENT_PROVIDER=hermes`)
 
 The Hermes shim is a thin OpenAI-format translator that fronts a local
 [hermes-agent](https://github.com/NousResearch/hermes-agent) gateway. The
@@ -35,6 +39,10 @@ gateway handles the actual agent loop, tool calls, `delegate_task`
 sub-orchestration, and (optional) image generation. The shim just packages
 the webui's `SolveRequest` into a multimodal `chat.completions` request and
 unpacks the response back into the legacy `SolveResponse` shape.
+
+> Since 2026-08-13 the default backend is **Codex** (below); Hermes is
+> retained and switchable, not recommended as the default. Hermes's own
+> environment (`D:\Workspace\hermes-data`) is never touched by the Codex path.
 
 ### 1. Install hermes-agent
 
@@ -102,7 +110,10 @@ working unchanged.
 
 ---
 
-## Codex 接入 (legacy / Linux)
+## Codex 接入 (default since 2026-08-13; Windows + Linux)
+
+On Windows the shim is started by `services/scripts/run-windows.ps1`
+(`Start-BackgroundAgent`, provider default `codex`). On Linux use:
 
 ```bash
 ./services/background-agent/scripts/run.sh
@@ -112,11 +123,6 @@ working unchanged.
 install script. If that environment does not exist, it falls back to
 `uv run` development mode.
 
-```bash
-cd services/background-agent
-./scripts/run.sh
-```
-
 The WebUI background client uses `http://127.0.0.1:8079` by default.
 Override with:
 
@@ -124,8 +130,25 @@ Override with:
 export BACKGROUND_AGENT_API_URL=http://127.0.0.1:8079
 ```
 
+### CODEX_HOME / auth
+
+The shim reuses the user's existing `~/.codex` (`CODEX_HOME`, Windows path
+`C:\Users\<user>\.codex`) for `config.toml` + `auth.json` — **no per-project
+auth copy**. `run-windows.ps1` injects `CODEX_HOME`; the Linux `run.sh`
+defaults to `<repo>/services/background-agent/codex-home` (override with
+`CODEX_HOME=/path/to/.codex`). The shim runs `codex exec` with
+`--ephemeral` so no session files are persisted.
+
+### Workspace
+
 `run.sh` uses `<repo>/agent-workspace` as the default Codex workspace and
-creates it on startup.
+creates it on startup; `run-windows.ps1` does the same.
+
+### Local Wiki recall (D-049 contract)
+
+`codex_api` includes the same `_enrich_with_memory` recall as `hermes_api`
+(memory-store :8997 `/v1/blocks/recall`, scoped to `WIKI_RECALL_NAMESPACES`,
+fail-open + WARNING log) — the D-049 contract is preserved on both backends.
 
 ### Security note (Codex path)
 

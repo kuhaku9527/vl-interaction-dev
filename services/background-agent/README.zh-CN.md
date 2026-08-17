@@ -6,11 +6,14 @@
 
 | shim | 模块 | 运行时 | 适用场景 |
 | --- | --- | --- | --- |
-| **Hermes API (推荐)** | `hermes_api/main.py` | 本地 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) HTTP gateway（OpenAI 兼容，端口 8642） | Windows 主机；想要现代化 agent + `delegate_task` 子任务编排的用户 |
-| **Codex API (旧)** | `codex_api/main.py` | 系统 `codex` CLI 子进程 | 已有的 Linux 部署，依赖原 `codex exec --json` 封装 |
+| **Codex API（默认）** | `codex_api/main.py` → `CodexProvider` | 系统 `codex` CLI 子进程（复用 `~/.codex` auth/config） | Windows + Linux；2026-08-13 起为默认后端（见 `doc/specs/draft-background-agent-codex-bridge.md`） |
+| **Hermes API（保留）** | `hermes_api/main.py` → `HermesProvider` | 本地 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) HTTP gateway（OpenAI 兼容，端口 8642） | 可切换；设 `BACKGROUND_AGENT_PROVIDER=hermes` 选择 |
 
-webui 端（`services/webui/src/joy_interaction_webui/background_model.py`）只调
-`POST {BACKGROUND_AGENT_API_URL}/v1/solve`，因此切换 shim 只需改变哪个进程占住这个端口。
+> **插件化架构（2026-08-14）**：两个 shim 实现共享 `AgentProvider` 接口
+> （`services/background-agent/agent_provider.py`），由统一入口 `agent_app:app`
+> 服务。`BACKGROUND_AGENT_PROVIDER`（默认 `codex` | `hermes`）是**插件选择**
+> 而非主/备回退——未知名 fail-loud。webui 只调
+> `POST {BACKGROUND_AGENT_API_URL}/v1/solve`，任何实现该接口的 agent 即插即用。
 
 ## 当前跑的是哪一个？
 
@@ -18,13 +21,13 @@ webui 端（`services/webui/src/joy_interaction_webui/background_model.py`）只
 curl http://127.0.0.1:8079/health
 ```
 
-- Hermes shim 返回 `{ "codex_api": "ok", "hermes_gateway": <int>, "model": "..." }`
+- Codex shim 返回 `{ provider: "codex", codex_path, codex_version, config_path, config_exists, workspace, ... }`。
+- Hermes shim 返回 `{ provider: "hermes", "codex_api": "ok", "hermes_gateway": <int>, "model": "..." }`
   （保留 `codex_api` 字段名以兼容 webui）。
-- Codex shim 返回包含 `codex_cli` 探测结果的 JSON。
 
 ---
 
-## Hermes 接入 (Windows 推荐)
+## Hermes 接入 (保留回退；`BACKGROUND_AGENT_PROVIDER=hermes`)
 
 Hermes shim 是一个轻量的 OpenAI 格式翻译器，前端对接本地
 [hermes-agent](https://github.com/NousResearch/hermes-agent) gateway。
@@ -97,19 +100,17 @@ WebUI 默认 `BACKGROUND_AGENT_API_URL=http://127.0.0.1:8079`，**无需任何�
 
 ---
 
-## Codex 接入 (旧 / Linux)
+## Codex 接入 (2026-08-13 起默认；Windows + Linux)
+
+Windows 由 `services/scripts/run-windows.ps1` 的 `Start-BackgroundAgent`
+启动（provider 默认 `codex`）。Linux 使用：
 
 ```bash
 ./services/background-agent/scripts/run.sh
 ```
 
 `run.sh` 优先使用安装脚本创建的共享环境 `services/.venv`。如果该环境
-不存在，则回退到 `uv run` 开发模式：
-
-```bash
-cd services/background-agent
-./scripts/run.sh
-```
+不存在，则回退到 `uv run` 开发模式。
 
 WebUI 后台客户端默认使用 `http://127.0.0.1:8079`。可通过以下方式覆盖：
 
@@ -117,7 +118,25 @@ WebUI 后台客户端默认使用 `http://127.0.0.1:8079`。可通过以下方�
 export BACKGROUND_AGENT_API_URL=http://127.0.0.1:8079
 ```
 
-`run.sh` 默认使用 `<repo>/agent-workspace` 作为 Codex 工作区，并在启动时创建它。
+### CODEX_HOME / 认证
+
+shim 复用用户已有的 `~/.codex`（`CODEX_HOME`，Windows 路径
+`C:\Users\<user>\.codex`）中的 `config.toml` + `auth.json`——**无需复制
+敏感文件进项目**。`run-windows.ps1` 注入 `CODEX_HOME`；Linux `run.sh`
+默认用 `<repo>/services/background-agent/codex-home`（可
+`CODEX_HOME=/path/to/.codex` 覆盖）。shim 以 `--ephemeral` 运行 `codex exec`，
+不落盘会话文件。
+
+### 工作区
+
+`run.sh` 默认使用 `<repo>/agent-workspace` 作为 Codex 工作区并在启动时创建；
+`run-windows.ps1` 同样自动创建。
+
+### Local Wiki 召回（D-049 契约）
+
+`codex_api` 与 `hermes_api` 相同：委派前调用 `_enrich_with_memory`
+（memory-store :8997 `/v1/blocks/recall`，按 `WIKI_RECALL_NAMESPACES` 限定，
+fail-open + WARNING 日志）——**D-049 契约在两个后端都保留**。
 
 ### 安全提示 (Codex 路径)
 
