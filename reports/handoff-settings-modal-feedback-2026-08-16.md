@@ -623,3 +623,52 @@ JS 关键 invariant:`subform-wrap` 内**始终两份** subform(本地+云端),�
 **一致性合规自检（D1–D5）**：D1 复用 `.ctrl`/`.chip`/`.mode-chip` 元件，新增仅是 `.ctrl-labeled`（`.ctrl` 的竖排标签变体，非新元件形态）+ `.ctrl-label` 文字；D2/D3 状态点语义不变；D4 标签按钮 7px/12px padding = 8px 网格近似（label 10px 字号）；D5 字体沿用 `--font`。
 
 **语义澄清（给用户）**：底部「实时」= live 模式（与顶部 live chip 同步）；底部「语音」= 语音识别/ASR 输入（call）；摄像头 = 视频捕获（浮层选源）；Jarvis 常驻 / 唤醒词 在顶部模式 chip。
+
+### 19. 麦克风嵌入输入框 + 删 jarvis chip + 发送按钮反馈（v6-lite.7）
+
+> 用户反馈（约 18:33，两张截图）：①「语音换到发送按钮旁边」—— 参考微信式语音输入，把 mic 嵌入输入框内右侧；②「上面不需要 jarvis 徽章了」—— 顶部 mode-chip 的 jarvis 删掉；③「你测试了发送按钮的点击反馈吗」—— 问责发送按钮无按下交互。
+
+**修正（`design/joyai-redesign-preview.html`）**：
+- mic 从底部 `.controls` 挪入 `.prompt` 内、紧贴发送按钮左侧，复用 `.ctrl` 视觉语言（圆角 ghost 圆形按钮，灰色麦克风图标，`.prompt-mic`）。
+- 麦克风激活：图标变红 + 淡红底；输入框整圈红色 glow ring（`.prompt.voice-on`）。
+- 顶部 `.quick-tabs` 删 `jarvis` chip（保留 `live` / `kws`）；Jarvis 常驻与麦克风合并（麦克风激活 = Jarvis 监听启用），不重复占位。
+- 发送按钮加 `.send:active` `scale(.9)` 缩放 + `.sent` 0.5s 闪烁动画，`sendDemo()` 触发（回应「测过没」问责）。
+- 删 `toggleCtrl()` 死代码（mic 改用 `toggleMic()`）。
+
+**校验**：`node --check` JS OK；tag balance `<section>`10/10、`<div>`211/211、`<button>`50/50、`<span>`104/104、`<style>`1/1。
+
+**一致性合规自检（D1–D5）**：D1 复用 `.ctrl`/`.chip`/`.mode-chip`/`.prompt` 视觉变量；D2 状态色沿用 `--brand`（激活）；D3/D4/D5 同前。
+
+### 20. 移除输入栏左缘脉冲灯（v6-lite.8）
+
+> 用户反馈（约 18:41）：「左缘脉冲灯不需要。其他都正常。」
+
+**修正**：
+- 删 `.voice-pulse` 元素 / CSS / JS 显隐逻辑（`voicePulse` 引用清零）。
+- 保留麦克风激活态：图标变红 + 输入框红色 glow ring（`.prompt.voice-on`）。
+
+**校验**：`node --check` JS OK；`voice-pulse` / `voicePulse` 引用均为 0。
+
+**状态**：UI 重设计本轮（v5 → v6-lite.8）基本收口，无新阻断问题。后续回灌 `services/webui/static/` 时按一致性 spec D1–D5 自查。
+
+---
+
+## 21. 阶段 0 收口 + 转入标准治理流程（2026-08-17）
+
+> 用户（2026-08-17 18:17）指令：「把现在项目的前端改造，先备份。你先分析现在项目的收集信息，写对应方案、文档。我知道怎么给流程，你来说我们对齐一下。」
+
+**备份（已完成）**：本地标签 `archive/ui-redesign-preview-20260817` → `0d93864`（分支 `ui/redesign-preview` tip，未推送），固化 v5→v6-lite.8 全部前端改造提交。
+
+**收集信息分析结论**：
+- 已定稿（用户多轮拍板、预览已落地）：模型 tab 本云分拆 + 上下文≥16384 + 输出长度；状态统一（`.chip` mode-chip）；视频采集浮层；麦克风嵌入输入框；删 方案预设/密钥显示策略/并行槽数/jarvis chip；一致性 spec D1–D5。
+- 仍 OPEN：后端 P0（TTS schema 扩 6 字段 + provider 插件、persona 槽位 + `MAX_SYSTEM_PROMPT_CHARS`）；路线图（inference 热调整、KWS 超参接入）；一致性 spec / ADR-0019 待 ratification 进 `决策/`；handoff 缺 §19/§20（本文件已补）。
+- 文档缺口：无单一「前端重设计决策 SSOT」——决策散落 handoff §1–§18（工作日志性质）+ 一份一致性 spec。
+
+**对齐后的标准流程推进（用户确认「全做」并按标准流程）**：
+- 阶段 0（本步）：补 handoff §19/§20 收口 ✅。
+- 阶段 1（Spec）：写 `doc/specs/webui-redesign-spec.md` —— 整合 v5→v6-lite.8 全部决策为 SSOT，引用一致性 spec D1–D5，含模型 tab / 槽位本云 idiom / 状态分层 / 视频浮层 / 输入栏 / 后端对接待办 / 回灌契约 / 验收门槛。
+- 阶段 2（ADR）：写 `doc/adr/0020-webui-local-cloud-selector.md` —— 把「本地/云端 两段选择器 = 所有 provider 槽位统一 UI idiom」立为可 ratification 的架构决策。
+- 阶段 3（★用户 ratification）：spec + adr 进 `决策/`，成为硬约束。
+- 阶段 4（交接）：出 `reports/integration-*.md` 给后端对话 + 实装 `services/webui/static/` 改动点清单。
+
+**边界纪律**：B/C 由前端端点产出草稿；D 由审查组（用户）拍板，端点不写 `决策/`；E 为跨对话交接件。
