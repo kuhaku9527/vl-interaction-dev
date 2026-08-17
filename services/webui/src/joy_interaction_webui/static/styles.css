@@ -2634,6 +2634,35 @@
             display: inline-flex;
         }
 
+        /* Axis 6 (v6-lite.16): mic active feedback — amplify the existing
+           .recording state with an accent glow ring + pulse so active
+           listening is unmistakable. Reuses --accent-color (= --joy-red).
+           Pure CSS; no JS / id changes, keeps all existing click bindings. */
+        .speech-control.recording {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+            animation: micActivePulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes micActivePulse {
+            0%, 100% {
+                box-shadow: 0 8px 18px rgba(143, 17, 26, 0.28),
+                            0 0 0 0 rgba(143, 17, 26, 0.45);
+            }
+            50% {
+                box-shadow: 0 8px 18px rgba(143, 17, 26, 0.28),
+                            0 0 0 7px rgba(143, 17, 26, 0);
+            }
+        }
+
+        /* Axis 6 (v6-lite.16): send button press feedback — scale down on
+           :active. The base .chat-prompt-action transition already covers
+           transform (0.2s), so the press eases in/out. */
+        .chat-prompt-action.send:active {
+            transform: scale(0.92);
+            box-shadow: 0 4px 12px rgba(143, 17, 26, 0.34);
+        }
+
         .chat-prompt-action.speech:disabled {
             opacity: 0.65;
             transform: none;
