@@ -580,40 +580,97 @@ limitations under the License.
                 </div>
                 <div class="panel-content collapsed" id="servicesConfig">
                     <div class="input-hint" style="margin-bottom: 12px;">Six pluggable backends. Save applies at runtime; no service restart.</div>
-                    <div class="service-row" data-service="llm">
+                    <div class="service-row" data-service="llm" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="brain"></i><span>LLM</span><span class="service-badge" id="badge-llm">--</span></div>
+                        <div class="svc-seg" data-slot="llm" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-llm-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-llm-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-llm-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-llm-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-llm-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <div class="local-hint" data-i18n>Local default endpoint · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-llm-api-base" placeholder="http://127.0.0.1:8070/v1"></div>
+                        <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-llm-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-llm-model" placeholder="joyai-vl-interaction-preview"></div>
-                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-llm-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
                             <button class="icon-btn" id="svc-llm-test-btn" type="button" title="Test LLM connection" aria-label="Test LLM connection"><i data-lucide="plug-zap"></i><span id="svc-llm-test-label">Test</span></button>
                             <span id="svc-llm-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
-                    <div class="service-row" data-service="summary">
+                    <div class="service-row" data-service="summary" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="file-text"></i><span data-i18n>Summary</span><span class="service-badge" id="badge-summary">--</span></div>
-                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-summary-provider"><option value="openrouter">openrouter</option><option value="minimax">minimax</option></select></div>
+                        <div class="svc-seg" data-slot="summary" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-summary-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-summary-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-summary-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-summary-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-summary-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <div class="local-hint" data-i18n>Local default endpoint · no API key</div>
+                        <div class="form-group" hidden><label data-i18n>Provider</label><select id="svc-summary-provider"><option value="openrouter">openrouter</option><option value="minimax">minimax</option></select></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-summary-api-base" placeholder="https://openrouter.ai/api/v1"></div>
+                        <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-summary-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-summary-model" placeholder="google/gemma-4-26b-a4b-it:free"></div>
-                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-summary-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
                             <button class="icon-btn" id="svc-summary-test-btn" type="button" title="Test Summary connection" aria-label="Test Summary connection"><i data-lucide="plug-zap"></i><span id="svc-summary-test-label">Test</span></button>
                             <span id="svc-summary-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
-                    <div class="service-row" data-service="tts">
+                    <div class="service-row" data-service="tts" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
+                        <div class="svc-seg" data-slot="tts" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="local-hint" data-i18n>Local Jarvis TTS · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
                             <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
                             <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
-                    <div class="service-row" data-service="asr">
+                    <div class="service-row" data-service="asr" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="mic"></i><span>ASR</span><span class="service-badge" id="badge-asr">--</span></div>
+                        <div class="svc-seg" data-slot="asr" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-asr-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-asr-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-asr-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-asr-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-asr-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <div class="local-hint" data-i18n>Local Whisper / FunASR · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-asr-api-base" placeholder="https://api.siliconflow.cn/v1/audio/transcriptions"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-asr-model" placeholder="ggml-large-v3-turbo"></div>
-                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-asr-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-asr-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
                             <button class="icon-btn" id="svc-asr-test-btn" type="button" title="Test ASR connection" aria-label="Test ASR connection"><i data-lucide="plug-zap"></i><span id="svc-asr-test-label">Test</span></button>
                             <span id="svc-asr-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
@@ -621,22 +678,56 @@ limitations under the License.
                     </div>
                     <!-- N7.1: agent / embedding provider slots (hot-switch via
                          /api/bg-agent/provider/route + memory-store /v1/settings/embedding). -->
-                    <div class="service-row" data-service="agent">
+                    <div class="service-row" data-service="agent" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="bot"></i><span>Agent</span><span class="service-badge" id="badge-agent">--</span></div>
-                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-agent-provider"><option value="codex">codex</option><option value="hermes">hermes</option></select></div>
+                        <div class="svc-seg" data-slot="agent" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-agent-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-agent-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-agent-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-agent-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-agent-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <div class="local-hint" data-i18n>Local agent · no API key</div>
+                        <div class="form-group" hidden><label data-i18n>Provider</label><select id="svc-agent-provider"><option value="codex">codex</option><option value="hermes">hermes</option></select></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-agent-api-base" placeholder="optional (remote agent)"></div>
-                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-agent-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-agent-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
                             <button class="icon-btn" id="svc-agent-test-btn" type="button" title="Test Agent connection" aria-label="Test Agent connection"><i data-lucide="plug-zap"></i><span id="svc-agent-test-label">Test</span></button>
                             <span id="svc-agent-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
-                    <div class="service-row" data-service="embedding">
+                    <div class="service-row" data-service="embedding" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="layers"></i><span>Embedding</span><span class="service-badge" id="badge-embedding">--</span></div>
-                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-embedding-provider"><option value="siliconflow">siliconflow</option><option value="local">local</option><option value="nvidia">nvidia</option></select></div>
+                        <div class="svc-seg" data-slot="embedding" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-embedding-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-embedding-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-embedding-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-embedding-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-embedding-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <div class="local-hint" data-i18n>Local bge-m3 · no API key</div>
+                        <div class="form-group" hidden><label data-i18n>Provider</label><select id="svc-embedding-provider"><option value="siliconflow">siliconflow</option><option value="local">local</option><option value="nvidia">nvidia</option></select></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-embedding-api-base" placeholder="optional"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-embedding-model" placeholder="BAAI/bge-m3"></div>
-                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-embedding-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-embedding-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
                             <button class="icon-btn" id="svc-embedding-test-btn" type="button" title="Test Embedding connection" aria-label="Test Embedding connection"><i data-lucide="plug-zap"></i><span id="svc-embedding-test-label">Test</span></button>
                             <span id="svc-embedding-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
@@ -1432,7 +1523,7 @@ limitations under the License.
         // Services panel (v3.38): load / save / probe 6 API slots (LLM / Summary / TTS / ASR / Agent / Embedding)
         // (function bodies extracted to config_services.js → window.JoyConfig)
         (function () {
-            const { readForm, writeForm, load, probe, save, wireSummaryProvider, testSlot } = window.JoyConfig;
+            const { readForm, writeForm, load, probe, save, wireSummaryProvider, wireSegProvider, testSlot } = window.JoyConfig;
             const saveBtn = document.getElementById("svcSaveBtn");
             const probeBtn = document.getElementById("svcProbeBtn");
             // N9: 各槽位「Test」按钮（表单当前值 → POST /api/services/test）。
@@ -1449,6 +1540,8 @@ limitations under the License.
             if (probeBtn) probeBtn.addEventListener("click", probe);
             // N8: summary provider 下拉联动默认值
             if (wireSummaryProvider) wireSummaryProvider();
+            // Axis 4 (v6-lite.12): local/cloud seg + Provider named presets
+            if (wireSegProvider) wireSegProvider();
             load();
         })();
 

@@ -43,6 +43,8 @@
 
 > 表格列：UI 元素（视觉） | 真实后端字段 / 落地方式 | 备注
 
+> **实装状态（v6-lite.12，已落地）**：本 §2 全部 UI 元素已落到真实 `services/webui/src/joy_interaction_webui/static/`（`styles.css` + `index.html` + `config_services.js#wireSegProvider`），**零后端改动**；契约测试全绿。6 槽位本云 Seg 全到位；Provider 控件落 main/summary/asr/agent/embedding（tts 按 spec 仅 seg，Provider 化留下轮）；实装分支 `ui/redesign-preview`。
+
 ### 2.0 Provider 命名预设控件（v6-lite.10，每个云端 subform 顶部 — 前端 localStorage）
 
 | UI 元素 | 后端字段 / 落地方式 | 备注 |
@@ -156,6 +158,7 @@
 
 ### 变更日志（本对接清单自身）
 
+- **v6-lite.12（2026-08-17）** — 轴 4 实装落地真实 `services/webui/src/joy_interaction_webui/static/`：6 槽位本云 Seg（纯 CSS 无 confirm）+ Provider 控件（main/summary/asr/agent/embedding；tts 仅 seg）经 `config_services.js#wireSegProvider` 接线，套用调现有 `PUT /api/services/config`；零后端改动；契约测试全绿（config_services / i18n / webui_static_contract）。§2 标注「已落地」。
 - **v6-lite.11（2026-08-17）** — 整体校准：① 修正错误假设 `services.<slot>.cloud.*` / `.local.*` / `.mode`（真实后端为扁平契约，见 §1）；② 路径 `services/webui/static/` → `services/webui/src/joy_interaction_webui/static/`；③ 真实 token 改为 `--border-color/--warning-color/--error-color/--joy-red`，并标注预览 demo 自造 token 须重映射（§3 红线 3）；④ 新增 §4 落地策略（纯前端实现、不改后端契约）；⑤ 未决项 注1/4/5 标记为已由策略 A 消解，新增 注6(TTS 字段)/注7(ASR 云端)/注8(agent 槽位)；⑥ 明确 `embedding` 槽位 ≠ memory-store 端点。
 - **v6-lite.10（2026-08-17）** — Provider 控件（自命名 + +保存整套 + 历史下拉）加入 main/summary/asr/embedding 云端 subform；嵌入云端「v6-lite.8 删除 Provider」注释撤回。
 - **初始（2026-08-17）** — 首版 UI 元素 → 后端字段映射（含当时未校准的 cloud.* 假设，已在 v6-lite.11 修正）。

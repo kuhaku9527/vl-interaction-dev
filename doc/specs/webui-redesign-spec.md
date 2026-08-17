@@ -68,6 +68,8 @@
 - **适用范围**：主模型 / 摘要模型 / TTS / ASR / Embedding 五个槽位。v6-lite.10 已为前 4 个槽位落地 Provider 控件（main / summary / asr / embedding）；TTS 因额外参数（voice_id/group_id/采样率/语速）结构差异较大，留待下轮单独设计 Provider 化方案，但接口风格保持一致（自命名 + +保存整套 + 下拉历史）。未来所有 provider 槽位默认套用本 idiom，不重复规定。
 - 详见 ADR-0020（本云选择器作为统一 UI idiom 的架构决策）。
 
+- **实装状态（v6-lite.12）**：本 idiom 已落到真实 `services/webui/src/joy_interaction_webui/static/`（`styles.css` 追加 Axis 4 样式 + `index.html` 全部 6 个 `.service-row` 改写 + `config_services.js#wireSegProvider`），**零后端改动**；契约测试（`config_services.test.js` / `i18n_ui_string.test.js` / `test_webui_static_contract.py`）全绿。实装分支 `ui/redesign-preview`。
+
 ### 3.3 状态分层与统一（遵循一致性 spec D1–D5）
 
 - header `mode-chip`（live / jarvis / kws）复用 `.chip`（圆角药丸 + 6px 状态点 + 文字）；状态点：绿=激活、灰=未激活；`title` 悬浮补状态说明；可点切换（live 与底部实时按钮双向同步）。

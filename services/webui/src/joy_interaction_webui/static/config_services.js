@@ -132,6 +132,134 @@
         });
     }
 
+    // Axis 4 (v6-lite.12): local/cloud seg + Provider named presets.
+    // - seg: toggle data-mode on .service-row (CSS moves the indicator; no confirm — v4-lite.2).
+    // - Provider presets: localStorage[joyai.providers.<slot>] = [{name, api_base, model(, provider)}];
+    //   api_key is NEVER stored client-side (backend-only, ADR-0014). Apply fills the visible
+    //   fields + hidden provider select, then calls existing save() (PUT /api/services/config).
+    const SEG_SLOTS = ['llm', 'summary', 'tts', 'asr', 'agent', 'embedding'];
+    const LS_KEY = function (slot) { return 'joyai.providers.' + slot; };
+
+    function _pRead(slot) {
+        try {
+            const raw = localStorage.getItem(LS_KEY(slot));
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch (_e) { return []; }
+    }
+    function _pWrite(slot, arr) {
+        try { localStorage.setItem(LS_KEY(slot), JSON.stringify(arr)); }
+        catch (_e) { /* storage unavailable: degrade to in-session only */ }
+    }
+    function _pMsg(slot, text, isErr) {
+        const el = document.getElementById('svc-' + slot + '-provider-msg');
+        if (!el) return;
+        el.textContent = text;
+        el.className = 'provider-msg ' + (isErr ? 'err' : 'ok');
+        setTimeout(function () { el.textContent = ''; el.className = 'provider-msg'; }, 2200);
+    }
+    function _pFillPick(slot) {
+        const pick = document.getElementById('svc-' + slot + '-provider-pick');
+        if (!pick) return;
+        const arr = _pRead(slot);
+        // 安全重建 options：用 DOM 构造 + textContent，避免 innerHTML 拼接
+        // （DeepSec sast_xss_inner_html 将 <option> 字符串拼接判为 XSS 模式；
+        //  且 textContent 对 & < > " 全部正确转义，优于手工 replace）。
+        while (pick.firstChild) pick.removeChild(pick.firstChild);
+        const ph = document.createElement('option');
+        ph.value = '';
+        ph.textContent = '— saved presets —';
+        pick.appendChild(ph);
+        arr.forEach(function (p) {
+            const n = p && p.name ? p.name : '';
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            pick.appendChild(opt);
+        });
+    }
+    function _pApply(slot, name) {
+        const arr = _pRead(slot);
+        const p = arr.filter(function (x) { return x && x.name === name; })[0];
+        if (!p) return;
+        const base = document.getElementById('svc-' + slot + '-api-base');
+        const model = document.getElementById('svc-' + slot + '-model');
+        const prov = document.getElementById('svc-' + slot + '-provider');
+        if (base && p.api_base != null) base.value = p.api_base;
+        if (model && p.model != null) model.value = p.model;
+        if (prov && p.provider != null) prov.value = p.provider; // hidden select → readForm still binds
+        const nameEl = document.getElementById('svc-' + slot + '-provider-name');
+        if (nameEl) nameEl.value = p.name;
+        _pMsg(slot, 'Applied: ' + p.name, false);
+        if (save) save(); // persist via existing PUT /api/services/config
+    }
+    function wireSegProvider() {
+        SEG_SLOTS.forEach(function (slot) {
+            const row = document.querySelector('.service-row[data-service="' + slot + '"]');
+            if (!row) return;
+            // seg toggle (CSS-driven indicator; no confirm)
+            const seg = row.querySelector('.svc-seg');
+            if (seg) {
+                seg.querySelectorAll('.svc-seg-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        const mode = btn.getAttribute('data-mode');
+                        if (row.getAttribute('data-mode') === mode) return;
+                        seg.querySelectorAll('.svc-seg-btn').forEach(function (b) {
+                            const on = b === btn;
+                            b.classList.toggle('on', on);
+                            b.setAttribute('aria-selected', on ? 'true' : 'false');
+                        });
+                        row.setAttribute('data-mode', mode);
+                    });
+                });
+            }
+            // Provider presets (tts deferred per spec — seg only)
+            if (slot === 'tts') return;
+            _pFillPick(slot);
+            const addBtn = document.getElementById('svc-' + slot + '-provider-add');
+            const delBtn = document.getElementById('svc-' + slot + '-provider-del');
+            const pick = document.getElementById('svc-' + slot + '-provider-pick');
+            const nameEl = document.getElementById('svc-' + slot + '-provider-name');
+            if (addBtn) {
+                addBtn.addEventListener('click', function () {
+                    const name = nameEl ? nameEl.value.trim() : '';
+                    if (!name) { _pMsg(slot, 'Name first, then +', true); return; }
+                    const base = document.getElementById('svc-' + slot + '-api-base');
+                    const model = document.getElementById('svc-' + slot + '-model');
+                    const prov = document.getElementById('svc-' + slot + '-provider');
+                    const rec = { name: name, api_base: base ? base.value : '', model: model ? model.value : '' };
+                    if (prov) rec.provider = prov.value; // only slots with provider select
+                    const arr = _pRead(slot);
+                    const idx = arr.findIndex(function (x) { return x && x.name === name; });
+                    if (idx >= 0) arr[idx] = rec; else arr.push(rec);
+                    _pWrite(slot, arr);
+                    _pFillPick(slot);
+                    if (pick) pick.value = name;
+                    _pMsg(slot, 'Saved: ' + name, false);
+                });
+            }
+            if (pick) {
+                pick.addEventListener('change', function () {
+                    if (pick.value) _pApply(slot, pick.value);
+                });
+            }
+            if (delBtn) {
+                delBtn.addEventListener('click', function () {
+                    const name = nameEl ? nameEl.value.trim() : '';
+                    if (!name) { _pMsg(slot, 'Type the name to delete', true); return; }
+                    let arr = _pRead(slot);
+                    const before = arr.length;
+                    arr = arr.filter(function (x) { return !(x && x.name === name); });
+                    if (arr.length === before) { _pMsg(slot, 'Not found: ' + name, true); return; }
+                    _pWrite(slot, arr);
+                    _pFillPick(slot);
+                    if (pick) pick.value = '';
+                    _pMsg(slot, 'Deleted: ' + name, false);
+                });
+            }
+        });
+    }
+
     // N9: 槽位「Test」按钮（通用版）——用表单**当前值**验证上游连通性。
     // 契约（与后端 POST /api/services/test 对齐，joyai-backend / joyai-backend-2 实现）：
     //   body { slot, api_base, model, api_key }
@@ -214,6 +342,7 @@
         probe,
         save,
         wireSummaryProvider,
+        wireSegProvider,
         testSlot,
         testSummary,
     };

@@ -52,6 +52,12 @@
 - `services/webui/static/` 回灌时，选择器相关样式（`.seg` / `.seg-indicator` / `.subform` / `.fade-in`）从预览文件平移，不在实装端另造平行变体。
 - 可选加 static lint：标记 `window.confirm` 调用（UI 交互路径禁用）。
 
+### 落地记录（v6-lite.12）
+
+- idiom 已落地真实 `services/webui/src/joy_interaction_webui/static/`：6 槽位本云 Seg（`.service-row[data-service][data-mode]` + `.svc-seg` 滑动指示器，纯 CSS 无 confirm）+ Provider 控件（main/summary/asr/agent/embedding；tts 按 spec 仅 seg）通过 `config_services.js#wireSegProvider` 接线（seg 切换 + localStorage 预设 CRUD + 套用调现有 `PUT /api/services/config`）。
+- **零后端改动**；`svc-*` id / `data-i18n` / lucide 图标 / 真实设计令牌全部保留；契约测试（`config_services.test.js` / `i18n` / `test_webui_static_contract.py`）全绿。
+- 实装分支 `ui/redesign-preview`；ratification 由审查组对话转 `决策/`。
+
 ## 五、影响面
 
 - 正向：新增 provider 槽位自动获得统一选择器 + 已知安全的切换实现，减少返工；与已正式的 `unified-api-config-ui.md` 数据契约解耦清晰。

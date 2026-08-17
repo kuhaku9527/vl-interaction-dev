@@ -2917,6 +2917,109 @@
             opacity: 0.4;
         }
 
+/* === Axis 4 (v6-lite.12): local/cloud seg + Provider named presets ===
+   Real tokens only: --bg-tertiary / --border-color / --card-bg / --text-* /
+   --accent-color(=--joy-red) / --warning-color / --error-color / #3fb950 (ok green).
+   Default mode = cloud (service-row[data-mode="cloud"]); local hides
+   provider-mgr + [data-local-hide] (api_key) and shows .local-hint. */
+.service-row { position: relative; }
+
+.svc-seg {
+    display: inline-flex;
+    position: relative;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 2px;
+    margin: 6px 0 10px;
+}
+.svc-seg-btn {
+    position: relative;
+    z-index: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    padding: 5px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: color .18s ease;
+}
+.svc-seg-btn.on { color: var(--text-primary); }
+.svc-seg-indicator {
+    position: absolute;
+    top: 2px; bottom: 2px; left: 2px;
+    width: calc(50% - 2px);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 1px 3px var(--joy-red-ring);
+    transition: transform .22s cubic-bezier(.4, 0, .2, 1);
+    z-index: 0;
+}
+.service-row[data-mode="local"] .svc-seg-indicator { transform: translateX(100%); }
+
+.provider-mgr {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+.provider-mgr-row { display: flex; align-items: center; gap: 6px; }
+.provider-mgr input,
+.provider-mgr select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 8px;
+}
+.provider-mgr input { flex: 1 1 auto; min-width: 0; }
+.provider-mgr select { flex: 0 0 auto; max-width: 150px; }
+.provider-add {
+    flex: 0 0 auto;
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--accent-color);
+    font-size: 18px; line-height: 1;
+    cursor: pointer;
+}
+.provider-add:hover { background: var(--card-hover); border-color: var(--accent-color); }
+.provider-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.provider-del {
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.provider-del:hover { color: var(--error-color); border-color: var(--error-color); }
+.provider-msg { font-size: 12px; }
+.provider-msg.ok { color: #3fb950; }
+.provider-msg.err { color: var(--error-color); }
+
+.local-hint {
+    display: none;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+}
+.service-row[data-mode="local"] .local-hint { display: block; }
+.service-row[data-mode="local"] .provider-mgr { display: none; }
+.service-row[data-mode="local"] [data-local-hide] { display: none; }
+
         .vlm-history-shell.fade {
             opacity: 1;
         }
