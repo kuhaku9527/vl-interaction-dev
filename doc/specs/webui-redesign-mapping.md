@@ -34,6 +34,7 @@
 - **目标**：统一到 `--accent-color`，去除零散配色，红只做强调。
 - **落地**：全局 `--accent-color` 即 joy-red；红仅用于激活态/品牌按钮/状态强调。
 - **契约**：无。　**阶段**：1（低风险）。
+- **实装状态（v6-lite.13，2026-08-17 审计确认）**：`styles.css` 全量审计确认 `--accent-color`=joy-red 已是全局**唯一交互强调色**（主按钮/激活态/品牌块均用 joy-red 渐变，如 `.chat-prompt-action.send`、header 渐变、`.sidebar-toggle` 等）。其余多色（设备/连接状态点 `.status-dot`、听录/直播态 `.listen.listening`/`.live-mode`、lucide 状态描边 3259–3396、`.service-badge` ok/err）均为**语义状态色**，非杂色，**予以保留**（轴3 仅统一状态「语义」不重着色）。故轴1 落地＝**验证通过，零代码改动**。
 
 ### 轴 2 · 统一卡片/面板表面语言（8px 栅格）
 - **现状**：已有 `.settings-section` / `.service-card` 等，但"错位、观赏性低"。
