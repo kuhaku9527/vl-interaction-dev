@@ -363,6 +363,9 @@
     margin-left:8px;
   }
   .key-mask-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);}
+  /* v6-lite.8: input 下方注释行（贴近用户截图样式：紧贴字段、左侧绿点 + 一行小字） */
+  .row-note{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;padding:4px 0 2px;line-height:1.2;}
+  .row-note .cdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;}
 
   /* v3: env 自动探测 pill */
   .env-pill{
@@ -884,6 +887,14 @@
             <input class="slider" type="range" min="0.05" max="0.9" step="0.05" value="0.25">
           </div>
           <div class="group">
+            <div class="gl"><label>ASR 提供方</label><span class="desc">本地 / 云端 独立切换</span></div>
+            <div class="seg" id="asr-mode-seg" data-current="local">
+              <span class="seg-indicator pos-0" aria-hidden="true"></span>
+              <button class="on" onclick="switchASR('local',this)">本地</button>
+              <button onclick="switchASR('cloud',this)">云端</button>
+            </div>
+          </div>
+          <div class="group" id="asr-local-form">
             <div class="row"><label>ASR 输入设备</label>
               <select class="sel">
                 <option>默认麦克风</option>
@@ -899,6 +910,33 @@
                 <option>Auto</option>
               </select>
             </div>
+            <div class="hint">本地走 sherpa-onnx（paraformer-zh / sense-voice），无 API key 暴露。</div>
+          </div>
+          <div class="group" id="asr-cloud-form" style="display:none;">
+            <div class="row"><label>API 地址</label>
+              <input class="inp" list="asr-endpoint-suggest" value="https://api.openai.com/v1/audio/transcriptions" placeholder="endpoint 即选择（OpenAI / 自托管 Whisper…）">
+              <datalist id="asr-endpoint-suggest">
+                <option value="https://api.openai.com/v1/audio/transcriptions"></option>
+                <option value="https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"></option>
+              </datalist>
+            </div>
+            <div class="row"><label>API Key</label>
+              <div class="key-wrap" data-key="mask">
+                <input class="inp" type="password" value="sk-cp-AsrKey1Aa2Bb3Cc4Dd5Ee6Ff7Gg8Hh9" data-mask="sk-cp-…Hh90" readonly>
+                <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="row"><label>模型</label>
+              <input class="inp" list="asr-cloud-models" value="whisper-1" placeholder="云端 ASR 模型名">
+              <datalist id="asr-cloud-models">
+                <option value="whisper-1"></option>
+                <option value="whisper-large-v3"></option>
+                <option value="paraformer-v2"></option>
+              </datalist>
+            </div>
+            <div class="hint">云端 ASR · 计费按音频时长，与本地免费版互斥。</div>
           </div>
           <div class="group">
             <div class="gl">
@@ -962,16 +1000,20 @@
               <div class="hint">本地跑 bge-m3，无 API key 暴露。</div>
             </div>
 
-            <!-- 嵌入云端子表单 -->
+            <!-- 嵌入云端子表单（v6-lite.8：删除 Provider 下拉；endpoint 即选择；与用户截图「本地/云端 seg + API 地址/Key/模型」一致） -->
             <div class="group" id="emb-cloud-form" style="display:none;">
-            <div class="row"><label>Provider</label>
-              <select class="sel">
-                <option>SiliconFlow</option>
-                <option>NVIDIA NIM</option>
-              </select>
+            <div class="row"><label>API 地址</label>
+              <input class="inp" list="emb-endpoint-suggest" value="https://api.siliconflow.cn/v1/embeddings" placeholder="endpoint 即选择（SiliconFlow / NVIDIA NIM / OpenAI…）">
+              <datalist id="emb-endpoint-suggest">
+                <option value="https://api.siliconflow.cn/v1/embeddings"></option>
+                <option value="https://integrate.api.nvidia.com/v1/embeddings"></option>
+                <option value="https://api.openai.com/v1/embeddings"></option>
+                <option value="https://ark.cn-beijing.volces.com/api/v3/embeddings"></option>
+              </datalist>
             </div>
-            <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label>
-              <input class="inp" value="https://api.siliconflow.cn/v1/embeddings">
+            <div class="row">
+              <div></div>
+              <div class="row-note"><span class="cdot ok"></span>仅前端显示加密 · 真实 key 永远走后端，不入日志</div>
             </div>
             <div class="row"><label>API Key</label>
               <div class="key-wrap" data-key="mask">
@@ -1234,6 +1276,18 @@
     document.getElementById('tts-local-form').style.display  = (mode==='local') ? '' : 'none';
     document.getElementById('tts-cloud-form').style.display  = (mode==='cloud') ? '' : 'none';
     fadeForm(document.getElementById(mode==='local' ? 'tts-local-form' : 'tts-cloud-form'));
+  }
+  /* v6-lite.8: ASR 提供方切换（与 TTS / Emb / Main / Summary 一致的 seg 模式） */
+  function switchASR(mode, btn){
+    var seg = btn.parentElement;
+    if(seg.dataset.current === mode) return;
+    seg.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    moveIndicator(seg, btn);
+    seg.dataset.current = mode;
+    document.getElementById('asr-local-form').style.display = (mode==='local') ? '' : 'none';
+    document.getElementById('asr-cloud-form').style.display = (mode==='cloud') ? '' : 'none';
+    fadeForm(document.getElementById(mode==='local' ? 'asr-local-form' : 'asr-cloud-form'));
   }
   function switchEmb(mode, btn){
     var seg = btn.parentElement;
