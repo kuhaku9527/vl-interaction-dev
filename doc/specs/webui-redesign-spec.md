@@ -50,8 +50,14 @@
 
 ### 3.2 Provider 槽位本云 idiom（统一选择器语言）
 
-- 所有 provider 槽位顶层一律 `本地/云端` 二选一；**本地** = env 自动探测 pill（绿点 + VAR + value）+ 自填端口/路径字段，不暴露 api_key；**云端** = 客户全自填（api_url / api_key 掩码 / model / provider 特有字段）。
+- 所有 provider 槽位顶层一律 `本地/云端` 二选一 Seg（`.seg` + `.seg-indicator` + `.subform`）；不展开 provider 下拉（v6-lite.9 用户确认：endpoint 即选择，没必要再选一遍 provider）。
+- **本地** = env 自动探测 pill（绿点 + VAR + value，`.env-pill .pill`）+ 自填端口/路径字段，不暴露 api_key。
+- **云端** = 三件套（API 地址 + API Key + 模型）；
+  - **API 地址**：input + `<datalist>` 端点建议（常用 OpenAI / SiliconFlow / NVIDIA / DashScope …），可自由填；
+  - **API Key**：input[type=password] + 眼睛图标切换显示/隐藏，**仅前端显示加密**（`.row-note` 绿点 + 一行小字说明 key 永远走后端、不入日志），后端明文落盘 chmod 0600（binding 在 `unified-api-config-ui.md` §X）；
+  - **模型**：input + `<datalist>` 模型名建议，可自由填。
 - **切换实现硬约束**：纯 CSS 滑动指示器 + `display` 切换 + keyframe 淡入；**禁止依赖 `window.confirm`**（预览 webview 屏蔽 confirm，依赖它会导致切换「没反映」—— v4-lite.2 实证教训）。
+- 适用范围：主模型 / 摘要模型 / TTS / ASR / Embedding（v6-lite.9 补齐 ASR）；未来所有 provider 槽位默认套用本 idiom，不重复规定。
 - 详见 ADR-0020（本云选择器作为统一 UI idiom 的架构决策）。
 
 ### 3.3 状态分层与统一（遵循一致性 spec D1–D5）
@@ -94,3 +100,12 @@
 ## 5. 生命周期标记
 
 `<草案>` — 前端端点产出，待审查组 ratification 后升 `<正式>` 并归档进 `决策/`。ratification 前本 spec 仅作回灌参考，不具硬约束效力（硬约束以 `webui-component-consistency-spec.md` + `unified-api-config-ui.md` 已正式件为准）。
+
+---
+
+## 6. 变更日志（端点内迭代的轻量修订，供审查组对比审稿）
+
+- **v6-lite.9（2026-08-17）** — 删除嵌入云端残留 Provider 下拉（用户截图明确「本地/云端切换多好用，为什么还要下拉」→ endpoint 即选择，用 datalist 建议常用端点）；ASR 加本地/云端 seg 完成 6 槽位视觉统一；新增 `.row-note` 视觉小字工具类，把「仅前端显示加密」从 label-chip 改成 input 下方一行小字（贴近截图样式）。
+- **v6-lite.7/.8（2026-08-16）** — 麦克风嵌入输入框；删 jarvis chip；发送按钮加反馈；移除左缘脉冲灯。
+- **v6 → v6-lite.6（2026-08-16）** — 模型 tab 本云分拆；状态统一 `.chip`；视频采集浮层；底部按钮图标区分与文字标签。
+- **v5** — 初版。

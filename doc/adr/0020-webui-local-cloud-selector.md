@@ -5,7 +5,7 @@
 
 ## 一句话结论
 
-把「**本地 / 云端 两段 Seg 选择器**」确立为 WebUI 所有 provider 槽位（TTS / 嵌入 / 主模型 / 摘要模型 / 未来语音扩展）的**统一 UI idiom**：本地 = env 探测 + 自填端口，云端 = 客户全自填；切换用纯 CSS 滑动指示器 + `display` 切换 + keyframe 淡入，**禁止依赖 `window.confirm`**。以此消除 v5→v6-lite 期间各槽位选择器形态不一、切换交互失效的反复返工。
+把「**本地 / 云端 两段 Seg 选择器**」确立为 WebUI 所有 provider 槽位（主模型 / 摘要模型 / TTS / ASR / Embedding / 未来语音扩展）的**统一 UI idiom**：本地 = env 探测 + 自填端口，云端 = 三件套（API 地址 + API Key + 模型，**不展开 provider 下拉，endpoint 即选择**）；切换用纯 CSS 滑动指示器 + `display` 切换 + keyframe 淡入，**禁止依赖 `window.confirm`**。以此消除 v5→v6-lite 期间各槽位选择器形态不一、切换交互失效的反复返工。
 
 ---
 
@@ -21,10 +21,11 @@
 
 ## 二、决策内容（与 spec 对齐）
 
-1. **统一 idiom**：所有 provider 槽位顶层一律 `本地 / 云端` 二选一 Seg；本地子表单 = env 探测 pill（绿点 + VAR + value）+ 自填端口/路径（不暴露 api_key）；云端子表单 = 客户全自填（api_url / api_key 掩码 / model / provider 特有字段）。
+1. **统一 idiom**：所有 provider 槽位顶层一律 `本地 / 云端` 二选一 Seg；本地子表单 = env 探测 pill（绿点 + VAR + value）+ 自填端口/路径（不暴露 api_key）；云端子表单 = 三件套（API 地址 + API Key + 模型）。**云端不展开 provider 下拉**——endpoint 即选择（用 `<datalist>` 给常用端点作建议，仍可自由填），免去多一次跳转（v6-lite.9 用户确认）。
 2. **切换实现硬约束**：纯 CSS `.seg-indicator` 滑动（`transform` 过渡）+ 子表单 `display` 切换 + `@keyframes` 淡入；**禁止 `window.confirm` 前置**；二次确认（如需）用自定义 toast / modal，不依赖原生 confirm。
 3. **状态一致性**：selector / 子表单的状态表达复用 `webui-component-consistency-spec.md` D1–D5（`.chip` / `.seg` / 语义色），不新造形态。
 4. **数据契约边界**：本 idiom 只管**呈现**；槽位字段 / 热重载端点以 `unified-api-config-ui.md`（正式）为准。
+5. **适用范围（v6-lite.9 起）**：主模型 / 摘要模型 / TTS / ASR / Embedding 五槽位均落地同一 idiom；未来新增槽位默认套用，不重复规定。
 
 ## 三、被否方案
 
