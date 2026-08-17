@@ -89,6 +89,7 @@ limitations under the License.
     <script src="./render_markdown.js"></script>
     <script src="./sanitize_static_html.js"></script>
     <script src="./config_services.js"></script>
+    <script src="./radio_silence.js"></script>
     <script src="./wiki_frontend.js"></script>
     <script src="./joy_ws.js"></script>
     <script src="./i18n_device_label.js"></script>
@@ -140,6 +141,7 @@ limitations under the License.
             <span class="status-badge live-disconnected" id="liveStatus" title="Live 常驻模式 (免唤醒词) turn state -- polled every 1s">Live ?</span>
             <span class="status-badge llm-unknown" id="memoryBadge" title="Memory (memory-store) 健康状态" role="status" aria-live="polite">记忆 ?</span>
             <span class="status-badge llm-unknown" id="wikiBadge" title="[Local Wiki] 召回健康状态" role="status" aria-live="polite">知识库 ?</span>
+            <span class="status-badge silence-off" id="silenceStatus" title="无线电静默状态（占位，完整弹窗后续）" role="status" aria-live="polite">静默关</span>
 
             <button class="settings-btn" id="settingsBtn" title="Settings" aria-label="Settings">
                 <i data-lucide="settings"></i>
@@ -175,6 +177,78 @@ limitations under the License.
                     <div class="api-status-item"><span class="status-dot" id="status-tts"></span><span class="api-status-name">TTS</span><span class="api-status-meta" id="meta-tts">--</span></div>
                 </div>
                 <button class="icon-btn" id="apiStatusRefresh" type="button" aria-label="Refresh API status"><i data-lucide="refresh-cw"></i> Refresh</button>
+            </div>
+
+            <!-- Radio Silence (draft-radio-silence.md §3/§7): 静默设置面板。
+                 存在但隐身：不推理不播报，只留唤醒通道。全部设置项带说明文字。 -->
+            <div class="settings-section full-width" id="radioSilenceSection">
+                <div class="settings-section-title">无线电静默</div>
+                <div class="input-hint" style="margin-bottom: 4px;">存在但隐身：不推理不播报，视觉继续，只留唤醒通道（KWS / 组合键 / 语音）。</div>
+
+                <div class="settings-item">
+                    <div>
+                        <div class="settings-item-label">静默组合键</div>
+                        <div class="settings-item-description">按此键切换无线电静默（按一次进，再按出；输入框聚焦时不触发）</div>
+                    </div>
+                    <input type="text" id="silenceHotkey" value="Ctrl+Shift+S" spellcheck="false" autocomplete="off" style="width: 160px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                </div>
+
+                <div class="settings-item">
+                    <div>
+                        <div class="settings-item-label">静默态 ASR</div>
+                        <div class="settings-item-description">开：静默期间继续转写记录记忆；关：更省算力</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="silenceAsrToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="settings-item">
+                    <div>
+                        <div class="settings-item-label">静默态 KWS</div>
+                        <div class="settings-item-description">开：喊名字可唤醒；关：仅组合键/语音唤醒</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="silenceKwsToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="settings-item">
+                    <div>
+                        <div class="settings-item-label">静默超时提示</div>
+                        <div class="settings-item-description">静默超时后 BT 提示一句"仍在静默中"（不打断专注）</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="number" id="silenceTimeoutHintMinutes" class="settings-minutes-input" min="1" max="1440" step="1" value="15" aria-label="静默超时提示分钟数">
+                        <span class="input-hint" style="margin: 0;">分</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="silenceTimeoutHintToggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-item">
+                    <div>
+                        <div class="settings-item-label">静默自动唤醒</div>
+                        <div class="settings-item-description">超时后自动退出静默（防忘记关闭变哑巴）</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="number" id="silenceAutoWakeMinutes" class="settings-minutes-input" min="1" max="1440" step="1" value="30" aria-label="静默自动唤醒分钟数">
+                        <span class="input-hint" style="margin: 0;">分</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="silenceAutoWakeToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+                    <button class="icon-btn" id="silenceSaveBtn" type="button" aria-label="保存无线电静默设置"><i data-lucide="save"></i> Save</button>
+                    <span class="input-hint" style="margin: 0;">保存后应用到运行中的会话，无需重启；静默不跨重启，重启回 live 常驻</span>
+                </div>
             </div>
 
             <!-- Column 1: Layout & Visual Effects -->
@@ -415,6 +489,8 @@ limitations under the License.
     <!-- TTS playback for LLM replies (auto-played when llm_reply WS event fires) -->
     <audio id="btTtsPlayer" preload="auto" playsinline></audio>
     <audio id="btListenPlayer" autoplay playsinline></audio>
+    <!-- 无线电静默唤醒音频（B3 silence_wake WS）：独立元素，避免打断 LLM 逐句回复队列 -->
+    <audio id="silenceWakePlayer" preload="auto" playsinline></audio>
 
     <div class="container">
         <!-- Left Sidebar -->
@@ -503,27 +579,68 @@ limitations under the License.
                     <span class="panel-toggle collapsed" id="servicesConfigToggle">▼</span>
                 </div>
                 <div class="panel-content collapsed" id="servicesConfig">
-                    <div class="input-hint" style="margin-bottom: 12px;">Four pluggable backends. Save applies at runtime; no service restart.</div>
+                    <div class="input-hint" style="margin-bottom: 12px;">Six pluggable backends. Save applies at runtime; no service restart.</div>
                     <div class="service-row" data-service="llm">
                         <div class="service-row-header"><i data-lucide="brain"></i><span>LLM</span><span class="service-badge" id="badge-llm">--</span></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-llm-api-base" placeholder="http://127.0.0.1:8070/v1"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-llm-model" placeholder="joyai-vl-interaction-preview"></div>
                         <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-llm-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-llm-test-btn" type="button" title="Test LLM connection" aria-label="Test LLM connection"><i data-lucide="plug-zap"></i><span id="svc-llm-test-label">Test</span></button>
+                            <span id="svc-llm-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
                     </div>
                     <div class="service-row" data-service="summary">
                         <div class="service-row-header"><i data-lucide="file-text"></i><span data-i18n>Summary</span><span class="service-badge" id="badge-summary">--</span></div>
-                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-summary-api-base" placeholder="http://127.0.0.1:7060/v1"></div>
-                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-summary-model" placeholder="joyai-vl-interaction-preview"></div>
+                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-summary-provider"><option value="openrouter">openrouter</option><option value="minimax">minimax</option></select></div>
+                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-summary-api-base" placeholder="https://openrouter.ai/api/v1"></div>
+                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-summary-model" placeholder="google/gemma-4-26b-a4b-it:free"></div>
+                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-summary-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-summary-test-btn" type="button" title="Test Summary connection" aria-label="Test Summary connection"><i data-lucide="plug-zap"></i><span id="svc-summary-test-label">Test</span></button>
+                            <span id="svc-summary-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
                     </div>
                     <div class="service-row" data-service="tts">
                         <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
+                            <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
                     </div>
                     <div class="service-row" data-service="asr">
                         <div class="service-row-header"><i data-lucide="mic"></i><span>ASR</span><span class="service-badge" id="badge-asr">--</span></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-asr-api-base" placeholder="https://api.siliconflow.cn/v1/audio/transcriptions"></div>
                         <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-asr-model" placeholder="ggml-large-v3-turbo"></div>
                         <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-asr-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-asr-test-btn" type="button" title="Test ASR connection" aria-label="Test ASR connection"><i data-lucide="plug-zap"></i><span id="svc-asr-test-label">Test</span></button>
+                            <span id="svc-asr-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                    <!-- N7.1: agent / embedding provider slots (hot-switch via
+                         /api/bg-agent/provider/route + memory-store /v1/settings/embedding). -->
+                    <div class="service-row" data-service="agent">
+                        <div class="service-row-header"><i data-lucide="bot"></i><span>Agent</span><span class="service-badge" id="badge-agent">--</span></div>
+                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-agent-provider"><option value="codex">codex</option><option value="hermes">hermes</option></select></div>
+                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-agent-api-base" placeholder="optional (remote agent)"></div>
+                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-agent-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-agent-test-btn" type="button" title="Test Agent connection" aria-label="Test Agent connection"><i data-lucide="plug-zap"></i><span id="svc-agent-test-label">Test</span></button>
+                            <span id="svc-agent-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                    <div class="service-row" data-service="embedding">
+                        <div class="service-row-header"><i data-lucide="layers"></i><span>Embedding</span><span class="service-badge" id="badge-embedding">--</span></div>
+                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-embedding-provider"><option value="siliconflow">siliconflow</option><option value="local">local</option><option value="nvidia">nvidia</option></select></div>
+                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-embedding-api-base" placeholder="optional"></div>
+                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-embedding-model" placeholder="BAAI/bge-m3"></div>
+                        <div class="form-group"><label data-i18n>API Key</label><input type="password" id="svc-embedding-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-embedding-test-btn" type="button" title="Test Embedding connection" aria-label="Test Embedding connection"><i data-lucide="plug-zap"></i><span id="svc-embedding-test-label">Test</span></button>
+                            <span id="svc-embedding-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
                     </div>
 
                     <!-- Memory Store: embedding / vector provider config (hits /v1/settings/network).
@@ -1312,14 +1429,26 @@ limitations under the License.
             })();
         })();
 
-        // Services panel (v3.38): load / save / probe 4 API slots (LLM / Summary / TTS / ASR)
+        // Services panel (v3.38): load / save / probe 6 API slots (LLM / Summary / TTS / ASR / Agent / Embedding)
         // (function bodies extracted to config_services.js → window.JoyConfig)
         (function () {
-            const { readForm, writeForm, load, probe, save } = window.JoyConfig;
+            const { readForm, writeForm, load, probe, save, wireSummaryProvider, testSlot } = window.JoyConfig;
             const saveBtn = document.getElementById("svcSaveBtn");
             const probeBtn = document.getElementById("svcProbeBtn");
+            // N9: 各槽位「Test」按钮（表单当前值 → POST /api/services/test）。
+            // testSlot 按 svc-{slot}-test-btn / -label / -status 取元素；summary 沿用旧 id。
+            ['summary', 'llm', 'tts', 'asr', 'agent', 'embedding'].forEach(function (slot) {
+                const btn = document.getElementById('svc-' + slot + '-test-btn');
+                if (btn && testSlot) {
+                    btn.addEventListener('click', function () {
+                        testSlot(slot, readForm()[slot]);
+                    });
+                }
+            });
             if (saveBtn) saveBtn.addEventListener("click", save);
             if (probeBtn) probeBtn.addEventListener("click", probe);
+            // N8: summary provider 下拉联动默认值
+            if (wireSummaryProvider) wireSummaryProvider();
             load();
         })();
 
@@ -1332,6 +1461,14 @@ limitations under the License.
                 msSaveBtn.addEventListener("click", function () {
                     window.JoyWs.saveMemoryStoreSettings();
                 });
+            }
+        })();
+
+        // Radio Silence (draft-radio-silence.md §3/§7): init 组合键监听 + 角标 +
+        // 初始状态读取。面板在 settingsModal 内；打开 modal 时刷新（见 settingsBtn handler）。
+        (function () {
+            if (window.JoyRadioSilence && window.JoyRadioSilence.init) {
+                window.JoyRadioSilence.init();
             }
         })();
 
@@ -1644,6 +1781,10 @@ limitations under the License.
             // modal opens so the form always reflects the server snapshot.
             if (window.JoyWs && window.JoyWs.loadMemoryStoreSettings) {
                 window.JoyWs.loadMemoryStoreSettings();
+            }
+            // Radio Silence: 打开 modal 时刷新静默设置 + 状态角标。
+            if (window.JoyRadioSilence && window.JoyRadioSilence.load) {
+                window.JoyRadioSilence.load();
             }
         });
 
