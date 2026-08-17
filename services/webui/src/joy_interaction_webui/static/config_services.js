@@ -213,8 +213,9 @@
                     });
                 });
             }
-            // Provider presets (tts deferred per spec — seg only)
-            if (slot === 'tts') return;
+            // Provider presets: tts now included. tts slot has only api_base
+            // (no model/provider fields), so presets manage named api_base
+            // endpoints; _pApply no-ops on the missing model/provider inputs.
             _pFillPick(slot);
             const addBtn = document.getElementById('svc-' + slot + '-provider-add');
             const delBtn = document.getElementById('svc-' + slot + '-provider-del');

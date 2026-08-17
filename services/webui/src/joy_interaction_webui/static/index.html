@@ -649,6 +649,17 @@ limitations under the License.
                             <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
                             <span class="svc-seg-indicator"></span>
                         </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-tts-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-tts-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-tts-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-tts-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-tts-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
                         <div class="local-hint" data-i18n>Local Jarvis TTS · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
                         <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
