@@ -40,6 +40,7 @@ from prompt_building import (
 )
 from response_format import _chat_completion_response, _openai_error_response, _short
 from session import SessionMixin
+from silence_control import SilenceControlMixin
 from summarizer_routing import SummarizerRoutingMixin
 
 from config import _env_bool, _env_float, _env_int, _split_paths
@@ -51,12 +52,13 @@ class StreamingInferAdapter(
     SessionMixin,
     InferLoopMixin,
     SummarizerRoutingMixin,
+    SilenceControlMixin,
     MemoryIOMixin,
     PromptAssemblyMixin,
 ):
     """Real-time video-language streaming inference adapter.
 
-    Composed from five single-responsibility mixins via multiple inheritance;
+    Composed from six single-responsibility mixins via multiple inheritance;
     see the module docstring for the responsibility split. The coordinator role
     (this module) owns only ``__init__`` and the public class identity.
     """
@@ -65,6 +67,8 @@ class StreamingInferAdapter(
         self.config = config
         self.sessions: dict[str, SessionState] = {}
         self._cleanup_task: asyncio.Task | None = None
+        # Radio-silence (无线电静默) sub-state: process-local, never persisted.
+        self._init_silence_control()
         # memory-store v0.2: client is fail-soft; no raise on connect fail
         self.memory_store = MemoryStoreClient(
             base_url=config.memory_store_url,

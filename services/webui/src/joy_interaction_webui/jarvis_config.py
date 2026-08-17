@@ -91,6 +91,46 @@ def _is_garbage_text(text):
     return False
 
 
+# N2 (call-mode unknown delegation): reply patterns that signal the model
+# cannot answer from its own context. Only used in call mode (which forbids
+# </delegation> tokens, so the backend must detect the unknown case itself).
+_UNKNOWN_REPLY_PATTERNS = (
+    "不知道",
+    "不清楚",
+    "不了解",
+    "无法回答",
+    "无法获取",
+    "没有能力",
+    "不确定",
+    "查不到",
+    "不晓得",
+    "没法回答",
+    "无从得知",
+    "不在我的",
+    "超出了我的",
+    "超出我的",
+    "没有这个信息",
+)
+
+
+def looks_like_unknown_reply(reply: str) -> bool:
+    """True when a model reply signals it cannot answer from its own context.
+
+    N2: call mode cannot rely on the model emitting ``</delegation>`` (the
+    NO_DECISION prompt forbids it), so the webui detects the unknown case
+    and routes it to the background sub-agent automatically. Patterns are
+    matched as substrings on the whole reply; false positives (e.g. "你
+    不知道吗？") are accepted for now — the delegation is fail-open and the
+    question is re-answered by the sub-agent, which is still useful.
+    """
+    if not reply:
+        return False
+    stripped = reply.strip()
+    if not stripped:
+        return False
+    return any(p in stripped for p in _UNKNOWN_REPLY_PATTERNS)
+
+
 def _load_default_llm_system_prompt() -> str:
     """Read the BT-7274 persona from prompts/bt-7274.txt.
 

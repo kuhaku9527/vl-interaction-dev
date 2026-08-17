@@ -84,6 +84,7 @@ class StreamingTurnConsumer:
         is_cancelled: Callable[[], bool] | None = None,
         stream_logger: logging.Logger | None = None,
         frames: list | None = None,
+        on_silence_wake: Callable[[], None] | None = None,
     ) -> None:
         self.endpoint_url = endpoint_url
         self.model = model
@@ -97,6 +98,9 @@ class StreamingTurnConsumer:
         self.on_sentence = on_sentence
         self.is_cancelled = is_cancelled
         self._log = stream_logger or logger
+        # Radio-silence wake (spec §5): called when webinfer's done frame
+        # carries ``silence: {wake: True}`` — the live caller plays wake.wav.
+        self.on_silence_wake = on_silence_wake
         # Live visual path (spec draft-live-visual-cb.md §3 层 2): optional
         # ``[{image_b64, ts_ms}]`` frames carried on this round's request.
         # ``None`` (jarvis / text-only live) keeps the request body unchanged.
@@ -249,6 +253,19 @@ class StreamingTurnConsumer:
                             decision = frame["decision"]
                         if frame.get("delegation_question") is not None:
                             delegation_question = frame["delegation_question"]
+                        # Radio-silence wake (spec §5): webinfer surfaces the
+                        # wake round in the done frame; fire the injected
+                        # callback so the live caller plays wake.wav.
+                        silence_meta = frame.get("silence")
+                        if (
+                            isinstance(silence_meta, dict)
+                            and silence_meta.get("wake") is True
+                            and self.on_silence_wake is not None
+                        ):
+                            try:
+                                self.on_silence_wake()
+                            except Exception as exc:
+                                self._log.warning("[tts-stream] on_silence_wake failed: %s", exc)
                     elif ftype == "error":
                         raise RuntimeError(frame.get("error") or "webinfer stream error")
         except Exception as exc:

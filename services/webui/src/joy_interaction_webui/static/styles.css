@@ -358,6 +358,21 @@
             background-color: white;
         }
 
+        /* Radio Silence panel: compact minutes input next to a toggle */
+        .settings-minutes-input {
+            width: 72px;
+            padding: 6px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .settings-minutes-input:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
         /* Settings Dropdown */
         .settings-select {
             background: var(--bg-tertiary);
@@ -920,6 +935,23 @@
             border-color: rgba(255, 80, 80, 0.45);
         }
         .status-badge.llm-unknown {
+            background: rgba(150, 150, 150, 0.18);
+            color: var(--joy-c0c0c0);
+            border-color: rgba(150, 150, 150, 0.30);
+        }
+        /* Radio Silence state-pill (header-right corner; placeholder for the
+           full status popup, draft-radio-silence.md §3) */
+        .status-badge.silence-on {
+            background: rgba(255, 120, 0, 0.20);
+            color: #ffaa44;
+            border-color: rgba(255, 170, 0, 0.55);
+        }
+        .status-badge.silence-off {
+            background: rgba(0, 200, 100, 0.16);
+            color: var(--joy-00ff90);
+            border-color: rgba(0, 200, 100, 0.40);
+        }
+        .status-badge.silence-unknown {
             background: rgba(150, 150, 150, 0.18);
             color: var(--joy-c0c0c0);
             border-color: rgba(150, 150, 150, 0.30);

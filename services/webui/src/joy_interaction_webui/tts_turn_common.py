@@ -19,6 +19,51 @@ import base64
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def load_event_wav(events_dir: str, filename: str) -> tuple[bytes, int] | None:
+    """Load a pre-recorded event WAV for playback (mono PCM16 + sample rate).
+
+    Reads the WAV (any sample rate; mono PCM16, or downmixed from stereo) and
+    returns ``(pcm, sample_rate)`` for the caller's audio sink. Returns
+    ``None`` when the file is missing (logged) and lets a corrupt/unreadable
+    file raise so the caller can apply its own fallback. This is the shared
+    loader behind jarvis's ``_play_event_wav`` and the live radio-silence wake
+    playback (spec §5 wake.wav, zero token).
+    """
+    import wave
+
+    import numpy as _np
+
+    path = Path(events_dir) / filename
+    if not path.exists():
+        logger.warning("Event audio not found: %s (skipping)", path)
+        return None
+    with wave.open(str(path), "rb") as wf:
+        sample_rate = wf.getframerate()
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        raw = wf.readframes(wf.getnframes())
+    if sampwidth != 2:
+        logger.warning(
+            "Event audio %s has sampwidth=%d (expected 2); playback may distort",
+            filename,
+            sampwidth,
+        )
+    samples = _np.frombuffer(raw, dtype=_np.int16)
+    if n_channels > 1:
+        # Downmix interleaved channels by averaging. Keeps duration honest and
+        # stops downstream resamplers from treating L/R as consecutive mono
+        # samples (pitch shift bug).
+        frames = samples.reshape(-1, n_channels)
+        samples = frames.mean(axis=1).astype(_np.int16)
+        pcm = samples.tobytes()
+    else:
+        pcm = raw
+    return pcm, sample_rate
 
 
 def spawn_sentence_tts(

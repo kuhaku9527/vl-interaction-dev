@@ -54,6 +54,9 @@ from .jarvis_config import (
 from .jarvis_config import (
     asr_model_display_name as asr_model_display_name,
 )
+from .jarvis_config import (
+    looks_like_unknown_reply as looks_like_unknown_reply,
+)
 from .jarvis_state import AsrPartial as AsrPartial
 from .jarvis_state import JarvisState as JarvisState
 from .smart_turn_adapter import SmartTurnAdapter
@@ -1348,64 +1351,40 @@ class JarvisStateMachine:
     async def _play_event_wav(self, filename: str):
         """Play a pre-generated event WAV file.
 
-        Reads the WAV (any sample rate; mono PCM16, or downmix from stereo),
-        pushes PCM to audio_output callback (webui WebRTC track),
-        or falls back to log+sleep if no callback is registered.
-        Never raises — log only on errors.
+        Reads the WAV via the shared ``tts_turn_common.load_event_wav`` loader
+        (any sample rate; mono PCM16, or downmix from stereo), pushes PCM to
+        audio_output callback (webui WebRTC track), or falls back to log+sleep
+        if no callback is registered. Never raises — log only on errors.
         """
-        path = Path(self.config.events_dir) / filename
-        if not path.exists():
-            logger.warning("Event audio not found: %s (skipping)", path)
-            return
+        from .tts_turn_common import load_event_wav
 
         try:
-            import wave
-
-            import numpy as _np
-
-            with wave.open(str(path), "rb") as wf:
-                sample_rate = wf.getframerate()
-                n_channels = wf.getnchannels()
-                sampwidth = wf.getsampwidth()
-                raw = wf.readframes(wf.getnframes())
-            if sampwidth != 2:
-                logger.warning(
-                    "Event audio %s has sampwidth=%d (expected 2); playback may distort",
-                    filename,
-                    sampwidth,
-                )
-            samples = _np.frombuffer(raw, dtype=_np.int16)
-            if n_channels > 1:
-                # Downmix interleaved channels by averaging. Keeps duration
-                # honest and stops SpeakerAudioTrack._resample_pcm16 from
-                # treating L/R as consecutive mono samples (pitch shift bug).
-                frames = samples.reshape(-1, n_channels)
-                samples = frames.mean(axis=1).astype(_np.int16)
-                pcm = samples.tobytes()
-            else:
-                pcm = raw
-            duration = samples.size / sample_rate
-            logger.info(
-                "Playing event: %s (%.1fs, %dHz, %dch, %d bytes)",
-                filename,
-                duration,
-                sample_rate,
-                n_channels,
-                len(pcm),
-            )
-            if self.audio_output:
-                try:
-                    await self.audio_output(pcm, sample_rate)
-                except Exception as exc:
-                    logger.error("audio_output for %s failed: %s", filename, exc)
-                    await asyncio.sleep(duration)
-            else:
-                # No audio_output callback: log + sleep (silent fail)
-                logger.debug("No audio_output registered; sleeping %.1fs", duration)
-                await asyncio.sleep(duration)
+            loaded = load_event_wav(self.config.events_dir, filename)
         except Exception as exc:
             logger.error("Failed to play %s: %s", filename, exc)
             await asyncio.sleep(1.5)  # fallback
+            return
+        if loaded is None:
+            return
+        pcm, sample_rate = loaded
+        duration = len(pcm) / 2 / sample_rate  # mono int16
+        logger.info(
+            "Playing event: %s (%.1fs, %dHz, %d bytes)",
+            filename,
+            duration,
+            sample_rate,
+            len(pcm),
+        )
+        if self.audio_output:
+            try:
+                await self.audio_output(pcm, sample_rate)
+            except Exception as exc:
+                logger.error("audio_output for %s failed: %s", filename, exc)
+                await asyncio.sleep(duration)
+        else:
+            # No audio_output callback: log + sleep (silent fail)
+            logger.debug("No audio_output registered; sleeping %.1fs", duration)
+            await asyncio.sleep(duration)
 
     async def _play_wake_wav(self):
         await self._play_event_wav(self.config.wake_wav)
@@ -1635,6 +1614,36 @@ class JarvisStateMachine:
             response = f"[LLM error: {exc}]"
             decision = "silence"
             delegation_question = None
+
+        # N2 (call-mode unknown delegation): call mode uses NO_DECISION_SYSTEM_PROMPT
+        # which forbids </delegation>, so the model can only answer "不知道/无法回答"
+        # for out-of-context questions. Detect that case and route it through the
+        # existing delegation path so the background sub-agent answers instead.
+        if (
+            interaction_mode == "call"
+            and decision == "response"
+            and not delegation_question
+            and looks_like_unknown_reply(response)
+        ):
+            bg = getattr(self, "_background_service", None)
+            if (
+                bg is not None
+                and getattr(bg, "enabled", True)
+                and not getattr(bg, "_closed", False)
+            ):
+                logger.info(
+                    "N2 call-mode unknown detected -> delegating: reply=%r question=%r",
+                    (response or "")[:80],
+                    (text or "")[:120],
+                )
+                response = "让我查一下再告诉你。"
+                decision = "delegation"
+                delegation_question = text
+            else:
+                logger.info(
+                    "N2 call-mode unknown detected but bg unavailable; keeping reply: %r",
+                    (response or "")[:80],
+                )
 
         await self._finish_llm_turn(
             text=text,

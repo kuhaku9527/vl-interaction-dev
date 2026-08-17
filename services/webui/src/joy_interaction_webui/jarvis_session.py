@@ -528,6 +528,15 @@ class JarvisSessionManager:
         """Get an existing live session, or None."""
         return self._live_sessions.get(session_id)
 
+    def live_session_ids(self) -> list[str]:
+        """Return the ids of all live sessions.
+
+        Used by the radio-silence proxy to mirror the silence state (suppressed
+        + kws_enabled) onto every running live session so the in-process KWS
+        listener starts/stops with the real suppression.
+        """
+        return list(self._live_sessions.keys())
+
     async def remove_session(self, session_id: str) -> bool:
         """Stop and remove a session.
 

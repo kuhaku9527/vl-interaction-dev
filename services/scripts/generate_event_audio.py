@@ -39,7 +39,8 @@ EVENTS_DIR = REPO_ROOT / "prompts" / "bt" / "events"
 
 EVENTS: list[tuple[str, str, float]] = [
     # (filename, text, expected_duration_sec)
-    ("wake", "铁御，我在", 1.6),
+    # 措辞规范（2026-08-17 用户拍板）：角色名统一「铁驭」，旧「铁御」废弃。
+    ("wake", "铁驭，我在", 1.6),
     ("goodbye", "任务完成，断开神经链接", 2.2),
 ]
 

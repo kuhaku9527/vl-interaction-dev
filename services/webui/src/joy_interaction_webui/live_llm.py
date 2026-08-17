@@ -35,6 +35,7 @@ async def send_to_llm(
     is_cancelled: Callable[[], bool],
     on_finish_turn: Callable[..., Awaitable[None]],
     on_retry_non_streaming: Callable[..., Awaitable[None]],
+    on_silence_wake: Callable[[], None] | None = None,
     logger: logging.Logger,
 ) -> tuple[int, int]:
     """Send ASR text to webinfer (interaction_mode='live', stream=True).
@@ -72,6 +73,7 @@ async def send_to_llm(
         is_cancelled=is_cancelled,
         stream_logger=logger,
         frames=frames,
+        on_silence_wake=on_silence_wake,
     )
     result = await consumer.consume(
         text,

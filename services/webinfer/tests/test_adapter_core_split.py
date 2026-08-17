@@ -1,13 +1,15 @@
 """Contract test locking the Milestone-2 ``adapter_core`` structure split.
 
 After the mechanical split of the former 1992-line ``adapter_core`` monolith
-into five single-responsibility mixins (``session``, ``prompt_assembly``,
-``memory_io``, ``summarizer_routing``, ``infer_loop``) plus a thin coordinator
-facade, this test pins the *external contract* that must stay intact:
+into six single-responsibility mixins (``session``, ``prompt_assembly``,
+``memory_io``, ``summarizer_routing``, ``silence_control``, ``infer_loop``)
+plus a thin coordinator facade, this test pins the *external contract* that
+must stay intact:
 
 * ``StreamingInferAdapter`` is still importable from ``live_adapter``;
 * its MRO order is exactly the designed mixin order
-  (Session -> InferLoop -> SummarizerRouting -> MemoryIO -> PromptAssembly);
+  (Session -> InferLoop -> SummarizerRouting -> SilenceControl -> MemoryIO
+  -> PromptAssembly);
 * every method named in design §2.1 (66 numbered) **plus** the 5 extracted
   ``_chat_payload_*`` sub-steps is present on the class;
 * ``live_adapter.__all__`` still re-exports the 10 private helpers (§7.2);
@@ -33,6 +35,7 @@ from live_adapter import __all__ as LIVE_ADAPTER_ALL  # noqa: E402
 from memory_io import MemoryIOMixin  # noqa: E402
 from prompt_assembly import PromptAssemblyMixin  # noqa: E402
 from session import SessionMixin  # noqa: E402
+from silence_control import SilenceControlMixin  # noqa: E402
 from summarizer_routing import SummarizerRoutingMixin  # noqa: E402
 
 # 66 methods from design §2.1, in mixin landing order, plus the 5 extracted
@@ -136,6 +139,7 @@ EXPECTED_MRO = (
     SessionMixin,
     InferLoopMixin,
     SummarizerRoutingMixin,
+    SilenceControlMixin,
     MemoryIOMixin,
     PromptAssemblyMixin,
     object,

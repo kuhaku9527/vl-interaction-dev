@@ -332,6 +332,13 @@ class InferLoopMixin:
             await self._memory_recall(state, last_user_text)
         except Exception as exc:
             LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
+        # Radio-silence (spec draft-radio-silence.md): the text path is the
+        # production live round path (/v1/text/chat with frames), so command /
+        # name detection + T1/T2 evaluation + the suppression gate live here
+        # too. Live-only: call/jarvis are untouched (D-001 isolation).
+        self._silence_process_transcript(last_user_text, interaction_mode)
+        silence_action = self._silence_check_timeouts()
+        is_suppressed = self._is_suppressed(interaction_mode)
 
         api_messages = list(payload.get("messages") or [])
         # call mode drops the decision-token framework (issues #44/#45);
@@ -376,14 +383,29 @@ class InferLoopMixin:
         else:
             removed = 0
 
-        generation_kwargs = self._main_generation_kwargs(payload)
-        response = await client.chat.completions.create(
-            model=model_name,
-            messages=http_messages,
-            **generation_kwargs,
-        )
-        raw_text = response.choices[0].message.content if response.choices else ""
-        usage = response.usage.model_dump() if getattr(response, "usage", None) else None
+        wake_round = False
+        if is_suppressed:
+            # 有 query 也不响应: full mute on the production live text path,
+            # no model call, silence decision (spec §2).
+            raw_text = ""
+            usage = None
+            LOGGER.info(
+                "[%s] live round suppressed (radio silence); text path muted",
+                state.session_id,
+            )
+        else:
+            wake_directive = self._consume_wake_directive(interaction_mode)
+            if wake_directive:
+                wake_round = True
+                http_messages = [{"role": "system", "content": wake_directive}, *http_messages]
+            generation_kwargs = self._main_generation_kwargs(payload)
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=http_messages,
+                **generation_kwargs,
+            )
+            raw_text = response.choices[0].message.content if response.choices else ""
+            usage = response.usage.model_dump() if getattr(response, "usage", None) else None
 
         decision, clean_text, delegation_question = _parse_decision_tokens(raw_text or "")
 
@@ -395,7 +417,7 @@ class InferLoopMixin:
         qa_history_len = len(state.memory_state.get("qa_history", []))
         prompt_chars = _estimate_messages_chars(http_messages)
 
-        return _chat_completion_response(
+        result = _chat_completion_response(
             model=self.config.adapter_model,
             content=clean_text,
             usage=usage,
@@ -408,6 +430,19 @@ class InferLoopMixin:
             prompt_chars=prompt_chars,
             trimmed_turns=removed,
         )
+        # Radio-silence round metadata: suppressed / hint / wake ride the same
+        # response so the webui can reflect the badge and play hint / wake.wav.
+        silence_meta = {}
+        if is_suppressed:
+            silence_meta["suppressed"] = True
+            silence_meta["reason"] = "radio_silence"
+        if silence_action == "hint":
+            silence_meta["hint"] = True
+        if wake_round:
+            silence_meta["wake"] = True
+        if silence_meta:
+            result["streamingharness"]["silence"] = silence_meta
+        return result
 
     # ------------------------------------------------------------------
     # P0-A TTS streaming: /v1/text/chat with stream=true (NDJSON frames)
@@ -525,6 +560,12 @@ class InferLoopMixin:
             await self._memory_recall(state, last_user_text)
         except Exception as exc:
             LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
+        # Radio-silence (spec draft-radio-silence.md): same live-only gate as
+        # the non-streaming text path — command/name detection first, then
+        # T1/T2, then the suppression gate (D-001 isolation for call/jarvis).
+        self._silence_process_transcript(last_user_text, interaction_mode)
+        silence_action = self._silence_check_timeouts()
+        is_suppressed = self._is_suppressed(interaction_mode)
 
         api_messages = list(payload.get("messages") or [])
         composed_system = (
@@ -563,6 +604,55 @@ class InferLoopMixin:
             )
         else:
             removed = 0
+
+        wake_round = False
+        if is_suppressed:
+            # 有 query 也不响应 (spec §2): mute the streaming path too — emit a
+            # silence decision + done frame, no model call. The webui consumer
+            # (StreamingTurnConsumer) treats a silence decision as nothing to
+            # speak, so the muted round is indistinguishable from a natural
+            # </silence> except for the added ``silence`` metadata.
+            LOGGER.info(
+                "[%s] live stream round suppressed (radio silence); text path muted",
+                state.session_id,
+            )
+            self._update_text_qa_history(state, api_messages, "", "silence")
+            memory_chars = len(composed_system)
+            qa_history_len = len(state.memory_state.get("qa_history", []))
+            prompt_chars = _estimate_messages_chars(http_messages)
+            yield {
+                "type": "decision",
+                "decision": "silence",
+                "delegation_question": None,
+            }
+            silence_meta: dict[str, Any] = {
+                "suppressed": True,
+                "reason": "radio_silence",
+            }
+            if silence_action == "hint":
+                silence_meta["hint"] = True
+            yield {
+                "type": "done",
+                "decision": "silence",
+                "delegation_question": None,
+                "full_text": "",
+                "raw_text": "",
+                "usage": None,
+                "model": self.config.adapter_model,
+                "raw_model": model_name,
+                "memory_chars": memory_chars,
+                "qa_history_len": qa_history_len,
+                "prompt_chars": prompt_chars,
+                "trimmed_turns": removed,
+                "silence": silence_meta,
+            }
+            return
+        # Radio-silence wake: the first live round after a name/KWS wake
+        # carries the one-shot addressee directive (spec §5 唤醒仪式).
+        wake_directive = self._consume_wake_directive(interaction_mode)
+        if wake_directive:
+            wake_round = True
+            http_messages = [{"role": "system", "content": wake_directive}, *http_messages]
 
         generation_kwargs = self._main_generation_kwargs(payload)
         generation_kwargs["stream"] = True
@@ -663,7 +753,7 @@ class InferLoopMixin:
         memory_chars = len(composed_system)
         qa_history_len = len(state.memory_state.get("qa_history", []))
         prompt_chars = _estimate_messages_chars(http_messages)
-        yield {
+        done_frame: dict[str, Any] = {
             "type": "done",
             "decision": decision,
             "delegation_question": delegation_question,
@@ -677,6 +767,11 @@ class InferLoopMixin:
             "prompt_chars": prompt_chars,
             "trimmed_turns": removed,
         }
+        if wake_round:
+            # The wake directive was injected above; surface it so the webui
+            # can play the wake.wav (spec §5 "我在铁驭" audio).
+            done_frame["silence"] = {"wake": True}
+        yield done_frame
 
     async def handle_chat_completions(self, request: web.Request) -> web.Response:
         """Handle the multimodal chat-completions endpoint."""
@@ -948,6 +1043,16 @@ class InferLoopMixin:
                 await self._memory_recall(state, last_user_text)
             except Exception as exc:
                 LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
+        # Radio-silence (spec draft-radio-silence.md): process the ASR
+        # transcript for enter/wake commands, evaluate the T1/T2 timers, then
+        # gate the round. Command detection runs BEFORE the suppression check
+        # so an entering ("无线电静默") or waking (name) round takes effect
+        # immediately. Live-only: call/jarvis are untouched (D-001 isolation).
+        self._silence_process_transcript(last_user_text, interaction_mode)
+        silence_action = self._silence_check_timeouts()
+        is_suppressed = self._is_suppressed(interaction_mode)
+        ctx.silence_action = silence_action
+        ctx.is_suppressed = is_suppressed
         # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
         turn_input_record = build_turn_input_record(messages, ctx, state)
 
@@ -965,16 +1070,21 @@ class InferLoopMixin:
         t_prompt_build_end = 0.0
         t_inference_end = 0.0
 
-        if is_forced_silence:
+        if is_forced_silence or is_suppressed:
+            # Radio silence is a HARDER mute than forced silence: it cuts
+            # inference AND TTS even when a user query is pending ("有 query
+            # 也不响应"), while the frames already appended above keep the
+            # vision context flowing (隐身观察, spec §2).
             generated_text = "</silence>"
             raw_text = ""
             usage = None
+            skip_reason = "radio_silence" if is_suppressed else "force_silence_before_query"
             turn_model_input_record = build_model_input_record(
                 chunk_index=state.chunk_index,
                 messages=state.current_chunk["messages"],
                 frame_count=state.current_chunk["frame_count"],
                 inference_skipped=True,
-                skip_reason="force_silence_before_query",
+                skip_reason=skip_reason,
                 image_paths=state.current_chunk["image_paths"],
                 frame_time_ranges=state.current_chunk["frame_time_ranges"],
             )
@@ -991,6 +1101,15 @@ class InferLoopMixin:
                 include_decision_tokens=include_decision_tokens,
                 interaction_mode=interaction_mode,
             )
+            # Radio-silence wake: the first live round after a name/KWS wake
+            # carries a one-shot addressee directive so the model replies
+            # (</response>) instead of treating the wake utterance as
+            # not-for-me / silence (spec §5 唤醒仪式). The round also surfaces
+            # ``silence.wake`` in the result so the webui can play wake.wav.
+            wake_directive = self._consume_wake_directive(interaction_mode)
+            if wake_directive:
+                ctx.wake_from_silence = True
+                http_messages = [{"role": "system", "content": wake_directive}, *http_messages]
             turn_model_input_record = build_model_input_record(
                 chunk_index=state.chunk_index,
                 messages=http_messages,
@@ -1067,6 +1186,9 @@ class InferLoopMixin:
         if ctx.is_forced_silence:
             turn_output_record["inference_skipped"] = True
             turn_output_record["skip_reason"] = "force_silence_before_query"
+        if getattr(ctx, "is_suppressed", False):
+            turn_output_record["inference_skipped"] = True
+            turn_output_record["skip_reason"] = "radio_silence"
 
         t_end = time.perf_counter()
         total_time = t_end - ctx.t_start
@@ -1078,7 +1200,14 @@ class InferLoopMixin:
         t_end = time.perf_counter()
         adapter_timing = build_adapter_timing(ctx, t_end)
 
-        if not ctx.is_forced_silence:
+        if getattr(ctx, "is_suppressed", False):
+            LOGGER.info(
+                "[%s] turn=%d timing: total=%.1fms (radio silence, inference skipped)",
+                state.session_id,
+                ctx.turn_count,
+                adapter_timing["adapter_total_ms"],
+            )
+        elif not ctx.is_forced_silence:
             LOGGER.info(
                 "[%s] turn=%d timing: total=%.1fms pre=%.1fms prompt_build=%.1fms vllm=%.1fms post=%.1fms",
                 state.session_id,
@@ -1111,6 +1240,20 @@ class InferLoopMixin:
         # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
         result["streamingharness"]["summarizer_timing"] = build_summarizer_timing(state)
         result["streamingharness"]["memory"] = build_memory_payload(state)
+        # Radio-silence round metadata (spec draft-radio-silence.md): the
+        # suppressed flag lets the webui reflect the 静默 badge per round; the
+        # hint / wake flags ride the same response so webui can play the
+        # pre-recorded "仍在静默中" hint or the wake.wav ("我在铁驭").
+        silence_meta = {}
+        if getattr(ctx, "is_suppressed", False):
+            silence_meta["suppressed"] = True
+            silence_meta["reason"] = "radio_silence"
+        if getattr(ctx, "silence_action", None) == "hint":
+            silence_meta["hint"] = True
+        if getattr(ctx, "wake_from_silence", False):
+            silence_meta["wake"] = True
+        if silence_meta:
+            result["streamingharness"]["silence"] = silence_meta
         return result
 
     async def _forward_text_only(

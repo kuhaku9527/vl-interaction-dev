@@ -511,6 +511,8 @@ def create_app(config: AdapterConfig) -> web.Application:
     app.router.add_get("/v1/summarizer/route", adapter.handle_summarizer_route)
     app.router.add_post("/v1/summarizer/route", adapter.handle_summarizer_route)
     app.router.add_post("/v1/text/chat", adapter.handle_text_chat)
+    app.router.add_get("/v1/live/silence", adapter.handle_live_silence)
+    app.router.add_post("/v1/live/silence", adapter.handle_live_silence)
     app.router.add_post("/v1/streaming/reset", adapter.handle_reset)
     app.router.add_get("/v1/prompts/active", adapter.handle_prompts_active)
     app.router.add_post("/v1/prompts/reload", adapter.handle_prompts_reload)

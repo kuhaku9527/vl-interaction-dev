@@ -136,6 +136,24 @@ def notify_session_tts_sentence(session_id, text, seq, audio_b64, session):
     _server_send_to_session(session_id, payload)
 
 
+def notify_session_silence_wake(session_id, audio_b64):
+    """Push the radio-silence wake ceremony audio (WAV base64) to the browser.
+
+    Live-mode analogue of jarvis's server-side ``_play_wake_wav``: live has no
+    server speaker track (replies are played by the browser), so the
+    pre-recorded wake.wav (zero token, spec §5 唤醒仪式) is sent to the
+    frontend to play on receipt. ``audio_b64`` is a playable WAV.
+    """
+    payload = {
+        "type": "silence_wake",
+        "audio_b64": audio_b64 or "",
+        "ts": time.time(),
+    }
+    targets = session_websockets.get(session_id, set())
+    logger.info("silence_wake push ws_targets=%d", len(targets))
+    _server_send_to_session(session_id, payload)
+
+
 def notify_session_pilot_utterance(session_id, text, source="asr", reply_epoch=0):
     payload = {
         "type": "pilot_utterance",

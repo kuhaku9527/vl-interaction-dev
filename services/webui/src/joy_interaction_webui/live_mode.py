@@ -52,6 +52,7 @@ sub-modules — behavior is unchanged.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 import time
@@ -92,6 +93,17 @@ from .turn_streaming import StreamingTurnConsumer
 from .vad_bypass import VadBypass
 
 logger = logging.getLogger("joyai.live_mode")
+
+
+def _silence_kws_task_done(task: asyncio.Task) -> None:
+    """done_callback for the fire-and-forget kws_event push (log failures)."""
+    try:
+        exc = task.exception()
+    except (asyncio.CancelledError, Exception):
+        return
+    if exc is not None:
+        logger.warning("[live-mode] silence kws_event push task failed: %s", exc)
+
 
 #: Confidence fed to the turn controller when VAD (or ASR partial growth)
 #: reports speech. Well above the live barge_in_threshold (0.75) so any real
@@ -289,6 +301,23 @@ class LiveStateMachine:
         self._proactive_enabled: bool = proactive_enabled_from_env()
         self._proactive_interval_s: float = proactive_interval_from_env()
         self._proactive_task: asyncio.Task | None = None
+
+        # Radio silence (spec draft-radio-silence.md §4/§5): the live session
+        # mirrors the webinfer-owned suppressed state + the silence KWS switch
+        # (updated by silence_proxy via set_silence_state, and by the session's
+        # own kws_event wake). While suppressed + kws_enabled, mic audio is
+        # also fed to a lazily-created KWS engine; a name hit pushes a
+        # ``kws_event`` to webinfer (the KWS wake channel). The wake.wav
+        # ceremony is played through the browser (live has no server speaker).
+        self._silence_suppressed: bool = False
+        self._silence_kws_enabled: bool = True
+        self._silence_kws: Any | None = None
+        self._silence_kws_last_hit_at: float = 0.0
+        # Dedup for the wake.wav ceremony: the KWS push plays immediately and
+        # the round's done frame also fires on_silence_wake — the cooldown
+        # keeps it to one play per wake.
+        self._silence_wake_played_at: float = 0.0
+        self._silence_wake_audio_cooldown_s: float = 5.0
 
         logger.info(
             "[live-mode] session %s initialized (state=%s, vad_threshold=%.2f, "
@@ -630,6 +659,13 @@ class LiveStateMachine:
         if self._enroll_phase:
             self._feed_enroll_audio(pcm, now)
             return
+
+        # 0.5 Radio silence (spec §4): while suppressed AND the silence KWS
+        #     switch is on, the same mic audio also feeds the wake-word KWS
+        #     (组合矩阵 关/开 纯省电 + 声学雷达). The KWS branch runs ALONGSIDE
+        #     the ASR path — when ASR is on too, both channels stay live.
+        if self._silence_suppressed and self._silence_kws_enabled:
+            await self._feed_silence_kws(pcm)
 
         addressee_gated = (
             self._addressee is not None
@@ -1081,6 +1117,7 @@ class LiveStateMachine:
             is_cancelled=lambda: self._llm_stream_cancel,
             on_finish_turn=self._finish_llm_turn,
             on_retry_non_streaming=self._send_to_llm_non_streaming,
+            on_silence_wake=self._play_silence_wake_wav,
             logger=logger,
         )
 
@@ -1267,6 +1304,164 @@ class LiveStateMachine:
         return wrap_pcm16_wav(pcm, sample_rate=sample_rate)
 
     # ------------------------------------------------------------------
+    # Radio silence (spec draft-radio-silence.md §4/§5)
+    # ------------------------------------------------------------------
+
+    def set_silence_state(self, suppressed: bool, kws_enabled: bool) -> None:
+        """Mirror the webinfer-owned silence state on this live session.
+
+        Called by the silence proxy after any state change (toggle / settings
+        / kws_event) so the in-process KWS listener starts/stops with the real
+        suppression. Releasing the KWS engine when it is no longer needed keeps
+        the (large) model from idling during normal live listening.
+        """
+        self._silence_suppressed = bool(suppressed)
+        self._silence_kws_enabled = bool(kws_enabled)
+        if not (self._silence_suppressed and self._silence_kws_enabled):
+            self._release_silence_kws()
+        logger.info(
+            "[live-mode] silence state mirror: suppressed=%s kws_enabled=%s",
+            self._silence_suppressed,
+            self._silence_kws_enabled,
+        )
+
+    def _ensure_silence_kws(self) -> None:
+        """Lazily build the silence-wake KWS engine (same model as jarvis)."""
+        if self._silence_kws is not None:
+            return
+        try:
+            from services.asr.jarvis.kws import JarvisKWS
+
+            self._silence_kws = JarvisKWS(
+                model_dir=self._config.kws_model_dir,
+                wake_word=self._config.wake_word,
+                num_threads=self._config.kws_num_threads,
+                keywords_score=self._config.kws_keywords_score,
+                keywords_threshold=self._config.kws_keywords_threshold,
+                num_trailing_blanks=self._config.kws_num_trailing_blanks,
+                max_active_paths=self._config.kws_max_active_paths,
+            )
+            self._silence_kws.start()
+            logger.info("[live-mode] silence KWS engine started (%s)", self._config.kws_model_dir)
+        except Exception as exc:
+            # Fail-open: a missing/broken KWS model must not crash the live
+            # loop; the other wake channels (组合键/语音/文本) still work.
+            self._silence_kws = None
+            logger.error("[live-mode] silence KWS init failed (fail-open): %s", exc)
+
+    def _release_silence_kws(self) -> None:
+        """Stop and drop the silence-wake KWS engine (idempotent)."""
+        kws = self._silence_kws
+        self._silence_kws = None
+        if kws is not None:
+            try:
+                kws.stop()
+            except Exception as exc:
+                logger.warning("[live-mode] silence KWS stop failed: %s", exc)
+
+    async def _feed_silence_kws(self, pcm: bytes) -> None:
+        """Feed mic audio to the silence-wake KWS; on name hit push kws_event.
+
+        Only called while suppressed + kws_enabled (from ``feed_audio``).
+        ``feed_audio`` on the sherpa KWS is synchronous and returns True on a
+        wake-word hit; the hit is debounced so a multi-chunk wake fires one
+        event. The event push is fire-and-forget (fail-open: a webinfer
+        outage just logs — the live loop survives).
+        """
+        if not pcm:
+            return
+        if self._silence_kws is None:
+            # First use: load the (large) KWS model OFF the event loop so a
+            # silence entry never freezes WebRTC/WS traffic (mirrors the jarvis
+            # prewarm via executor). Subsequent chunks skip this branch.
+            await asyncio.to_thread(self._ensure_silence_kws)
+        kws = self._silence_kws
+        if kws is None:
+            return
+        try:
+            hit = bool(kws.feed_audio(pcm))
+        except Exception as exc:
+            logger.warning("[live-mode] silence KWS feed failed (fail-open): %s", exc)
+            return
+        if not hit:
+            return
+        now = time.time()
+        if (now - self._silence_kws_last_hit_at) < 2.0:
+            logger.info("[live-mode] silence KWS hit debounced")
+            return
+        self._silence_kws_last_hit_at = now
+        logger.info("[live-mode] silence KWS wake-word hit; pushing kws_event to webinfer")
+        try:
+            task = asyncio.create_task(self._push_silence_kws_event())
+            task.add_done_callback(_silence_kws_task_done)
+        except RuntimeError:
+            # No running loop (rare teardown race): log and continue.
+            logger.warning("[live-mode] silence KWS event push skipped (no event loop)")
+
+    async def _push_silence_kws_event(self) -> None:
+        """Forward one KWS wake event to webinfer and play the wake ceremony.
+
+        Uses the silence proxy's in-process forwarder (no self-HTTP round-trip).
+        On a confirmed wake (webinfer returns suppressed=False / wake_pending),
+        the session clears its mirror and plays wake.wav in the browser.
+        """
+        from .silence_proxy import _silence_forward_kws_event
+
+        try:
+            result = await _silence_forward_kws_event()
+        except Exception as exc:
+            logger.warning("[live-mode] silence kws_event forward failed: %s", exc)
+            return
+        suppressed = result.get("suppressed")
+        if isinstance(suppressed, bool):
+            self._silence_suppressed = suppressed
+            if not suppressed:
+                self._release_silence_kws()
+        if result.get("wake_pending") is True or suppressed is False:
+            # Confirmed wake -> play the ceremony immediately (zero token).
+            self._play_silence_wake_wav()
+
+    def _play_silence_wake_wav(self) -> None:
+        """Play the wake ceremony wake.wav in the browser (zero token, spec §5).
+
+        Live mode has no server-side speaker track, so the pre-recorded
+        wake.wav is loaded through the shared event-audio loader and pushed to
+        the frontend as a ``silence_wake`` WS event. Cooldown-deduped: the KWS
+        push plays immediately and the wake round's done frame fires again.
+        Fail-open: missing wav / no session only logs.
+        """
+        now = time.time()
+        if (now - self._silence_wake_played_at) < self._silence_wake_audio_cooldown_s:
+            logger.debug("[live-mode] silence wake audio deduped (cooldown)")
+            return
+        if not self.session_id:
+            return
+        from .tts_turn_common import load_event_wav
+
+        try:
+            loaded = load_event_wav(self._config.events_dir, self._config.wake_wav)
+        except Exception as exc:
+            logger.error("[live-mode] silence wake wav load failed: %s", exc)
+            return
+        if loaded is None:
+            return
+        pcm, sample_rate = loaded
+        try:
+            wav = wrap_pcm16_wav(pcm, sample_rate=sample_rate)
+            audio_b64 = base64.b64encode(wav).decode("ascii")
+        except Exception as exc:
+            logger.error("[live-mode] silence wake wav wrap failed: %s", exc)
+            return
+        from .ws_notify import notify_session_silence_wake
+
+        try:
+            notify_session_silence_wake(self.session_id, audio_b64)
+            self._silence_wake_played_at = now
+            logger.info("[live-mode] silence wake.wav pushed to browser (%d bytes)", len(wav))
+        except Exception as exc:
+            logger.warning("[live-mode] silence wake WS push failed: %s", exc)
+
+    # ------------------------------------------------------------------
     # Barge-in / stop
     # ------------------------------------------------------------------
 
@@ -1328,6 +1523,9 @@ class LiveStateMachine:
                 self._asr.stop()
             except Exception as exc:
                 logger.warning("[live-mode] ASR stop failed: %s", exc)
+        # Release the silence-wake KWS engine (large model; don't idle it).
+        self._release_silence_kws()
+        self._silence_suppressed = False
         logger.info("[live-mode] session %s stopped", self.session_id)
 
 

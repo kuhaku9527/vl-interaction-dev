@@ -257,8 +257,49 @@
                         : '—';
                 }
                 console.log('ASR promotion updated:', data.enabled, data.asr_model_name || '');
+            } else if (data.type === 'silence_wake') {
+                // 无线电静默唤醒音频（B3, draft-radio-silence.md §5）：后端消费 live
+                // done frame silence:{wake:true} 后把 prompts/bt/events/wake.wav 以
+                // WAV base64 推来（live 无服务端扬声器，走浏览器播放）。与 tts_sentence
+                // 同通道但独立事件——不接队列（无 seq/会话语义）、不产生文本气泡。
+                if (data.audio_b64) {
+                    playSilenceWakeAudio(data.audio_b64);
+                }
             }
 
+        }
+
+        // silence_wake 唤醒音频播放（B3）：atob→Blob(audio/wav)→独立 #silenceWakePlayer
+        // 播一次。用独立元素而非 btTtsPlayer，避免打断 LLM 逐句回复队列（其有
+        // epoch/barge-in 不变式）。播放结束/出错即释放 object URL，防泄漏。
+        let _silenceWakeUrl = null;
+        function playSilenceWakeAudio(audioB64) {
+            const player = document.getElementById('silenceWakePlayer');
+            if (!player || !audioB64) return;
+            try {
+                const bin = atob(audioB64);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+                if (_silenceWakeUrl) URL.revokeObjectURL(_silenceWakeUrl);
+                _silenceWakeUrl = url;
+                const release = () => {
+                    if (_silenceWakeUrl === url) _silenceWakeUrl = null;
+                    URL.revokeObjectURL(url);
+                    player.removeEventListener('ended', release);
+                    player.removeEventListener('error', release);
+                };
+                player.addEventListener('ended', release, { once: true });
+                player.addEventListener('error', release, { once: true });
+                player.src = url;
+                player.play().catch((e) => {
+                    console.warn('[silence_wake] play blocked', e);
+                    release();
+                });
+            } catch (e) {
+                console.warn('[silence_wake] audio decode failed', e);
+            }
         }
 
         // cleanupServerSession moved to joy_ws.js (window.JoyWs) — see Block 4.
@@ -323,6 +364,7 @@ if (typeof window !== 'undefined') {
         connectWebSocket,
         dispatchServerMessage,
         resetSession,
+        playSilenceWakeAudio,
         // Split-introduced load crash (same family as P0-1 in audit 2026-08-13):
         // sendDebugFlags is declared in the MAIN inline script, which loads AFTER
         // this pre-main file — a bare shorthand here throws ReferenceError at load
