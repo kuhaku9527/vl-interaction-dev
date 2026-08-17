@@ -367,6 +367,45 @@
   .row-note{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;padding:4px 0 2px;line-height:1.2;}
   .row-note .cdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;}
 
+  /* v6-lite.10: provider 配置管理（自命名 + + 保存整套 + 下拉历史；按槽位独立 Provider 池，localStorage 持久化） */
+  .provider-mgr{
+    display:flex;flex-direction:column;gap:6px;
+    padding:8px 10px;border-radius:10px;
+    background:var(--bg-elev-2);border:1px solid var(--border);
+  }
+  .provider-mgr .label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);font-weight:500;}
+  .provider-mgr .label .cdot{width:6px;height:6px;border-radius:50%;background:var(--brand);}
+  .provider-mgr-row{display:flex;gap:6px;align-items:center;}
+  .provider-mgr-row .inp{flex:1 1 auto;min-width:0;}
+  .provider-add{
+    flex:0 0 36px;height:36px;border-radius:9px;
+    background:var(--bg-input);border:1px solid var(--border);color:var(--text);
+    font-size:20px;line-height:1;cursor:pointer;transition:.12s;
+    display:flex;align-items:center;justify-content:center;font-family:var(--font);
+  }
+  .provider-add:hover{border-color:var(--brand);color:var(--brand);}
+  .provider-add[title]{font-weight:300;}
+  .provider-pick{
+    flex:0 0 130px;height:36px;border-radius:9px;
+    background:var(--bg-input);border:1px solid var(--border);color:var(--text);
+    cursor:pointer;transition:.12s;
+    appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239090A0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center;padding:0 28px 0 10px;
+    font-family:var(--font);font-size:12px;
+  }
+  .provider-pick:hover{border-color:var(--border-strong);}
+  .provider-actions{display:flex;gap:8px;align-items:center;margin-top:2px;}
+  .provider-actions .mini{
+    height:26px;padding:0 10px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--text-2);
+    font-family:var(--font);font-size:11px;cursor:pointer;transition:.12s;
+  }
+  .provider-actions .mini:hover{color:var(--text);border-color:var(--border-strong);}
+  .provider-actions .mini.danger:hover{color:var(--brand);border-color:var(--brand);}
+  .provider-actions .msg{font-size:11px;color:var(--text-3);margin-left:2px;}
+  .provider-actions .msg.ok{color:var(--ok);}
+  .provider-actions .msg.err{color:var(--brand);}
+
   /* v3: env 自动探测 pill */
   .env-pill{
     display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;
@@ -725,16 +764,30 @@
               <div class="hint">走后端服务地址本地推理（llama.cpp）。</div>
             </div>
             <div class="subform model-sub" id="main-cloud-form" style="display:none;">
-              <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label><input class="inp" value="https://api.openai.com/v1"></div>
+              <!-- v6-lite.10: provider 配置管理（自命名 + +保存整套 + 下拉历史；按槽位独立 Provider 池） -->
+              <div class="provider-mgr" data-slot="main">
+                <div class="label"><span class="cdot"></span>提供商 <span style="color:var(--text-3);font-weight:400;margin-left:auto;font-size:11px;">以名字保存整套（地址 + Key + 模型）</span></div>
+                <div class="provider-mgr-row">
+                  <input class="inp" id="main-provider-name" list="main-providers" placeholder="自填名字（如 my-siliconflow）">
+                  <button class="provider-add" id="main-provider-add" title="保存整套到该名字">+</button>
+                  <select class="provider-pick" id="main-provider-pick" title="选择已保存的提供商"><option value="">— 历史 —</option></select>
+                </div>
+                <datalist id="main-providers"></datalist>
+                <div class="provider-actions">
+                  <button class="mini danger" id="main-provider-del" title="删除当前名字对应的整套配置">删除该名字</button>
+                  <span class="msg" id="main-provider-msg"></span>
+                </div>
+              </div>
+              <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label><input class="inp" id="main-cloud-api-base" value="https://api.openai.com/v1"></div>
               <div class="row"><label>API Key</label>
                 <div class="key-wrap" data-key="mask">
-                  <input class="inp" type="password" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" data-mask="sk-xx…xxxx" readonly>
+                  <input class="inp" type="password" id="main-cloud-api-key" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" data-mask="sk-xx…xxxx" readonly>
                   <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   </button>
                 </div>
               </div>
-              <div class="row"><label>模型</label><input class="inp" value="gpt-oss-120b" placeholder="云端 LLM 模型名"></div>
+              <div class="row"><label>模型</label><input class="inp" id="main-cloud-model" value="gpt-oss-120b" placeholder="云端 LLM 模型名"></div>
             </div>
           </div>
 
@@ -751,16 +804,30 @@
               <div class="hint">本地轻量摘要模型，用于长对话压缩。</div>
             </div>
             <div class="subform model-sub" id="summary-cloud-form" style="display:none;">
-              <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label><input class="inp" value="https://api.openai.com/v1"></div>
+              <!-- v6-lite.10: provider 配置管理 -->
+              <div class="provider-mgr" data-slot="summary">
+                <div class="label"><span class="cdot"></span>提供商 <span style="color:var(--text-3);font-weight:400;margin-left:auto;font-size:11px;">以名字保存整套</span></div>
+                <div class="provider-mgr-row">
+                  <input class="inp" id="summary-provider-name" list="summary-providers" placeholder="自填名字（如 gpt4o-mini）">
+                  <button class="provider-add" id="summary-provider-add" title="保存整套到该名字">+</button>
+                  <select class="provider-pick" id="summary-provider-pick" title="选择已保存的提供商"><option value="">— 历史 —</option></select>
+                </div>
+                <datalist id="summary-providers"></datalist>
+                <div class="provider-actions">
+                  <button class="mini danger" id="summary-provider-del" title="删除该名字">删除该名字</button>
+                  <span class="msg" id="summary-provider-msg"></span>
+                </div>
+              </div>
+              <div class="row"><label>API 地址 <span class="key-mask-chip">仅前端显示加密</span></label><input class="inp" id="summary-cloud-api-base" value="https://api.openai.com/v1"></div>
               <div class="row"><label>API Key</label>
                 <div class="key-wrap" data-key="mask">
-                  <input class="inp" type="password" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" data-mask="sk-xx…xxxx" readonly>
+                  <input class="inp" type="password" id="summary-cloud-api-key" value="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" data-mask="sk-xx…xxxx" readonly>
                   <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   </button>
                 </div>
               </div>
-              <div class="row"><label>模型</label><input class="inp" value="gpt-oss-20b" placeholder="云端摘要模型名"></div>
+              <div class="row"><label>模型</label><input class="inp" id="summary-cloud-model" value="gpt-oss-20b" placeholder="云端摘要模型名"></div>
             </div>
           </div>
 
@@ -913,8 +980,22 @@
             <div class="hint">本地走 sherpa-onnx（paraformer-zh / sense-voice），无 API key 暴露。</div>
           </div>
           <div class="group" id="asr-cloud-form" style="display:none;">
+            <!-- v6-lite.10: provider 配置管理（ASR 槽位独立 Provider 池） -->
+            <div class="provider-mgr" data-slot="asr">
+              <div class="label"><span class="cdot"></span>提供商 <span style="color:var(--text-3);font-weight:400;margin-left:auto;font-size:11px;">以名字保存整套</span></div>
+              <div class="provider-mgr-row">
+                <input class="inp" id="asr-provider-name" list="asr-providers" placeholder="自填名字（如 dashscope-asr）">
+                <button class="provider-add" id="asr-provider-add" title="保存整套到该名字">+</button>
+                <select class="provider-pick" id="asr-provider-pick" title="选择已保存的提供商"><option value="">— 历史 —</option></select>
+              </div>
+              <datalist id="asr-providers"></datalist>
+              <div class="provider-actions">
+                <button class="mini danger" id="asr-provider-del" title="删除该名字">删除该名字</button>
+                <span class="msg" id="asr-provider-msg"></span>
+              </div>
+            </div>
             <div class="row"><label>API 地址</label>
-              <input class="inp" list="asr-endpoint-suggest" value="https://api.openai.com/v1/audio/transcriptions" placeholder="endpoint 即选择（OpenAI / 自托管 Whisper…）">
+              <input class="inp" id="asr-cloud-api-base" list="asr-endpoint-suggest" value="https://api.openai.com/v1/audio/transcriptions" placeholder="endpoint 即选择（OpenAI / 自托管 Whisper…）">
               <datalist id="asr-endpoint-suggest">
                 <option value="https://api.openai.com/v1/audio/transcriptions"></option>
                 <option value="https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"></option>
@@ -922,14 +1003,14 @@
             </div>
             <div class="row"><label>API Key</label>
               <div class="key-wrap" data-key="mask">
-                <input class="inp" type="password" value="sk-cp-AsrKey1Aa2Bb3Cc4Dd5Ee6Ff7Gg8Hh9" data-mask="sk-cp-…Hh90" readonly>
+                <input class="inp" type="password" id="asr-cloud-api-key" value="sk-cp-AsrKey1Aa2Bb3Cc4Dd5Ee6Ff7Gg8Hh9" data-mask="sk-cp-…Hh90" readonly>
                 <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </div>
             </div>
             <div class="row"><label>模型</label>
-              <input class="inp" list="asr-cloud-models" value="whisper-1" placeholder="云端 ASR 模型名">
+              <input class="inp" id="asr-cloud-model" list="asr-cloud-models" value="whisper-1" placeholder="云端 ASR 模型名">
               <datalist id="asr-cloud-models">
                 <option value="whisper-1"></option>
                 <option value="whisper-large-v3"></option>
@@ -1000,10 +1081,23 @@
               <div class="hint">本地跑 bge-m3，无 API key 暴露。</div>
             </div>
 
-            <!-- 嵌入云端子表单（v6-lite.8：删除 Provider 下拉；endpoint 即选择；与用户截图「本地/云端 seg + API 地址/Key/模型」一致） -->
+            <!-- 嵌入云端子表单（v6-lite.10：补回 Provider 控件 = 名称 + +保存整套 + 下拉历史；datalist endpoint 建议保留） -->
             <div class="group" id="emb-cloud-form" style="display:none;">
+            <div class="provider-mgr" data-slot="emb">
+              <div class="label"><span class="cdot"></span>提供商 <span style="color:var(--text-3);font-weight:400;margin-left:auto;font-size:11px;">以名字保存整套</span></div>
+              <div class="provider-mgr-row">
+                <input class="inp" id="emb-provider-name" list="emb-providers" placeholder="自填名字（如 my-siliconflow）">
+                <button class="provider-add" id="emb-provider-add" title="保存整套到该名字">+</button>
+                <select class="provider-pick" id="emb-provider-pick" title="选择已保存的提供商"><option value="">— 历史 —</option></select>
+              </div>
+              <datalist id="emb-providers"></datalist>
+              <div class="provider-actions">
+                <button class="mini danger" id="emb-provider-del" title="删除该名字">删除该名字</button>
+                <span class="msg" id="emb-provider-msg"></span>
+              </div>
+            </div>
             <div class="row"><label>API 地址</label>
-              <input class="inp" list="emb-endpoint-suggest" value="https://api.siliconflow.cn/v1/embeddings" placeholder="endpoint 即选择（SiliconFlow / NVIDIA NIM / OpenAI…）">
+              <input class="inp" id="emb-cloud-api-base" list="emb-endpoint-suggest" value="https://api.siliconflow.cn/v1/embeddings" placeholder="endpoint 即选择（SiliconFlow / NVIDIA NIM / OpenAI…）">
               <datalist id="emb-endpoint-suggest">
                 <option value="https://api.siliconflow.cn/v1/embeddings"></option>
                 <option value="https://integrate.api.nvidia.com/v1/embeddings"></option>
@@ -1017,14 +1111,14 @@
             </div>
             <div class="row"><label>API Key</label>
               <div class="key-wrap" data-key="mask">
-                <input class="inp" type="password" value="sk-cp-Zx9Yx8Ww7Vv6Uu5Tt4Ss3Rr2Qq1Pp" data-mask="sk-cp-…QqPp0" readonly>
+                <input class="inp" type="password" id="emb-cloud-api-key" value="sk-cp-Zx9Yx8Ww7Vv6Uu5Tt4Ss3Rr2Qq1Pp" data-mask="sk-cp-…QqPp0" readonly>
                 <button class="key-toggle" type="button" onclick="toggleKey(this)" title="显示 / 隐藏">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </div>
             </div>
             <div class="row"><label>模型</label>
-              <input class="inp" list="emb-cloud-models" value="BAAI/bge-m3" placeholder="可粘贴云端模型名">
+              <input class="inp" id="emb-cloud-model" list="emb-cloud-models" value="BAAI/bge-m3" placeholder="可粘贴云端模型名">
               <datalist id="emb-cloud-models">
                 <option value="BAAI/bge-m3"></option>
                 <option value="BAAI/bge-large-zh-v1.5"></option>
@@ -1299,6 +1393,111 @@
     document.getElementById('emb-local-form').style.display = (mode==='local') ? '' : 'none';
     document.getElementById('emb-cloud-form').style.display = (mode==='cloud') ? '' : 'none';
     fadeForm(document.getElementById(mode==='local' ? 'emb-local-form' : 'emb-cloud-form'));
+  }
+
+  /* ---------- v6-lite.10: provider 配置管理（自命名 + +保存整套 + 下拉历史；按槽位独立 Provider 池，localStorage 持久化；API Key 不入 localStorage，仅后端落盘） ---------- */
+  var PROVIDER_SLOTS = ['main','summary','asr','emb'];
+  var PROVIDER_STORAGE = function(slot){ return 'joyai.providers.' + slot; };
+  function _pStorageOK(){
+    try { var k='__joyai_p_test'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }
+    catch(e){ return false; }
+  }
+  function _pLoad(slot){
+    if(!_pStorageOK()) return [];
+    try { var raw = localStorage.getItem(PROVIDER_STORAGE(slot)); return raw ? JSON.parse(raw) : []; }
+    catch(e){ return []; }
+  }
+  function _pWrite(slot, list){
+    if(!_pStorageOK()) return false;
+    try { localStorage.setItem(PROVIDER_STORAGE(slot), JSON.stringify(list)); return true; }
+    catch(e){ return false; }
+  }
+  function _pId(slot, kind){
+    return slot + '-' + kind;
+    /* kinds: name / add / pick / del / dl / msg / api-base / api-key / model / providers */
+  }
+  function _pMsg(slot, text, type){
+    var m = document.getElementById(_pId(slot,'msg'));
+    if(!m) return;
+    m.textContent = text || '';
+    m.className = 'msg' + (type ? ' ' + type : '');
+    if(text){ setTimeout(function(){ if(m.textContent === text){ m.textContent=''; m.className='msg'; } }, 2200); }
+  }
+  function _pRefill(slot){
+    var list = _pLoad(slot);
+    var dl  = document.getElementById(_pId(slot,'providers'));
+    var pk  = document.getElementById(_pId(slot,'pick'));
+    if(dl) dl.innerHTML = '';
+    if(pk) { pk.innerHTML = '<option value="">— 历史 —</option>'; }
+    list.forEach(function(p){
+      var n = p.name;
+      if(dl){ var o = document.createElement('option'); o.value = n; dl.appendChild(o); }
+      if(pk){ var o2 = document.createElement('option'); o2.value = n; o2.textContent = n; pk.appendChild(o2); }
+    });
+  }
+  function _pReadTriples(slot){
+    var b = document.getElementById(_pId(slot,'api-base'));
+    var k = document.getElementById(_pId(slot,'api-key'));
+    var m = document.getElementById(_pId(slot,'model'));
+    return { base: (b && b.value || '').trim(), keyMask: (k && k.value || '').trim(), model: (m && m.value || '').trim() };
+  }
+  function providerSave(slot){
+    var nameI = document.getElementById(_pId(slot,'name'));
+    var name = (nameI && nameI.value || '').trim();
+    if(!name){ _pMsg(slot, '先起个名字再 +', 'err'); return false; }
+    var t = _pReadTriples(slot);
+    if(!t.base){ _pMsg(slot, 'API 地址为空', 'err'); return false; }
+    if(!t.model){ _pMsg(slot, '模型为空', 'err'); return false; }
+    var list = _pLoad(slot);
+    var entry = { name: name, api_base: t.base, model: t.model };
+    /* 不存 api_key 到 localStorage（仅后端落盘；前端从不外发明文 key） */
+    var idx = -1;
+    for(var i=0;i<list.length;i++) if(list[i].name === name){ idx = i; break; }
+    if(idx >= 0) list[idx] = entry; else list.push(entry);
+    if(!_pWrite(slot, list)){ _pMsg(slot, '浏览器禁用了本地存储，仅本会话生效', 'err'); return false; }
+    _pRefill(slot);
+    _pMsg(slot, '已保存：' + name, 'ok');
+    return true;
+  }
+  function providerPick(slot, name){
+    var list = _pLoad(slot);
+    var entry;
+    for(var i=0;i<list.length;i++) if(list[i].name === name){ entry = list[i]; break; }
+    if(!entry){ _pMsg(slot, '找不到：' + name, 'err'); return; }
+    var nameI = document.getElementById(_pId(slot,'name'));
+    var b = document.getElementById(_pId(slot,'api-base'));
+    var m = document.getElementById(_pId(slot,'model'));
+    if(nameI) nameI.value = entry.name;
+    if(b) b.value = entry.api_base;
+    if(m) m.value = entry.model;
+    /* api_key 不覆盖（保留当前输入 / 后端已存值） */
+    _pMsg(slot, '已套用：' + entry.name, 'ok');
+  }
+  function providerDeleteCurrent(slot){
+    var nameI = document.getElementById(_pId(slot,'name'));
+    var name = (nameI && nameI.value || '').trim();
+    if(!name){ _pMsg(slot, '先填入要删除的名字', 'err'); return; }
+    var list = _pLoad(slot).filter(function(p){ return p.name !== name; });
+    _pWrite(slot, list);
+    _pRefill(slot);
+    _pMsg(slot, '已删除：' + name, 'ok');
+  }
+  function providerInitSlot(slot){
+    _pRefill(slot);
+    var addBtn = document.getElementById(_pId(slot,'add'));
+    if(addBtn) addBtn.addEventListener('click', function(){ providerSave(slot); });
+    var pk = document.getElementById(_pId(slot,'pick'));
+    if(pk) pk.addEventListener('change', function(){ if(pk.value) providerPick(slot, pk.value); });
+    var del = document.getElementById(_pId(slot,'del'));
+    if(del) del.addEventListener('click', function(){ providerDeleteCurrent(slot); });
+    /* 名字输入回车 = 保存整套 */
+    var nameI = document.getElementById(_pId(slot,'name'));
+    if(nameI) nameI.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); providerSave(slot); } });
+  }
+  document.addEventListener('DOMContentLoaded', function(){ PROVIDER_SLOTS.forEach(providerInitSlot); });
+  /* 兜底：若脚本在 DOM 已就绪之后注入（预览 HTML 单一文档），立即跑一遍 */
+  if(document.readyState === 'interactive' || document.readyState === 'complete'){
+    PROVIDER_SLOTS.forEach(providerInitSlot);
   }
   /* ---------- KWS 切换(3 段方案 B) — 滑动指示器 + 按钮高亮 ---------- */
   function switchKWS(mode, btn){
