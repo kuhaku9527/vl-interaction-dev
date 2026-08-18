@@ -120,7 +120,7 @@
                 asrDraftElement.className = 'result-text jarvis-pilot-message asr-draft';
                 const role = document.createElement('span');
                 role.className = 'jarvis-message-role';
-                role.textContent = window.JoyI18n.localizeUiString('Pilot (listening)');
+                role.textContent = window.JoyI18n.localizeUiString('你 (聆听中)');
                 const body = document.createElement('div');
                 body.className = 'jarvis-message-body';
                 asrDraftElement.appendChild(role);

@@ -4,6 +4,16 @@
 // calls and shared `let`/`const` state keep working exactly as before.
 // window.JoyXxx namespace is attached additively (D-033 pattern).
 
+        // Build a Lucide icon placeholder without any innerHTML assignment.
+        // Avoids sast_xss_inner_html false positives; the <i data-lucide> node
+        // is later converted to an <svg> by the existing
+        // requestAnimationFrame(() => lucide.createIcons()) calls.
+        function createLucideIcon(name) {
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', name);
+            return icon;
+        }
+
         function isVlmHistoryNearBottom(element) {
             if (!element) return false;
             if (element.scrollHeight <= element.clientHeight) return true;
@@ -98,7 +108,7 @@
 
             const role = document.createElement('span');
             role.className = 'jarvis-message-role';
-            role.textContent = isPilot ? 'Pilot' : 'BT-7274';
+            role.textContent = isPilot ? '你 (Me)' : 'BT-7274';
 
             const body = document.createElement('div');
             body.className = 'jarvis-message-body';
@@ -185,13 +195,16 @@
         }
 
         function renderBackgroundSummaryMarkdown(responseDiv, text) {
-            responseDiv.innerHTML = '';
+            responseDiv.replaceChildren();
             responseDiv.classList.remove('standard-rich-response');
             responseDiv.classList.add('background-summary-message');
 
             const label = document.createElement('div');
             label.className = 'background-summary-label';
-            label.innerHTML = '<i data-lucide="sparkles"></i><span>摘要</span>';
+            label.appendChild(createLucideIcon('sparkles'));
+            const labelText = document.createElement('span');
+            labelText.textContent = '摘要';
+            label.appendChild(labelText);
 
             const body = document.createElement('div');
             body.className = 'background-summary-body markdown-rendered';
@@ -221,7 +234,7 @@
                 return;
             }
 
-            responseDiv.innerHTML = '';
+            responseDiv.replaceChildren();
             responseDiv.classList.add('standard-rich-response');
             responseDiv.classList.remove('background-summary-message');
             const explanation = extractBackgroundExplanation(text);
@@ -326,7 +339,10 @@
             button.type = 'button';
             button.className = 'background-jump-button';
             button.dataset.backgroundTaskId = taskId;
-            button.innerHTML = '<i data-lucide="corner-down-left"></i><span>跳转</span>';
+            button.appendChild(createLucideIcon('corner-down-left'));
+            const buttonLabel = document.createElement('span');
+            buttonLabel.textContent = '跳转';
+            button.appendChild(buttonLabel);
             button.title = '跳转到对应的后台结果';
             button.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -475,7 +491,7 @@
 
             const icon = document.createElement('div');
             icon.className = 'background-result-icon';
-            icon.innerHTML = '<i data-lucide="sparkles"></i>';
+            icon.appendChild(createLucideIcon('sparkles'));
 
             const title = document.createElement('div');
             title.className = 'background-result-title';
@@ -508,7 +524,7 @@
                 originAction = document.createElement('button');
                 originAction.type = 'button';
                 originAction.className = 'background-result-action background-origin-action';
-                originAction.innerHTML = '<i data-lucide="corner-up-left"></i>';
+                originAction.appendChild(createLucideIcon('corner-up-left'));
                 originAction.title = '跳转到原问题';
                 originAction.addEventListener('click', (event) => {
                     event.preventDefault();
@@ -581,7 +597,7 @@
 
             const shouldAutoScroll = isVlmHistoryNearBottom(contentDiv);
 
-            contentDiv.innerHTML = '';
+            contentDiv.replaceChildren();
             const fragment = document.createDocumentFragment();
             vlmHistory.forEach((entry, index) => {
                 const { promptDiv, responseDiv } = createHistoryNodes(

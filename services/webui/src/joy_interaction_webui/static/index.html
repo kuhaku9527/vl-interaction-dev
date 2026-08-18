@@ -200,9 +200,9 @@ limitations under the License.
             <nav class="modal-nav" id="modalNav">
                 <h3>Settings</h3>
                 <button class="nav-item active" data-panel="services" type="button"><i data-lucide="cpu"></i> 模型 Model</button>
-                <button class="nav-item" data-panel="services" data-scroll="ttsSectionCard" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
+                <button class="nav-item" data-panel="voice" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
                 <button class="nav-item" data-panel="input" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
-                <button class="nav-item" data-panel="services" data-scroll="memoryStoreSub" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
+                <button class="nav-item" data-panel="memory" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
                 <button class="nav-item" data-panel="wiki" type="button"><i data-lucide="book-open"></i> 知识库 Wiki</button>
                 <button class="nav-item" data-panel="api" type="button"><i data-lucide="activity"></i> 接口状态 API</button>
                 <button class="nav-item" data-panel="appearance" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
@@ -594,6 +594,7 @@ limitations under the License.
                             <span id="svc-summary-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
+                    <div class="panel" id="voicePanel">
                     <div id="ttsSectionCard" style="display:contents">
                     <div class="service-row" data-service="tts" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
@@ -619,6 +620,7 @@ limitations under the License.
                             <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
                             <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
+                    </div>
                     </div>
                     </div>
                     <div class="service-row" data-service="asr" data-mode="cloud">
@@ -706,12 +708,22 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <!-- Memory Store: embedding / vector provider config (hits /v1/settings/network).
-                         The [Local Wiki] network *proxy* sub-object is edited elsewhere (wiki_frontend.js);
-                         this sub-area surfaces the embedding/provider portion, rendered dynamically from the
-                         GET response by joy_ws.js (window.JoyWs.loadMemoryStoreSettings). -->
-                    <div class="memory-store-sub" id="memoryStoreSub">
-                        <div class="service-row-header" style="margin-top:14px;"><i data-lucide="database"></i><span data-i18n>Memory Store</span></div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="icon-btn" id="svcSaveBtn" title="Save all service configs and probe" aria-label="Save all service configs and probe"><i data-lucide="save"></i> Save</button>
+                        <button class="icon-btn" id="svcProbeBtn" title="Re-probe all services" aria-label="Re-probe all services"><i data-lucide="activity"></i> Probe</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory Store: embedding / vector provider config (hits /v1/settings/network).
+                 The [Local Wiki] network *proxy* sub-object is edited elsewhere (wiki_frontend.js);
+                 this sub-area surfaces the embedding/provider portion, rendered dynamically from the
+                 GET response by joy_ws.js (window.JoyWs.loadMemoryStoreSettings). -->
+            <div class="panel" id="memoryPanel">
+                <div class="panel-header" onclick="togglePanel('memoryStoreSub')"><i data-lucide="database"></i><span data-i18n>记忆 Memory</span><i data-lucide="chevron-down" class="panel-toggle" id="memoryStoreSubToggle"></i></div>
+                <div class="panel-content" id="memoryStoreSub">
+                    <div class="memory-store-sub">
+                        <div class="service-row-header" style="margin-top:0;"><i data-lucide="database"></i><span data-i18n>Memory Store</span></div>
                         <div class="input-hint" style="margin:6px 0 10px;">Embedding / vector provider settings. Saved to the memory-store network config.</div>
                         <div id="memoryStoreForm"><!-- dynamically rendered by joy_ws.js --></div>
                         <div id="memoryStoreError" role="alert" aria-live="assertive" style="display:none; color: var(--error-color, #e5484d); white-space: pre-wrap; margin-top: 8px; font-size: 13px;"></div>
@@ -719,11 +731,6 @@ limitations under the License.
                         <div style="display: flex; gap: 8px; margin-top: 10px;">
                             <button class="icon-btn" id="memoryStoreSaveBtn" type="button" aria-label="Save Memory Store settings"><i data-lucide="save"></i> Save Memory Store</button>
                         </div>
-                    </div>
-
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button class="icon-btn" id="svcSaveBtn" title="Save all service configs and probe" aria-label="Save all service configs and probe"><i data-lucide="save"></i> Save</button>
-                        <button class="icon-btn" id="svcProbeBtn" title="Re-probe all services" aria-label="Re-probe all services"><i data-lucide="activity"></i> Probe</button>
                     </div>
                 </div>
             </div>
@@ -2870,6 +2877,8 @@ limitations under the License.
             services: 'servicesPanel',
             input: 'capSettingCard',
             wiki: 'wikiPanel',
+            voice: 'voicePanel',
+            memory: 'memoryPanel',
             api: 'apiStatusSection',
             appearance: 'appearanceSection',
             advanced: 'radioSilenceSection',
