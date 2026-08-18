@@ -22,7 +22,7 @@
         // mirrors the backend's per-turn counter without drift. A late
         // llm_reply whose reply_epoch is older is dropped instead of playing
         // over the user's speech (barge-in / newer turn).
-        let llmReplyGeneration = 0;
+        // (llmReplyGeneration now lives on window.JoyState.llmReplyGeneration — see joy_state.js)
         let llmReplyAudioUrl = null;
         // P0-A per-sentence playback queue (tts_sentence WS messages). The
         // browser plays sentences in `seq` order; `llmReplyQueueSession`

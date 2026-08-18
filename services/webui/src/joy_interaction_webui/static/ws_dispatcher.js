@@ -180,8 +180,7 @@
                 appendOrUpdateBackgroundEntry(data);
             } else if (data.type === 'server_config') {
                 if (data.session_id) {
-                    sessionId = data.session_id;
-                    window.sessionId = sessionId;
+                    window.sessionId = data.session_id;
                 }
                 // Server sent its current configuration (model, api_base, prompt)
                 if (data.model) {
@@ -308,7 +307,7 @@
         // working unchanged.
 
         async function resetSession({ clearConversation = false, cleanupServer = true } = {}) {
-            const oldSessionId = sessionId;
+            const oldSessionId = window.sessionId;
 
             if (!cleanupServer && websocket && websocket.readyState === WebSocket.OPEN) {
                 try {
@@ -318,9 +317,8 @@
                 }
             }
 
-            sessionId = crypto.randomUUID ? crypto.randomUUID() : 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-            window.sessionId = sessionId;
-            console.log('Session reset:', oldSessionId, '->', sessionId);
+            window.sessionId = crypto.randomUUID ? crypto.randomUUID() : 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            console.log('Session reset:', oldSessionId, '->', window.sessionId);
 
             // Reconnect WebSocket with new session_id
             if (websocket) {
@@ -331,7 +329,7 @@
 
             // Clear prompt input
             promptText.value = '';
-            currentPromptText = '';
+            window.JoyState.currentPromptText = '';
 
             if (clearConversation) {
                 clearVlmConversation();

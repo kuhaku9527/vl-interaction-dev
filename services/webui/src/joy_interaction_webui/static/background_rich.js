@@ -482,7 +482,7 @@
             const explanation = extractBackgroundExplanation(text);
             if (!hasRich) {
                 renderTextIntoElement(element, text);
-                element.classList.toggle('markdown-rendered', markdownEnabled);
+                element.classList.toggle('markdown-rendered', window.JoyState.markdownEnabled);
                 return;
             }
 

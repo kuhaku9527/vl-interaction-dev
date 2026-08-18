@@ -83,6 +83,7 @@ limitations under the License.
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"
             integrity="sha384-vdScihEZCfbPnBQf+lc7LgXUdJVYyhC3yWHUW5C5P5GpHRqVnaM6HJELJxT6IqwM"
             crossorigin="anonymous"></script>
+    <script src="./joy_state.js"></script>
     <script src="./screen_capture.js"></script>
     <script src="./capture_webcam.js"></script>
     <script src="./capture_rtsp.js"></script>
@@ -1266,7 +1267,6 @@ limitations under the License.
         let ttsSpeaking = false;
         let pendingTtsText = '';
         let ttsFinishTimer = null;
-        let currentPromptText = '';
         let backgroundTaskEntries = new Map();
         let backgroundSummaryEntries = new Map();
         let lastReadyBackgroundTaskId = '';
@@ -1313,16 +1313,15 @@ limitations under the License.
             ttsPlayAt: null,
         };
         let mobileVoiceMode = false;
-        // Multi-session: one ID per page/tab; sent in WebSocket and /offer so this tab gets only its VLM output
-        let sessionId = crypto.randomUUID ? crypto.randomUUID() : 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-        window.sessionId = sessionId;
+        // Multi-session: one ID per page/tab; sent in WebSocket and /offer so this tab gets only its VLM output.
+        // sessionId now lives on window.sessionId (assigned below; originally a redundant local `let` mirror).
+        window.sessionId = crypto.randomUUID ? crypto.randomUUID() : 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2);
         let isAnalysisRunning = false;
         let selectedCameraId = null;
         let videoDevices = [];
         let preferredCameraFacing = 'environment';
         let rtspSessionId = 'default';  // For RTSP mode
-        // Enable markdown by default (user can disable if they prefer raw text)
-        let markdownEnabled = localStorage.getItem('markdownEnabled') !== 'false';
+        // Markdown toggle default is initialized on window.JoyState.markdownEnabled (see joy_state.js).
         function getCameraFacing(device, index = 0) {
             const label = (device?.label || '').toLowerCase();
             if (/front|user|face|前/.test(label)) {
@@ -2443,7 +2442,7 @@ limitations under the License.
 
             const newPrompt = cleanBackgroundQuestionText(promptText.value.trim());
 
-            currentPromptText = newPrompt;
+            window.JoyState.currentPromptText = newPrompt;
             if (newPrompt) {
                 appendPromptHistoryEntry(newPrompt);
             } else {
@@ -2528,7 +2527,7 @@ limitations under the License.
                 websocket = ws;
                 window.websocket = ws;
             },
-            getSessionId: () => sessionId,
+            getSessionId: () => window.sessionId,
             installLlmReplyHandler,
             dispatchServerMessage
         });
@@ -2796,7 +2795,7 @@ limitations under the License.
             // Initialize prompt display
             const initialPrompt = promptText.value.trim();
             if (initialPrompt) {
-                currentPromptText = initialPrompt;
+                window.JoyState.currentPromptText = initialPrompt;
             }
 
             // Initialize Lucide icons

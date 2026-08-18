@@ -25,16 +25,16 @@
                             // P1 reply_epoch guard: the backend tags every
                             // llm_reply with the generation of the user turn
                             // it answers. A barge-in / newer turn raises
-                            // llmReplyGeneration (from asr_partial /
+                            // window.JoyState.llmReplyGeneration (from asr_partial /
                             // pilot_utterance payloads), so a late broadcast
                             // from an older turn is dropped instead of
                             // rendering/playing over the user's speech.
-                            if (typeof data.reply_epoch === 'number' && data.reply_epoch < llmReplyGeneration) {
+                            if (typeof data.reply_epoch === 'number' && data.reply_epoch < window.JoyState.llmReplyGeneration) {
                                 console.debug('[llm-reply] stale reply_epoch=' + data.reply_epoch +
-                                    ' < generation=' + llmReplyGeneration + '; dropped');
+                                    ' < generation=' + window.JoyState.llmReplyGeneration + '; dropped');
                             } else {
-                                if (typeof data.reply_epoch === 'number' && data.reply_epoch >= llmReplyGeneration) {
-                                    llmReplyGeneration = data.reply_epoch;
+                                if (typeof data.reply_epoch === 'number' && data.reply_epoch >= window.JoyState.llmReplyGeneration) {
+                                    window.JoyState.llmReplyGeneration = data.reply_epoch;
                                 }
                                 btLatency.llmReplyAt = performance.now();
                                 renderBtLatency();
@@ -55,8 +55,8 @@
                             // generation (the backend bumps its per-turn
                             // epoch at the same commit point), so an older
                             // turn's late llm_reply is recognized as stale.
-                            if (typeof data.reply_epoch === 'number' && data.reply_epoch > llmReplyGeneration) {
-                                llmReplyGeneration = data.reply_epoch;
+                            if (typeof data.reply_epoch === 'number' && data.reply_epoch > window.JoyState.llmReplyGeneration) {
+                                window.JoyState.llmReplyGeneration = data.reply_epoch;
                             }
                             clearAsrDraft();
                             appendPilotToResult(data.text || '');
@@ -70,8 +70,8 @@
                             // interrupted turn's late llm_reply is recognized
                             // as stale (the backend bumps its epoch on the
                             // barge-in; the following partials carry it).
-                            if (typeof data.reply_epoch === 'number' && data.reply_epoch > llmReplyGeneration) {
-                                llmReplyGeneration = data.reply_epoch;
+                            if (typeof data.reply_epoch === 'number' && data.reply_epoch > window.JoyState.llmReplyGeneration) {
+                                window.JoyState.llmReplyGeneration = data.reply_epoch;
                             }
                             // ASR streaming hypothesis: render as a draft
                             // bubble so the operator can see what ASR is

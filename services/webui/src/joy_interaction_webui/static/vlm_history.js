@@ -39,7 +39,7 @@
             lastText = '';
             lastTtsEventKey = '';
             lastHistoryKey = null;
-            currentPromptText = '';
+            window.JoyState.currentPromptText = '';
             pendingPromptEntry = null;
 
             resultText.classList.remove('fade');
@@ -809,7 +809,7 @@
             const resolvedBackgroundHandoff = isBackgroundWaitingNotice(displayText)
                 ? null
                 : (backgroundHandoff || null);
-            const prompt = currentPromptText || '';
+            const prompt = window.JoyState.currentPromptText || '';
             const hasInferenceKey = metrics?.total_inferences != null;
             const historyKey = hasInferenceKey
                 ? `count:${metrics.total_inferences}`
@@ -866,7 +866,7 @@
                 pendingEntry.backgroundHandoff = resolvedBackgroundHandoff || pendingEntry.backgroundHandoff || null;
                 pendingEntry.pending = false;
                 lastHistoryKey = historyKey;
-                currentPromptText = '';
+                window.JoyState.currentPromptText = '';
                 pendingPromptEntry = null;
 
                 if (pendingEntry.responseElement) {
@@ -900,7 +900,7 @@
                 };
                 vlmHistory.push(entry);
                 lastHistoryKey = historyKey;
-                currentPromptText = '';
+                window.JoyState.currentPromptText = '';
                 appendVlmHistoryEntry(entry, { animateLast: true });
             }
 
