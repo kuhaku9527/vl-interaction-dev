@@ -254,24 +254,20 @@
         }
 
         .settings-body {
-            padding: 24px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 32px;
+            padding: 20px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
         }
 
         .settings-section {
-            margin-bottom: 24px;
-        }
-
-        .settings-section:last-child {
             margin-bottom: 0;
         }
 
-        /* Full width section for sections that need it */
-        .settings-section.full-width {
-            grid-column: 1 / -1;
-        }
+        /* v6-lite.24 — 删除 .settings-section.full-width 的 grid-column 声明。
+           因果链：原先 .settings-body 是 grid（1fr 1fr），full-width 用 grid-column:1/-1 跨两列；
+           现已将 .settings-body 改为 flex column（见上方 .settings-body 规则），grid-column 在 flex 上下文无效，
+           且该规则对 radioSilenceSection 的视觉不再产生任何作用，属死代码，移除避免误导。 */
 
         .settings-section-title {
             font-size: 14px;
@@ -453,8 +449,8 @@
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            margin-bottom: 16px;
-            overflow: visible;
+            margin-bottom: 0;
+            overflow: hidden;
         }
 
         .sidebar.docked .panel {
@@ -517,10 +513,10 @@
 
         .panel-content {
             padding: 16px;
-            max-height: 1000px;
+            max-height: 4000px;
             transition: max-height 0.3s ease, opacity 0.3s ease;
             opacity: 1;
-            overflow: visible;
+            overflow: auto;
         }
 
         .panel-content.collapsed {
@@ -3798,18 +3794,20 @@
             .container {
                 display: flex;
                 flex-direction: column;
-                height: auto;
-                min-height: calc(100dvh - 59px);
+                flex: 1;
+                min-height: 0;
+                overflow: hidden;
             }
 
             .main-content {
                 order: 1;
+                flex: 1 1 auto;
                 width: 100%;
-                height: calc(100dvh - 59px);
-                min-height: calc(100dvh - 59px);
+                min-height: 0;
+                height: auto;
                 padding: 10px;
                 gap: 10px;
-                overflow: visible;
+                overflow: auto;
                 display: flex;
                 flex-direction: column;
             }
@@ -3945,13 +3943,15 @@
             }
 
             .prompt-editor-inline {
-                position: sticky;
-                bottom: 0;
+                order: 2;
+                position: relative;
                 z-index: 40;
-                margin: auto -12px -12px;
+                flex: 0 0 auto;
+                width: 100%;
+                margin: 0;
                 padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-                background: var(--card-bg);
-                border-top: 1px solid var(--border-color);
+                background: var(--surface-glass);
+                border-top: 1px solid var(--border);
                 box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.16);
             }
 
@@ -4123,7 +4123,7 @@
             }
 
             .prompt-editor-inline {
-                margin: auto -10px -10px;
+                margin: 0;
                 padding-left: 8px;
                 padding-right: 8px;
             }
@@ -4399,25 +4399,10 @@
             --shadow-lift: 0 16px 56px rgba(0,0,0,0.55), 0 2px 0 rgba(255,255,255,0.04) inset;
             --video-bg: radial-gradient(120% 120% at 50% 0%, #1d1d20 0%, #0c0c0d 70%);
         }
-        [data-theme="light"]{
-            --bg:           #F6F6F8;
-            --bg-elev:      #FFFFFF;
-            --bg-elev-2:    #F0F1F3;
-            --bg-input:     #ECECEE;
-            --bg-hover:     #E5E6E9;
-            --surface-glass: rgba(255,255,255,0.78);
-            --overlay-deep:  rgba(255,255,255,0.85);
-            --overlay-soft:  rgba(255,255,255,0.65);
-            --vignette-red:  0.05;
-            --border:        rgba(15,15,17,0.08);
-            --border-strong: rgba(15,15,17,0.14);
-            --text:   #1A1A1C;
-            --text-2: #5F5F66;
-            --text-3: #9090A0;
-            --shadow:     0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 24px rgba(15,15,30,0.08);
-            --shadow-lift:0 16px 48px rgba(15,15,30,0.18), 0 1px 0 rgba(255,255,255,0.7) inset;
-            --video-bg: radial-gradient(120% 120% at 50% 0%, #ECECEE 0%, #DCDCE0 75%);
-        }
+        /* v6-lite.24 — 删除旧的 [data-theme="light"] 亮色 token 块（原 L4402–L4420）。
+           因果链：JS 主题切换实际用 document.body.classList.add('light-theme')（index.html:1781），
+           永不设置 data-theme="light"，故该块是永远不可达的「第二套亮色定义」，与 reskin 基础段
+           body.light-theme（约 L4712）重复且冲突。亮色 token 的 SSOT 已归 body.light-theme，此处删除。 */
 
         /* 主体布局 —— 样板 2 列（视频 + 实时输出） */
         .app{position:relative;z-index:1;display:flex;flex-direction:column;height:100vh;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;}
@@ -4796,7 +4781,7 @@
         .settings-modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:none;align-items:stretch;justify-content:flex-end;}
         .settings-modal.show{display:flex;animation:smFade .18s ease;}
         @keyframes smFade{from{opacity:0}to{opacity:1}}
-        [data-theme="light"] .settings-modal{background:rgba(15,15,30,.32);}
+        body.light-theme .settings-modal{background:rgba(15,15,30,.32);}
         .settings-dialog{width:min(880px,92vw);height:100vh;max-height:100vh;margin:0;background:var(--bg-elev);border:0;border-left:1px solid var(--border);box-shadow:var(--shadow-lift);display:grid;grid-template-columns:220px 1fr;grid-template-rows:auto 1fr;animation:smSlide .22s cubic-bezier(.22,.61,.36,1);overflow:hidden;}
         /* v6-lite.22 — modalNav 与 settings-body 必须同 row 高度（继承 settings-dialog 第二行 = 视口减 header） */
         .settings-dialog .modal-nav{height:100%;min-height:0;}
@@ -4814,7 +4799,8 @@
         .settings-body .section:last-child{border-bottom:0;}
 
         /* 服务/Provider 区块套用样板 provider-mgr（v6-lite.19 已定义 .provider-mgr 等） */
-        .service-row{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-elev-2);}
+        .service-row{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-elev-2);margin-bottom:14px;}
+        .service-row:last-child{margin-bottom:0;}
         .service-row-header{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--text);}
         .service-row-header i{color:var(--brand-bright);}
         .svc-seg{display:flex;background:var(--bg-input);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px;width:fit-content;position:relative;}
@@ -4911,3 +4897,68 @@
         /* v6-lite.22 — 设置页 nav 跳转的 5s 高亮（fade outline），anchors 自动展开 */
         @keyframes nav-flash-fade{0%{outline:2px solid var(--brand);outline-offset:4px;}50%{outline-color:var(--brand-bright);}100%{outline-color:transparent;}}
         .nav-flash{animation:nav-flash-fade 1.2s ease-out 0s 3 alternate;outline:2px solid transparent;outline-offset:4px;border-radius:10px;transition:outline-color .4s ease-out 4.5s;}
+
+        /* ============================================================
+           v6-lite.24 — 移动端级联修复（2026-08-18）
+           因果链：v6 reskin 基础段（约 L4707–L4914）被追加在「≤768 / ≤420 媒体查询」
+           （约 L3713–L4149）之后，按其源码顺序 reskin 基础规则在移动端反客为主，
+           盖掉了媒体查询里的 .container/.main-content/.prompt-editor-inline 等声明，
+           导致：① 输入栏 position:sticky 在 overflow:hidden 链里失效、跑到内容顶部并
+           与视频卡重叠；② .prompt-editor-inline 负 margin（auto -10px）使其超出视口
+           左右各 10px；③ .main-content 被 reskin 基础改回 grid+overflow:hidden，
+           移动端无法内部滚动。
+           修复：把移动端布局意图在这里（reskin 基础之后）重新声明，确保在 ≤768/≤420
+           断点下胜出；不改动上方媒体查询与 reskin 基础本身，保留可回溯性。
+           ============================================================ */
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 12px;
+                gap: 10px;
+            }
+
+            /* 还原 flex 应用壳：容器填满视口剩余高度并裁剪，main 内部滚动，输入栏贴底 */
+            .container {
+                flex: 1;
+                min-height: 0;
+                overflow: hidden;
+            }
+
+            .main-content {
+                order: 1;
+                display: flex;
+                flex-direction: column;
+                flex: 1 1 auto;
+                width: 100%;
+                min-height: 0;
+                height: auto;
+                padding: 10px;
+                gap: 10px;
+                overflow: auto;
+            }
+
+            .video-card { order: 1; }
+            .result-card { order: 2; }
+
+            /* 输入栏：相对定位 + order:2，作为 flex 应用壳最后子项自然贴底；
+               去掉 sticky 与负 margin，杜绝顶部重叠与视口外溢出 */
+            .prompt-editor-inline {
+                order: 2;
+                position: relative;
+                z-index: 40;
+                flex: 0 0 auto;
+                width: 100%;
+                margin: 0;
+                padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+                background: var(--surface-glass);
+                border-top: 1px solid var(--border);
+                box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.16);
+            }
+        }
+
+        @media (max-width: 420px) {
+            .prompt-editor-inline {
+                margin: 0;
+                padding-left: 8px;
+                padding-right: 8px;
+            }
+        }
