@@ -96,6 +96,16 @@ limitations under the License.
     <script>
         document.title = 'JoyAI VL Live';
 
+        // Resilience: lucide is loaded from a CDN. If the CDN is blocked/slow
+        // (offline, firewall, flaky network), `lucide` is undefined and every
+        // `lucide.createIcons()` call would throw, aborting the inline script
+        // mid-bootstrap (theme, settings modal, WS, live-mode handlers...).
+        // Stub it to a no-op so the app degrades gracefully (icons missing)
+        // instead of hard-crashing. Real env with the CDN up is unaffected.
+        if (typeof lucide === 'undefined') {
+            window.lucide = { createIcons: function () {} };
+        }
+
         // Initialize Lucide icons immediately when DOM is ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -1019,6 +1029,10 @@ limitations under the License.
             <button class="chat-prompt-action" id="camBtn" title="视频捕获（点击选择采集源）" type="button" aria-label="视频">
                 <i data-lucide="video"></i>
                 <span class="ctrl-label">视频</span>
+            </button>
+            <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
+                <i data-lucide="radio"></i>
+                <span class="listen-label">Jarvis 唤醒</span>
             </button>
             <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="实时">
                 <i data-lucide="radio-tower"></i>
