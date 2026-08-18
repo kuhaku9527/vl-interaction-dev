@@ -191,3 +191,32 @@ node -e "..."  # 伺服 static/ 于 http://127.0.0.1:8099/
 - `services/webui/src/joy_interaction_webui/static/index.html`：nav 加 `data-panel`/`data-scroll`；`servicesPanel`/`wikiPanel` id；`showSettingsPanel()` 替换旧滚动 handler；`captureOverlay` 已在上一轮移入 `.ctrl-wrap`。
 - `services/webui/src/joy_interaction_webui/static/styles.css`：`#captureOverlay` 加 `inset:auto` + 锚定；新增 `.cat-hidden`。
 - 截图留存：`reports/webui-preview-2026-08-18/`（main/capture-overlay/health-menu/settings-services/settings-appearance/settings-api）。
+
+## 9. 用户三次反馈 —「外观」子节仍有没收起来的 — v6-lite.28（2026-08-18 续）
+
+> 用户截图显示「视觉风格 / WebRTC / 音频输出 / Wake / ASR / Background 模型 / 调试 / 网络代理」7 个子节平铺。
+
+### 9.1 根因
+- 上一轮虽把左侧导航改为面板切换，但 `#appearanceSection` **只包裹了 Column 1**（Layout + Visual Effects）。
+- Column 2 的 7 个子节（Visual Style/WebRTC/Audio Output/Wake·ASR/Background Model/Debug/Network Proxy）是 `.settings-body` 的直接子 `<div>` 下的节点，**不在任何 `PANEL_ROOTS` 内**。
+- 结果是：切换到「模型 / 语音 / 输入 / 记忆 / 知识库 / 接口状态 / 高级 / 关于」时，Column 2 的 7 个子节仍平铺在内容区；只有切换到「外观」时才显得归属正确。
+- 用户看到的“没收起来”即这 7 个节点未真正归入「外观」大类，也没有手风琴互斥，导致视觉上始终是一长串标题行。
+
+### 9.2 改动
+1. **归属修正**（`index.html`）：把 Column 2 的 `<div>` 整体移入 `#appearanceSection` 包裹。
+   - 原结构：`#appearanceSection` 在 Column 1 后提前闭合；Column 2 为 `.settings-body` 的独立子分支。
+   - 新结构：`#appearanceSection` 包裹 Column 1 + Column 2，共 9 个 `.settings-section`。
+2. **手风琴互斥**：新增事件委托监听 `#appearanceSection` 内 `.settings-section-title` 点击。
+   - 展开某一子节时，自动收起同面板其他 8 个子节。
+   - 这样「外观」面板默认只看到 9 个折叠标题；点开一个才展开其表单项，其余保持收起。
+3. **面板切换验证**：`PANEL_ROOTS['appearance'] = 'appearanceSection'` 已经正确隐藏/显示整个大类。
+
+### 9.3 验证（agent-browser @ 1440×900）
+- 切换「外观」：9 个子节 `collapsed=true`，仅标题行可见；`servicesPanel`/`apiStatusSection` 均 `HIDDEN`。✅
+- 点击「布局」标题：仅「布局」展开，其余 8 个自动折叠。✅
+- 切换「模型」：`appearanceSection` `HIDDEN`，无 stray 子节留在内容区。✅
+- `captureOverlay` / health pill 未回归。✅
+
+### 9.4 本次改动文件
+- `services/webui/src/joy_interaction_webui/static/index.html`：Column 2 移入 `#appearanceSection`；新增 appearanceSection 手风琴事件委托。
+- 截图留存：`reports/webui-preview-2026-08-18/settings-appearance-03.png`、`settings-appearance-04.png`、`settings-services-02.png`、`capture-overlay-03.png`。

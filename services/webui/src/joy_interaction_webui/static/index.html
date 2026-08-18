@@ -363,7 +363,6 @@ limitations under the License.
                         </div>
                     </div>
                 </div>
-                </div>
 
                 <!-- Column 2: Input Colors & WebRTC -->
                 <div>
@@ -527,6 +526,7 @@ limitations under the License.
                         </div>
                         <div id="proxyStatus" class="input-hint" style="margin-top: 8px;"></div>
                     </div>
+                </div>
                 </div>
             <!-- Services (4 API selectors, v3.38) -->
             <div class="panel" id="servicesPanel">
@@ -2910,6 +2910,24 @@ limitations under the License.
             // 初始：仅显示「模型」面板（其余收入左侧栏，按需切换）
             showSettingsPanel('services');
         }
+        // 外观面板内的子节使用手风琴：展开一项时自动收起同面板其他项，避免 9 个标题平铺
+        (function () {
+            var appearanceSection = document.getElementById('appearanceSection');
+            if (appearanceSection) {
+                appearanceSection.addEventListener('click', function (e) {
+                    var title = e.target.closest('.settings-section-title');
+                    if (!title) return;
+                    var section = title.parentElement;
+                    if (!section || !section.classList.contains('settings-section')) return;
+                    // inline onclick 已先切换；若当前处于展开状态，收起兄弟节
+                    if (!section.classList.contains('collapsed')) {
+                        appearanceSection.querySelectorAll('.settings-section').forEach(function (sib) {
+                            if (sib !== section) sib.classList.add('collapsed');
+                        });
+                    }
+                });
+            }
+        })();
         var cam = document.getElementById('camBtn');
         var cap = document.getElementById('captureOverlay');
         if (cam && cap) {
