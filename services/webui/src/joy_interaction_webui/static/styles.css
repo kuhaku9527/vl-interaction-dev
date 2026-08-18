@@ -1578,8 +1578,8 @@
             transform: scale(1.1);
         }
 
-        /* Keep controls above VLM overlay in fullscreen so shrink/mirror remain clickable */
-        .video-card.fullscreen .video-controls {
+        /* Keep controls above VLM overlay in fullscreen so mirror/quick-cam/fullscreen remain clickable */
+        .video-card.fullscreen .video-tools {
             z-index: 101;
         }
 
@@ -4418,11 +4418,12 @@
         .tag{font-size:11px;color:var(--text-3);border:1px solid var(--border);padding:2px 8px;border-radius:var(--radius-pill);}
 
         /* health-pill + health-menu */
+        .health-wrap{position:relative;display:inline-flex;}
         .health-pill{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg-elev-2);border:1px solid var(--border);padding:7px 12px;border-radius:var(--radius-pill);font-size:13px;color:var(--text-2);transition:border-color .15s, color .15s;}
         .health-pill:hover{border-color:var(--border-strong);color:var(--text);}
         .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px rgba(47,191,113,.6);}
         .sdot{width:7px;height:7px;border-radius:50%;}
-        .health-menu{position:absolute;top:48px;right:0;width:280px;background:var(--bg-elev);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px;box-shadow:var(--shadow);display:none;z-index:60;}
+        .health-menu{position:absolute;top:calc(100% + 8px);right:0;width:280px;background:var(--bg-elev);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px;box-shadow:var(--shadow);display:none;z-index:60;}
         .health-menu.open{display:block;}
         .health-menu h4{margin:6px 8px 10px;font-size:12px;color:var(--text-3);font-weight:500;}
         .svc{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;}
@@ -4678,7 +4679,7 @@
 
         /* Capture overlay → cap-pop（锚定输入栏，非全屏浮层；保留 id 供 JS 引用） */
         #captureFabBtn{display:none;}
-        #captureOverlay{position:fixed;left:18px;bottom:86px;width:360px;max-height:62vh;overflow:auto;z-index:120;display:none;border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lift);background:var(--bg-elev);padding:14px;animation:capPopIn .18s ease;}
+        #captureOverlay{position:absolute;inset:auto;bottom:calc(100% + 10px);left:-4px;width:360px;max-height:62vh;overflow:auto;z-index:120;display:none;border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lift);background:var(--bg-elev);padding:14px;animation:capPopIn .18s ease;}
         #captureOverlay.hidden{display:none !important;}
         #captureOverlay:not(.hidden){display:block;}
         #captureOverlay .capture-overlay-card{background:transparent;border:0;box-shadow:none;padding:0;}
@@ -4745,11 +4746,13 @@
         .video-card{background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:0;position:relative;}
         .video-card video{width:100%;height:100%;object-fit:cover;background:#000;}
         .video-card.fullscreen{position:fixed;inset:0;z-index:200;border-radius:0;}
-        .fullscreen-btn,#quickCameraBtn,.video-control-btn{position:absolute;width:34px;height:34px;border-radius:9px;background:var(--overlay-deep);border:1px solid var(--border);backdrop-filter:blur(8px);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;transition:.15s;}
-        .fullscreen-btn{top:14px;right:14px;}
-        #quickCameraBtn{top:14px;right:56px;}
-        .video-controls{position:absolute;top:60px;left:14px;display:flex;gap:8px;z-index:3;}
-        .fullscreen-btn:hover,#quickCameraBtn:hover,.video-control-btn:hover{border-color:var(--border-strong);color:var(--brand-bright);}
+        .video-tools{position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:3;}
+        .video-tools .fullscreen-btn,.video-tools #quickCameraBtn,.video-tools .video-control-btn{position:static;width:34px;height:34px;border-radius:9px;background:var(--overlay-deep);border:1px solid var(--border);backdrop-filter:blur(8px);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;}
+        .video-tools .fullscreen-btn:hover,.video-tools #quickCameraBtn:hover,.video-tools .video-control-btn:hover{border-color:var(--border-strong);color:var(--brand-bright);}
+        /* quick-camera 是带文字的胶囊按钮，宽度自适应 */
+        .video-tools #quickCameraBtn{width:auto;min-width:34px;padding:0 10px;gap:6px;font-size:12px;font-weight:600;}
+        .video-tools #quickCameraBtn .lucide,.video-tools #quickCameraBtn i{width:16px;height:16px;flex-shrink:0;}
+        .video-tools #quickCameraBtn span{white-space:nowrap;}
 
         .result-card{background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:0;}
         .result-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);gap:10px;}
@@ -4797,6 +4800,8 @@
         .settings-dialog .modal-nav{border-right:1px solid var(--border);padding:18px 12px;display:flex;flex-direction:column;gap:2px;overflow:auto;}
         .settings-body .section{padding:22px;border-bottom:1px solid var(--border);}
         .settings-body .section:last-child{border-bottom:0;}
+        /* 设置面板切换：仅显示当前大类，其余收入左侧栏（参考样板 showSection 模型） */
+        .cat-hidden{display:none !important;}
 
         /* 服务/Provider 区块套用样板 provider-mgr（v6-lite.19 已定义 .provider-mgr 等） */
         .service-row{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-elev-2);margin-bottom:14px;}
@@ -4869,8 +4874,7 @@
          * 2) 顶栏多余 status-badge（LLM/TTS/KWS/Jarvis/Live/记忆/知识库/静默关/连接状态）：设计未显示，CSS 隐藏（JS 仍轮询 + 更新 DOM，但不渲染）
          * 3) .title-section 新增 .subtitle 样式（"本地 · 开源 Apache 2.0" 副标，弱化对比） */
         .header .sidebar-toggle-btn{display:none !important;}
-        .header .header-right > .status-badge,
-        .header .header-right > .health-menu{display:none !important;}
+        .header .header-right > .status-badge{display:none !important;}
         .title-section .subtitle{font-size:11px;color:var(--text-3);margin-top:1px;letter-spacing:.02em;display:block !important;}
         .title-section h1{font-size:18px;line-height:1.1;}
 

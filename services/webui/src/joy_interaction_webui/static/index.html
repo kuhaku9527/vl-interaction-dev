@@ -146,14 +146,13 @@ limitations under the License.
                 <button class="chip mode-chip active" data-mode="live" type="button"><span class="cdot"></span>live</button>
                 <button class="chip mode-chip" data-mode="kws" type="button"><span class="cdot"></span>kws</button>
             </div>
-            <div class="health-pill" id="healthPill" title="Service health · click for details">
-                <span class="dot"></span>
-                <span id="healthPillText">系统正常</span>
-                <i data-lucide="chevron-down"></i>
-            </div>
-        </div>
-        <div class="header-right">
-            <div class="health-menu" id="healthMenu">
+            <div class="health-wrap">
+                <div class="health-pill" id="healthPill" title="Service health · click for details">
+                    <span class="dot"></span>
+                    <span id="healthPillText">系统正常</span>
+                    <i data-lucide="chevron-down"></i>
+                </div>
+                <div class="health-menu" id="healthMenu">
                 <h4>Service Health</h4>
                 <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Main LLM</span><span class="svc-state" id="hm-main_llm">--</span></div>
                 <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Summarizer</span><span class="svc-state" id="hm-summarizer">--</span></div>
@@ -163,6 +162,9 @@ limitations under the License.
                 <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>ASR</span><span class="svc-state" id="hm-asr">--</span></div>
                 <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Agent</span><span class="svc-state" id="hm-agent">--</span></div>
             </div>
+            </div>
+        </div>
+        <div class="header-right">
             <span class="status-badge disconnected" id="connectionStatus" role="status" aria-live="polite" data-i18n>Disconnected</span>
             <span class="status-badge llm-unknown" id="llmServiceStatus" title="LLM (llama-server) reachability -- polled every 3s">LLM ?</span>
             <span class="status-badge llm-unknown" id="ttsServiceStatus" title="TTS (voice_clone_api) reachability -- polled every 3s">TTS ?</span>
@@ -197,19 +199,20 @@ limitations under the License.
             </div>
             <nav class="modal-nav" id="modalNav">
                 <h3>Settings</h3>
-                <button class="nav-item active" data-target="servicesConfig" type="button"><i data-lucide="cpu"></i> 模型 Model</button>
-                <button class="nav-item" data-target="ttsSectionCard" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
-                <button class="nav-item" data-target="capSettingCard" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
-                <button class="nav-item" data-target="memoryStoreSub" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
-                <button class="nav-item" data-target="knowledgeBase" type="button"><i data-lucide="book-open"></i> 知识库 Wiki</button>
-                <button class="nav-item" data-target="appearanceSection" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
-                <button class="nav-item" data-target="radioSilenceSection" type="button"><i data-lucide="layers"></i> 高级 Advanced</button>
-                <button class="nav-item" data-target="aboutFooter" type="button"><i data-lucide="info"></i> 关于 About</button>
+                <button class="nav-item active" data-panel="services" type="button"><i data-lucide="cpu"></i> 模型 Model</button>
+                <button class="nav-item" data-panel="services" data-scroll="ttsSectionCard" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
+                <button class="nav-item" data-panel="input" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
+                <button class="nav-item" data-panel="services" data-scroll="memoryStoreSub" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
+                <button class="nav-item" data-panel="wiki" type="button"><i data-lucide="book-open"></i> 知识库 Wiki</button>
+                <button class="nav-item" data-panel="api" type="button"><i data-lucide="activity"></i> 接口状态 API</button>
+                <button class="nav-item" data-panel="appearance" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
+                <button class="nav-item" data-panel="advanced" type="button"><i data-lucide="layers"></i> 高级 Advanced</button>
+                <button class="nav-item" data-panel="about" type="button"><i data-lucide="info"></i> 关于 About</button>
                 <div class="nav-foot"><span class="ver">JoyAI VL · v6-lite.22</span></div>
             </nav>
         <div class="settings-body">
             <!-- [Local Wiki] F2: API Status panel (top of settings, ADR-0012 §5) -->
-            <div class="settings-section" style="grid-column: 1 / -1;">
+            <div class="settings-section" id="apiStatusSection" style="grid-column: 1 / -1;">
                 <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>API Status</div>
                 <div class="api-status-grid" id="apiStatusGrid">
                     <div class="api-status-item"><span class="status-dot" id="status-main_llm"></span><span class="api-status-name" data-i18n>Main LLM</span><span class="api-status-meta" id="meta-main_llm">--</span></div>
@@ -526,7 +529,7 @@ limitations under the License.
                     </div>
                 </div>
             <!-- Services (4 API selectors, v3.38) -->
-            <div class="panel">
+            <div class="panel" id="servicesPanel">
                 <div class="panel-header" onclick="togglePanel('servicesConfig')">
                     <div class="panel-title">
                         <span class="panel-icon"><i data-lucide="plug"></i></span>
@@ -735,7 +738,7 @@ limitations under the License.
             </div>
 
             <!-- [Local Wiki] F4: Knowledge Base panel (ADR-0012 §7.3) -->
-            <div class="panel">
+            <div class="panel" id="wikiPanel">
                 <div class="panel-header" onclick="togglePanel('knowledgeBase')">
                     <div class="panel-title">
                         <span class="panel-icon"><i data-lucide="book-open"></i></span>
@@ -812,15 +815,19 @@ limitations under the License.
         <div class="main-content">
             <!-- Video Feed -->
             <div class="video-card" id="videoCard">
-                <!-- Fullscreen Button (top-right corner) -->
-                <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle fullscreen" aria-label="Toggle fullscreen">
-                    <i data-lucide="maximize" id="fullscreenIcon"></i>
-                </button>
-
-                <button class="quick-camera-btn" id="quickCameraBtn" title="切换前置/后置" type="button" aria-label="切换前置/后置">
-                    <i data-lucide="camera"></i>
-                    <span id="quickCameraLabel">后置</span>
-                </button>
+                <!-- 视频工具栏（右上）：镜像、切换前后置、全屏 —— 全部收纳在 .video-tools 中 -->
+                <div class="video-tools">
+                    <button class="video-control-btn" id="mirrorBtn" title="Mirror video" aria-label="Mirror video">
+                        <i data-lucide="flip-horizontal"></i>
+                    </button>
+                    <button class="quick-camera-btn" id="quickCameraBtn" title="切换前置/后置" type="button" aria-label="切换前置/后置">
+                        <i data-lucide="camera"></i>
+                        <span id="quickCameraLabel">后置</span>
+                    </button>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+                        <i data-lucide="maximize" id="fullscreenIcon"></i>
+                    </button>
+                </div>
 
                 <div class="fullscreen-prompt-overlay" id="fullscreenPromptOverlay"></div>
 
@@ -832,13 +839,6 @@ limitations under the License.
                     </div>
                     <div class="vlm-content" id="fullscreenVlmContent" data-i18n>Ready</div>
                     <div class="vlm-metrics" id="fullscreenVlmMetrics"></div>
-                </div>
-
-                <!-- Legacy controls (kept for mirror functionality) -->
-                <div class="video-controls" style="top: 64px;">
-                    <button class="video-control-btn" id="mirrorBtn" title="Mirror video" aria-label="Mirror video">
-                        <i data-lucide="flip-horizontal"></i> Mirror
-                    </button>
                 </div>
 
                 <video id="videoElement" autoplay playsinline muted></video>
@@ -954,82 +954,84 @@ limitations under the License.
 <button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="document.getElementById('captureOverlay').classList.toggle('hidden')">
     <i data-lucide="video"></i>
 </button>
-<div class="capture-overlay hidden" id="captureOverlay" role="dialog" aria-modal="true" aria-label="Video Source" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="capture-overlay-card">
-        <div class="capture-overlay-header">
-            <span class="capture-overlay-title"><i data-lucide="video"></i> <span data-i18n>Video Source</span></span>
-            <button class="capture-overlay-close" id="captureOverlayClose" type="button" aria-label="Close" title="Close" onclick="document.getElementById('captureOverlay').classList.add('hidden')"><i data-lucide="x"></i></button>
-        </div>
-        <div class="capture-overlay-body">
-        <!-- Webcam capture -->
-        <div class="capture-block">
-            <div class="capture-block-header"><i data-lucide="video"></i> <span data-i18n>Webcam Capture</span></div>
-            <div class="form-group">
-                <label data-i18n>Camera Selection</label>
-                <select id="cameraSelect"><option value="" data-i18n>Detecting cameras...</option></select>
-            </div>
-            <div class="form-group">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <button class="icon-btn" id="webcamStartBtn" title="Start webcam capture" type="button" aria-label="Start webcam capture" data-i18n-title="Start webcam capture" data-i18n-aria="Start webcam capture"><i data-lucide="play"></i></button>
-                    <button class="icon-btn" id="webcamStopBtn" title="Stop webcam capture" type="button" disabled aria-label="Stop webcam capture" data-i18n-title="Stop webcam capture" data-i18n-aria="Stop webcam capture"><i data-lucide="square"></i></button>
-                    <span id="webcamStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
-                </div>
-                <div class="input-hint" style="margin-top: 8px;">Local preview + WebRTC to backend. VLM runs automatically while streaming.</div>
-            </div>
-        </div>
-
-        <!-- RTSP capture -->
-        <div class="capture-block">
-            <div class="capture-block-header"><i data-lucide="cast"></i> <span data-i18n>RTSP Stream</span> <span class="beta-badge">BETA</span></div>
-            <div class="form-group">
-                <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
-                    <label style="margin-bottom: 0; flex: 1;" data-i18n>RTSP Stream URL</label>
-                    <button class="icon-btn" id="testRtspBtn" title="Test Connection" aria-label="Test Connection"><i data-lucide="test-tube-diagonal"></i></button>
-                </div>
-                <input type="text" id="rtspUrl" placeholder="rtsp://192.168.1.100:554/stream">
-                <div id="rtspStatus" class="input-hint" style="margin-top: -4px; margin-bottom: 8px; display: none;"></div>
-            </div>
-            <div class="form-group">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <button class="icon-btn" id="rtspStartBtn" title="Start RTSP capture" type="button" aria-label="Start RTSP capture" data-i18n-title="Start RTSP capture" data-i18n-aria="Start RTSP capture"><i data-lucide="play"></i></button>
-                    <button class="icon-btn" id="rtspStopBtn" title="Stop RTSP capture" type="button" disabled aria-label="Stop RTSP capture" data-i18n-title="Stop RTSP capture" data-i18n-aria="Stop RTSP capture"><i data-lucide="square"></i></button>
-                    <span id="rtspCaptureStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
-                </div>
-                <div id="rtspBetaWarning" class="input-hint" style="margin-top: 8px; color: var(--warning-color);"><strong>Beta:</strong> Tested with Reolink RLC-811A.</div>
-            </div>
-            <div class="form-group">
-                <label data-i18n>Processing Interval</label>
-                <input type="number" id="processEvery" value="1" min="0.1" max="60" step="0.1">
-                <div class="input-hint">Seconds between each VLM inference (default: 1s)</div>
-            </div>
-            <div class="form-group" style="margin-bottom: 0;">
-                <label data-i18n>Frames per Batch</label>
-                <input type="number" id="framesPerBatch" value="1" min="1" max="30" step="1">
-                <div class="input-hint">Number of frames batched per inference (default: 1)</div>
-            </div>
-        </div>
-
-        <!-- Screen capture -->
-        <div class="capture-block">
-            <div class="capture-block-header"><i data-lucide="monitor"></i> <span data-i18n>Screen Capture</span></div>
-            <div class="form-group">
-                <div class="input-hint" style="margin-bottom: 8px;">Browser-native getDisplayMedia, 1 fps JPEG frames.</div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <button class="icon-btn" id="screenStartBtn" title="Start screen capture" type="button" aria-label="Start screen capture" data-i18n-title="Start screen capture" data-i18n-aria="Start screen capture"><i data-lucide="play"></i></button>
-                    <button class="icon-btn" id="screenStopBtn" title="Stop screen capture" type="button" disabled aria-label="Stop screen capture" data-i18n-title="Stop screen capture" data-i18n-aria="Stop screen capture"><i data-lucide="square"></i></button>
-                    <span id="screenStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
-                </div>
-            </div>
-        </div>
-        </div>
-    </div>
-    </div>
-
+    
     <div class="chat-prompt-shell" id="promptEditor">
+            <div class="ctrl-wrap">
             <button class="chat-prompt-action" id="camBtn" title="视频捕获（点击选择采集源）" type="button" aria-label="视频">
                 <i data-lucide="video"></i>
                 <span class="ctrl-label">视频</span>
             </button>
+            <div class="capture-overlay hidden" id="captureOverlay" role="dialog" aria-modal="true" aria-label="Video Source" onclick="if(event.target===this)this.classList.add('hidden')">
+                <div class="capture-overlay-card">
+                    <div class="capture-overlay-header">
+                        <span class="capture-overlay-title"><i data-lucide="video"></i> <span data-i18n>Video Source</span></span>
+                        <button class="capture-overlay-close" id="captureOverlayClose" type="button" aria-label="Close" title="Close" onclick="document.getElementById('captureOverlay').classList.add('hidden')"><i data-lucide="x"></i></button>
+                    </div>
+                    <div class="capture-overlay-body">
+                    <!-- Webcam capture -->
+                    <div class="capture-block">
+                        <div class="capture-block-header"><i data-lucide="video"></i> <span data-i18n>Webcam Capture</span></div>
+                        <div class="form-group">
+                            <label data-i18n>Camera Selection</label>
+                            <select id="cameraSelect"><option value="" data-i18n>Detecting cameras...</option></select>
+                        </div>
+                        <div class="form-group">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="icon-btn" id="webcamStartBtn" title="Start webcam capture" type="button" aria-label="Start webcam capture" data-i18n-title="Start webcam capture" data-i18n-aria="Start webcam capture"><i data-lucide="play"></i></button>
+                                <button class="icon-btn" id="webcamStopBtn" title="Stop webcam capture" type="button" disabled aria-label="Stop webcam capture" data-i18n-title="Stop webcam capture" data-i18n-aria="Stop webcam capture"><i data-lucide="square"></i></button>
+                                <span id="webcamStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
+                            </div>
+                            <div class="input-hint" style="margin-top: 8px;">Local preview + WebRTC to backend. VLM runs automatically while streaming.</div>
+                        </div>
+                    </div>
+            
+                    <!-- RTSP capture -->
+                    <div class="capture-block">
+                        <div class="capture-block-header"><i data-lucide="cast"></i> <span data-i18n>RTSP Stream</span> <span class="beta-badge">BETA</span></div>
+                        <div class="form-group">
+                            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
+                                <label style="margin-bottom: 0; flex: 1;" data-i18n>RTSP Stream URL</label>
+                                <button class="icon-btn" id="testRtspBtn" title="Test Connection" aria-label="Test Connection"><i data-lucide="test-tube-diagonal"></i></button>
+                            </div>
+                            <input type="text" id="rtspUrl" placeholder="rtsp://192.168.1.100:554/stream">
+                            <div id="rtspStatus" class="input-hint" style="margin-top: -4px; margin-bottom: 8px; display: none;"></div>
+                        </div>
+                        <div class="form-group">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="icon-btn" id="rtspStartBtn" title="Start RTSP capture" type="button" aria-label="Start RTSP capture" data-i18n-title="Start RTSP capture" data-i18n-aria="Start RTSP capture"><i data-lucide="play"></i></button>
+                                <button class="icon-btn" id="rtspStopBtn" title="Stop RTSP capture" type="button" disabled aria-label="Stop RTSP capture" data-i18n-title="Stop RTSP capture" data-i18n-aria="Stop RTSP capture"><i data-lucide="square"></i></button>
+                                <span id="rtspCaptureStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
+                            </div>
+                            <div id="rtspBetaWarning" class="input-hint" style="margin-top: 8px; color: var(--warning-color);"><strong>Beta:</strong> Tested with Reolink RLC-811A.</div>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n>Processing Interval</label>
+                            <input type="number" id="processEvery" value="1" min="0.1" max="60" step="0.1">
+                            <div class="input-hint">Seconds between each VLM inference (default: 1s)</div>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label data-i18n>Frames per Batch</label>
+                            <input type="number" id="framesPerBatch" value="1" min="1" max="30" step="1">
+                            <div class="input-hint">Number of frames batched per inference (default: 1)</div>
+                        </div>
+                    </div>
+            
+                    <!-- Screen capture -->
+                    <div class="capture-block">
+                        <div class="capture-block-header"><i data-lucide="monitor"></i> <span data-i18n>Screen Capture</span></div>
+                        <div class="form-group">
+                            <div class="input-hint" style="margin-bottom: 8px;">Browser-native getDisplayMedia, 1 fps JPEG frames.</div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="icon-btn" id="screenStartBtn" title="Start screen capture" type="button" aria-label="Start screen capture" data-i18n-title="Start screen capture" data-i18n-aria="Start screen capture"><i data-lucide="play"></i></button>
+                                <button class="icon-btn" id="screenStopBtn" title="Stop screen capture" type="button" disabled aria-label="Stop screen capture" data-i18n-title="Stop screen capture" data-i18n-aria="Stop screen capture"><i data-lucide="square"></i></button>
+                                <span id="screenStatus" class="input-hint" style="margin: 0;" data-i18n>Idle</span>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                </div>
+        </div>
             <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
                 <i data-lucide="radio"></i>
                 <span class="listen-label">Jarvis 唤醒</span>
@@ -2861,32 +2863,52 @@ limitations under the License.
                 }
             });
         }
+        // 设置左侧导航：面板切换（参考 design/joyai-redesign-preview.html 的 showSection 模型）
+        // 点击导航项 → 仅显示对应大类面板，其余隐藏（不再把所有 section 平铺长滚）。
         var nav = document.getElementById('modalNav');
-        var body = document.querySelector('.settings-body');
-        if (nav && body) {
+        var PANEL_ROOTS = {
+            services: 'servicesPanel',
+            input: 'capSettingCard',
+            wiki: 'wikiPanel',
+            api: 'apiStatusSection',
+            appearance: 'appearanceSection',
+            advanced: 'radioSilenceSection',
+            about: 'aboutFooter'
+        };
+        function showSettingsPanel(key, scrollId) {
+            Object.keys(PANEL_ROOTS).forEach(function (k) {
+                var el = document.getElementById(PANEL_ROOTS[k]);
+                if (el) el.classList.toggle('cat-hidden', k !== key);
+            });
+            if (nav) {
+                nav.querySelectorAll('.nav-item').forEach(function (n) {
+                    n.classList.toggle('active', n.getAttribute('data-panel') === key);
+                });
+            }
+            if (scrollId) {
+                var s = document.getElementById(scrollId);
+                if (s) {
+                    // 确保目标所在的折叠面板（如 servicesConfig）已展开
+                    var pc = s.closest('.panel-content.collapsed');
+                    if (pc) {
+                        pc.classList.remove('collapsed');
+                        var pt = document.getElementById(pc.id + 'Toggle');
+                        if (pt) pt.classList.remove('collapsed');
+                    }
+                    s.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    s.classList.add('nav-flash');
+                    setTimeout(function () { s.classList.remove('nav-flash'); }, 5000);
+                }
+            }
+        }
+        if (nav) {
             nav.querySelectorAll('.nav-item').forEach(function (it) {
                 it.addEventListener('click', function () {
-                    nav.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
-                    it.classList.add('active');
-                    var t = document.getElementById(it.getAttribute('data-target'));
-                    if (!t) return;
-                    // 1) 自动展开 target 自身或任何折叠的父级 .settings-section / .panel-content
-                    var node = t;
-                    while (node && node !== body) {
-                        if (node.classList && (node.classList.contains('settings-section') || node.classList.contains('panel-content')) && node.classList.contains('collapsed')) {
-                            node.classList.remove('collapsed');
-                            var tg = document.getElementById(node.id + 'Toggle');
-                            if (tg) tg.classList.remove('collapsed');
-                        }
-                        node = node.parentElement;
-                    }
-                    // 2) 短暂 outline 高亮（5s 自动消失）
-                    t.classList.add('nav-flash');
-                    setTimeout(function () { t.classList.remove('nav-flash'); }, 5000);
-                    // 3) scroll
-                    if (t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    showSettingsPanel(it.getAttribute('data-panel'), it.getAttribute('data-scroll'));
                 });
             });
+            // 初始：仅显示「模型」面板（其余收入左侧栏，按需切换）
+            showSettingsPanel('services');
         }
         var cam = document.getElementById('camBtn');
         var cap = document.getElementById('captureOverlay');

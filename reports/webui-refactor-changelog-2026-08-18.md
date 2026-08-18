@@ -147,3 +147,47 @@ node -e "..."  # 伺服 static/ 于 http://127.0.0.1:8099/
 #  - 移动：.prompt-editor-inline T≈视口底、L=0 R=视口宽、position=relative
 #  - 亮色：点击 theme-toggle → body.light-theme；.settings-modal 背景 rgba(15,15,30,.32)
 ```
+
+## 8. 用户二次反馈（4 点）修复 — v6-lite.27（2026-08-18 续）
+
+> 验证：浏览器实跑（agent-browser @ 1440×900，伺服 `static/` 于 `:8099`）。
+> 全部修改留痕：HTML 结构性改动（captureOverlay 移入 ctrl-wrap、nav 加 data-panel）+ CSS 锚定/面板切换。
+
+### 8.1 镜头反转 / 前置切换（反馈点 1）
+- **现状核实**：`#mirrorBtn`（L820）与 `#quickCameraBtn`（L823）已统一收进 `.video-tools`（视频卡片右上角，`top:14px;right:14px`），**位置已正确**。
+- **功能核实（均有实现，非本次新增）**：
+  - `mirrorBtn` → `videoElement.classList.toggle('mirrored')`（L2612），点击即镜像。
+  - `quickCameraBtn` → `switchCameraByFacing(nextFacing)`（L1447）；`videoDevices.length<2` 时禁用（L1340）。
+- **结论**：位置与功能均已就位，本次仅确认 + 浏览器验证（DOM 实测三按钮归位：`mirror/quickCamera/fullscreen` 同处右上工具栏）。
+
+### 8.2 视频按钮展开太短 / 看不到（反馈点 2）
+- **根因（关键因果链）**：`#captureOverlay` 上一轮已从独立 `position:fixed;left:18px;bottom:86px` 移入 `.ctrl-wrap`（锚定 camBtn）。
+  但 `.capture-overlay` 基类（约 L1183）带 `inset:0`，且 `#captureOverlay` 的 id 规则**未重置** top/right/bottom/left
+  → 叠加 `position:absolute` 后，`inset:0` 把它钉死在极小的 `.ctrl-wrap` 盒子里 → 高度坍缩到 ~30px（实测 `clientH≈20`、`scrollH≈854`，内容溢出不可见）。
+- **改动**（`styles.css` `#captureOverlay`，L4682）：
+  `position:absolute; inset:auto; bottom:calc(100% + 10px); left:-4px; width:360px; max-height:62vh; overflow:auto;`
+  — `inset:auto` 解除基类 `inset:0` 的钉死，仅用 `bottom` 锚定按钮上方，`max-height:62vh` 让长内容滚动。
+- **验证**（点击「视频」按钮实测）：`display=block; top=257; bottom=815; height≈558; fits=true`（视口 900），
+  854px 内容在 558px 可视区内可滚动 → 完整可见。✅
+
+### 8.3 设置小节未收纳到左侧栏（反馈点 3）
+- **根因**：旧 `.modal-nav` 点击仅 `scrollIntoView` + 闪光，**不隐藏其他 section** → 全部 13 个 section 平铺长滚；
+  用户看到的「布局/视觉效果/视觉风格/WebRTC/音频输出/Wake·ASR/Background 模型/调试/网络代理」9 个子节挤在 `appearanceSection` 里一并平铺。
+- **改动（参考样板 `showSection` 面板切换模型）**：
+  1. `index.html` 导航项改挂 `data-panel`（+ `data-scroll` 用于语音/记忆跳转到 Services 内子块）；
+     两个 `.panel` 容器补 `id="servicesPanel"` / `id="wikiPanel"`（`appearanceSection`/`apiStatusSection`/`radioSilenceSection`/`capSettingCard`/`aboutFooter` 已有 id）。
+  2. 新增 `showSettingsPanel(key, scrollId)`：对 7 个大类根（`services/input/wiki/api/appearance/advanced/about`）
+     仅显示当前、其余加 `.cat-hidden`；同步 `nav-item.active`；`scrollId` 时展开祖先 `.panel-content.collapsed` 并滚动高亮。
+  3. `styles.css` 加 `.cat-hidden{display:none !important;}`（L4804 附近）。
+- **效果**：左侧栏成为真正的分类导航；点「外观」即**仅显示**该大类（9 个子节以折叠手风琴呈现），其余大类隐藏。
+- **验证**：默认 `servicesPanel` 可见、其余 6 类 `HIDDEN`；点「外观」→ `appearanceSection` 可见、其余 `HIDDEN`、`activeNav=appearance`；点「接口状态」→ `apiStatusSection` 可见。✅
+
+### 8.4 接口状态 + 系统正常不可点击 / 未收纳（反馈点 4）
+- **系统正常健康丸**：`health-wrap`/`health-menu` 上一轮已修（脱离被 CSS 隐藏的 `.header-right`）。本次验证：点击「系统正常」→
+  `healthMenu.open=true; display=block; top=55; bottom=336; fits=true` → 下拉完整可见、可点击。✅
+- **接口状态**：原为平铺 section，现挂 `data-panel="api"` → 左侧栏「接口状态 API」独立大类，点击即显示 `apiStatusSection`（含 5 个状态项 Main/Summarizer/Embedding/Memory/TTS）。已「收纳」入左侧栏。✅
+
+### 8.5 本次改动文件
+- `services/webui/src/joy_interaction_webui/static/index.html`：nav 加 `data-panel`/`data-scroll`；`servicesPanel`/`wikiPanel` id；`showSettingsPanel()` 替换旧滚动 handler；`captureOverlay` 已在上一轮移入 `.ctrl-wrap`。
+- `services/webui/src/joy_interaction_webui/static/styles.css`：`#captureOverlay` 加 `inset:auto` + 锚定；新增 `.cat-hidden`。
+- 截图留存：`reports/webui-preview-2026-08-18/`（main/capture-overlay/health-menu/settings-services/settings-appearance/settings-api）。
