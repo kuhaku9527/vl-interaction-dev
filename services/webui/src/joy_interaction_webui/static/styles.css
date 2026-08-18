@@ -526,6 +526,23 @@
             overflow: hidden;
         }
 
+        /* Settings root panels (services/voice/memory/wiki) are top-level sections
+           accessed via the left nav; they should not have collapsible accordion headers. */
+        .settings-root-header {
+            cursor: default;
+            user-select: none;
+        }
+        .settings-root-header .panel-toggle {
+            display: none;
+        }
+        .settings-root-content,
+        .settings-root-content.collapsed {
+            max-height: none;
+            opacity: 1;
+            padding: 16px;
+            overflow: visible;
+        }
+
         #apiKeyField {
             max-height: 100px;
             transition: max-height 0.3s ease, opacity 0.3s ease;
@@ -4679,7 +4696,7 @@
 
         /* Capture overlay → cap-pop（锚定输入栏，非全屏浮层；保留 id 供 JS 引用） */
         #captureFabBtn{display:none;}
-        #captureOverlay{position:absolute;inset:auto;bottom:calc(100% + 10px);left:-4px;width:360px;max-height:62vh;overflow:auto;z-index:120;display:none;border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lift);background:var(--bg-elev);padding:14px;animation:capPopIn .18s ease;}
+        #captureOverlay{position:fixed;inset:auto;width:360px;max-height:62vh;overflow:auto;z-index:9999;display:none;border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-lift);background:var(--bg-elev);padding:14px;animation:capPopIn .18s ease;}
         #captureOverlay.hidden{display:none !important;}
         #captureOverlay:not(.hidden){display:block;}
         #captureOverlay .capture-overlay-card{background:transparent;border:0;box-shadow:none;padding:0;}

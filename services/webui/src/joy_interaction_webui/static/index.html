@@ -530,15 +530,14 @@ limitations under the License.
                 </div>
                 </div>
             <!-- Services (4 API selectors, v3.38) -->
-            <div class="panel" id="servicesPanel">
-                <div class="panel-header" onclick="togglePanel('servicesConfig')">
+            <div class="panel settings-root-panel" id="servicesPanel">
+                <div class="panel-header settings-root-header">
                     <div class="panel-title">
                         <span class="panel-icon"><i data-lucide="plug"></i></span>
-                        <span class="panel-title-text" data-i18n>Services</span>
+                        <span class="panel-title-text" data-i18n>模型 Model</span>
                     </div>
-                    <span class="panel-toggle collapsed" id="servicesConfigToggle">▼</span>
                 </div>
-                <div class="panel-content" id="servicesConfig">
+                <div class="panel-content settings-root-content" id="servicesConfig">
                     <div class="input-hint" style="margin-bottom: 12px;">Six pluggable backends. Save applies at runtime; no service restart.</div>
                     <div class="service-row" data-service="llm" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="brain"></i><span>LLM</span><span class="service-badge" id="badge-llm">--</span></div>
@@ -594,35 +593,6 @@ limitations under the License.
                             <button class="icon-btn" id="svc-summary-test-btn" type="button" title="Test Summary connection" aria-label="Test Summary connection"><i data-lucide="plug-zap"></i><span id="svc-summary-test-label">Test</span></button>
                             <span id="svc-summary-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
-                    </div>
-                    <div class="panel" id="voicePanel">
-                    <div id="ttsSectionCard" style="display:contents">
-                    <div class="service-row" data-service="tts" data-mode="cloud">
-                        <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
-                        <div class="svc-seg" data-slot="tts" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
-                            <span class="svc-seg-indicator"></span>
-                        </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-tts-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-tts-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-tts-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
-                            </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-tts-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-tts-provider-msg" role="status" aria-live="polite"></span>
-                            </div>
-                        </div>
-                        <div class="local-hint" data-i18n>Local Jarvis TTS · no API key</div>
-                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
-                            <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
-                        </div>
-                    </div>
-                    </div>
                     </div>
                     <div class="service-row" data-service="asr" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="mic"></i><span>ASR</span><span class="service-badge" id="badge-asr">--</span></div>
@@ -716,13 +686,55 @@ limitations under the License.
                 </div>
             </div>
 
+            <!-- Voice panel: TTS only (moved out of servicesPanel so the settings nav can show it independently) -->
+            <div class="panel settings-root-panel" id="voicePanel">
+                <div class="panel-header settings-root-header">
+                    <div class="panel-title">
+                        <span class="panel-icon"><i data-lucide="volume-2"></i></span>
+                        <span class="panel-title-text" data-i18n>语音 Voice</span>
+                    </div>
+                </div>
+                <div class="panel-content settings-root-content" id="ttsSectionCard">
+                    <div class="service-row" data-service="tts" data-mode="cloud">
+                        <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
+                        <div class="svc-seg" data-slot="tts" role="tablist" aria-label="Local or cloud">
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <span class="svc-seg-indicator"></span>
+                        </div>
+                        <div class="provider-mgr">
+                            <div class="provider-mgr-row">
+                                <input id="svc-tts-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
+                                <button class="provider-add" id="svc-tts-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
+                                <select class="provider-pick" id="svc-tts-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-del" id="svc-tts-provider-del" type="button">Delete</button>
+                                <span class="provider-msg" id="svc-tts-provider-msg" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <div class="local-hint" data-i18n>Local Jarvis TTS · no API key</div>
+                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
+                            <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Memory Store: embedding / vector provider config (hits /v1/settings/network).
                  The [Local Wiki] network *proxy* sub-object is edited elsewhere (wiki_frontend.js);
                  this sub-area surfaces the embedding/provider portion, rendered dynamically from the
                  GET response by joy_ws.js (window.JoyWs.loadMemoryStoreSettings). -->
-            <div class="panel" id="memoryPanel">
-                <div class="panel-header" onclick="togglePanel('memoryStoreSub')"><i data-lucide="database"></i><span data-i18n>记忆 Memory</span><i data-lucide="chevron-down" class="panel-toggle" id="memoryStoreSubToggle"></i></div>
-                <div class="panel-content" id="memoryStoreSub">
+            <div class="panel settings-root-panel" id="memoryPanel">
+                <div class="panel-header settings-root-header">
+                    <div class="panel-title">
+                        <span class="panel-icon"><i data-lucide="database"></i></span>
+                        <span class="panel-title-text" data-i18n>记忆 Memory</span>
+                    </div>
+                </div>
+                <div class="panel-content settings-root-content" id="memoryStoreSub">
                     <div class="memory-store-sub">
                         <div class="service-row-header" style="margin-top:0;"><i data-lucide="database"></i><span data-i18n>Memory Store</span></div>
                         <div class="input-hint" style="margin:6px 0 10px;">Embedding / vector provider settings. Saved to the memory-store network config.</div>
@@ -746,15 +758,14 @@ limitations under the License.
             </div>
 
             <!-- [Local Wiki] F4: Knowledge Base panel (ADR-0012 §7.3) -->
-            <div class="panel" id="wikiPanel">
-                <div class="panel-header" onclick="togglePanel('knowledgeBase')">
+            <div class="panel settings-root-panel" id="wikiPanel">
+                <div class="panel-header settings-root-header">
                     <div class="panel-title">
                         <span class="panel-icon"><i data-lucide="book-open"></i></span>
-                        <span class="panel-title-text" data-i18n>Knowledge Base</span>
+                        <span class="panel-title-text" data-i18n>知识库 Wiki</span>
                     </div>
-                    <span class="panel-toggle collapsed" id="knowledgeBaseToggle">▼</span>
                 </div>
-                <div class="panel-content" id="knowledgeBase">
+                <div class="panel-content settings-root-content" id="knowledgeBase">
                     <div class="input-hint" style="margin-bottom: 8px;">Local wiki corpora (per game). Sync a <code>wiki/&lt;game&gt;</code> folder into a vector namespace.</div>
                     <div id="namespaceList" class="namespace-list"></div>
                     <div id="namespaceEmpty" class="input-hint" style="display: none;" data-i18n>No knowledge bases yet.</div>
@@ -959,7 +970,7 @@ limitations under the License.
 
         <!-- 输入栏：锚定 .container 底部，全宽，与样板 .inputbar 对齐 -->
     <div class="prompt-editor-inline">
-<button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="document.getElementById('captureOverlay').classList.toggle('hidden')">
+<button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="var c=document.getElementById('captureOverlay'); c.classList.toggle('hidden'); if(!c.classList.contains('hidden')) positionCaptureOverlay();">
     <i data-lucide="video"></i>
 </button>
     
@@ -2938,8 +2949,44 @@ limitations under the License.
         })();
         var cam = document.getElementById('camBtn');
         var cap = document.getElementById('captureOverlay');
+        // Reparent the capture overlay to <body> so position:fixed resolves
+        // against the viewport instead of a transformed ancestor
+        // (.chat-prompt-shell / .prompt-editor-inline). Otherwise fixed
+        // positioning is trapped by the local containing block and the
+        // overlay renders clipped/offset outside the visible area.
+        if (cap && cap.parentElement !== document.body) {
+            document.body.appendChild(cap);
+        }
+        function positionCaptureOverlay() {
+            if (!cam || !cap) return;
+            var rect = cam.getBoundingClientRect();
+            var capWidth = 360;
+            var pad = 12;
+            var left = rect.left + rect.width / 2 - capWidth / 2;
+            var maxLeft = window.innerWidth - capWidth - pad;
+            if (left < pad) left = pad;
+            if (left > maxLeft) left = maxLeft;
+            var spaceAbove = rect.top - pad;
+            var spaceBelow = window.innerHeight - rect.bottom - pad;
+            // Prefer opening upward (above the button); if it does not fit, shrink the overlay.
+            if (spaceAbove >= 180 || spaceAbove >= spaceBelow) {
+                cap.style.maxHeight = Math.min(spaceAbove, parseFloat(getComputedStyle(cap).maxHeight) || 600) + 'px';
+                cap.style.top = (rect.top - cap.offsetHeight - pad) + 'px';
+                cap.style.bottom = 'auto';
+            } else {
+                cap.style.maxHeight = Math.min(spaceBelow, parseFloat(getComputedStyle(cap).maxHeight) || 600) + 'px';
+                cap.style.top = (rect.bottom + pad) + 'px';
+                cap.style.bottom = 'auto';
+            }
+            cap.style.left = left + 'px';
+        }
         if (cam && cap) {
-            cam.addEventListener('click', function (e) { e.stopPropagation(); cap.classList.toggle('hidden'); });
+            cam.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var willShow = cap.classList.contains('hidden');
+                cap.classList.toggle('hidden');
+                if (willShow) positionCaptureOverlay();
+            });
             document.addEventListener('click', function (e) {
                 if (cap && !cap.classList.contains('hidden') && !cap.contains(e.target) && e.target !== cam && !cam.contains(e.target)) {
                     cap.classList.add('hidden');
