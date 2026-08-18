@@ -4797,7 +4797,10 @@
         .settings-modal.show{display:flex;animation:smFade .18s ease;}
         @keyframes smFade{from{opacity:0}to{opacity:1}}
         [data-theme="light"] .settings-modal{background:rgba(15,15,30,.32);}
-        .settings-dialog{width:min(880px,92vw);height:100%;margin:0;background:var(--bg-elev);border:0;border-left:1px solid var(--border);box-shadow:var(--shadow-lift);display:grid;grid-template-columns:220px 1fr;animation:smSlide .22s cubic-bezier(.22,.61,.36,1);overflow:hidden;}
+        .settings-dialog{width:min(880px,92vw);height:100vh;max-height:100vh;margin:0;background:var(--bg-elev);border:0;border-left:1px solid var(--border);box-shadow:var(--shadow-lift);display:grid;grid-template-columns:220px 1fr;grid-template-rows:auto 1fr;animation:smSlide .22s cubic-bezier(.22,.61,.36,1);overflow:hidden;}
+        /* v6-lite.22 — modalNav 与 settings-body 必须同 row 高度（继承 settings-dialog 第二行 = 视口减 header） */
+        .settings-dialog .modal-nav{height:100%;min-height:0;}
+        .settings-dialog .settings-body{height:100%;min-height:0;}
         @keyframes smSlide{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
         .settings-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);}
         .settings-title{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600;}
@@ -4829,3 +4832,25 @@
         .panel-header{cursor:pointer;}
 
         /* 旧 .capture-overlay 全屏样式已被上方 #captureOverlay id 规则覆盖（cap-pop） */
+
+        /* v6-lite.22 — 输入栏精简（2026-08-18）
+         * 详见 reports/integration-inputbar-vs-settings-2026-08-18.md
+         * 5 个底部输入栏元素按用户反馈「优化去除/移到后台」用 CSS display:none
+         * 全部 id 在 DOM 中保留（契约不查的 id 完全可删；保留是为文档留痕 + 后端 JS 引用仍可用）
+         * 红框（优化去除，写说明）：camBtn → 设置面板「输入」#capSettingCard；btListenBtn → 顶部 quick-tabs jarvis chip（功能重复）
+         * 黄框（放后台）：liveEnrollRow/liveVideoRow/liveProactiveToggle → 设置面板「语音」#ttsSectionCard +「输入」#capSettingCard
+         * 副：promptPresetBtn/Menu（快速预设不常用、低频、占视觉）一并隐藏
+         * 用后代选择器「空格」（不是直接子「>」）：camBtn/liveModeBtn 等是 .chat-prompt-shell 后代，.prompt-editor-inline 是祖父 */
+        .prompt-editor-inline #camBtn,
+        .prompt-editor-inline #btListenBtn,
+        .prompt-editor-inline #liveModeBtn,
+        .prompt-editor-inline #liveEnrollRow,
+        .prompt-editor-inline #liveVideoRow,
+        .prompt-editor-inline #promptPresetBtn,
+        .prompt-editor-inline #promptPresetMenu{display:none !important;}
+
+        /* btListenBtn 隐藏后，残留 label「Jarvis 唤醒」/icon 视觉归零；inputbar 视觉只剩 mic+textarea+send 三件套 */
+
+        /* v6-lite.22 — 设置页 nav 跳转的 5s 高亮（fade outline），anchors 自动展开 */
+        @keyframes nav-flash-fade{0%{outline:2px solid var(--brand);outline-offset:4px;}50%{outline-color:var(--brand-bright);}100%{outline-color:transparent;}}
+        .nav-flash{animation:nav-flash-fade 1.2s ease-out 0s 3 alternate;outline:2px solid transparent;outline-offset:4px;border-radius:10px;transition:outline-color .4s ease-out 4.5s;}

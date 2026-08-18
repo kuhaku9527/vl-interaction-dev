@@ -187,14 +187,14 @@ limitations under the License.
             <nav class="modal-nav" id="modalNav">
                 <h3>Settings</h3>
                 <button class="nav-item active" data-target="servicesConfig" type="button"><i data-lucide="cpu"></i> 模型 Model</button>
-                <button class="nav-item" data-target="ttsEnabledToggle" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
-                <button class="nav-item" data-target="maxLatency" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
+                <button class="nav-item" data-target="ttsSectionCard" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
+                <button class="nav-item" data-target="capSettingCard" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
                 <button class="nav-item" data-target="memoryStoreSub" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
                 <button class="nav-item" data-target="knowledgeBase" type="button"><i data-lucide="book-open"></i> 知识库 Wiki</button>
-                <button class="nav-item" data-target="layoutOrder" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
-                <button class="nav-item" data-target="backgroundEnabledToggle" type="button"><i data-lucide="layers"></i> 高级 Advanced</button>
-                <button class="nav-item" data-target="proxyEnabledToggle" type="button"><i data-lucide="info"></i> 关于 About</button>
-                <div class="nav-foot"><span class="ver">JoyAI VL · v6-lite.19b</span></div>
+                <button class="nav-item" data-target="appearanceSection" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
+                <button class="nav-item" data-target="radioSilenceSection" type="button"><i data-lucide="layers"></i> 高级 Advanced</button>
+                <button class="nav-item" data-target="aboutFooter" type="button"><i data-lucide="info"></i> 关于 About</button>
+                <div class="nav-foot"><span class="ver">JoyAI VL · v6-lite.22</span></div>
             </nav>
         <div class="settings-body">
             <!-- [Local Wiki] F2: API Status panel (top of settings, ADR-0012 §5) -->
@@ -283,6 +283,7 @@ limitations under the License.
             </div>
 
             <!-- Column 1: Layout & Visual Effects -->
+                <div id="appearanceSection" style="display:contents">
                 <div>
                     <div class="settings-section collapsed">
                         <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Layout</div>
@@ -347,6 +348,7 @@ limitations under the License.
                             </label>
                         </div>
                     </div>
+                </div>
                 </div>
 
                 <!-- Column 2: Input Colors & WebRTC -->
@@ -512,7 +514,6 @@ limitations under the License.
                         <div id="proxyStatus" class="input-hint" style="margin-top: 8px;"></div>
                     </div>
                 </div>
-            </div>
             <!-- Services (4 API selectors, v3.38) -->
             <div class="panel">
                 <div class="panel-header" onclick="togglePanel('servicesConfig')">
@@ -579,6 +580,7 @@ limitations under the License.
                             <span id="svc-summary-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
+                    <div id="ttsSectionCard" style="display:contents">
                     <div class="service-row" data-service="tts" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
                         <div class="svc-seg" data-slot="tts" role="tablist" aria-label="Local or cloud">
@@ -603,6 +605,7 @@ limitations under the License.
                             <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
                             <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
+                    </div>
                     </div>
                     <div class="service-row" data-service="asr" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="mic"></i><span>ASR</span><span class="service-badge" id="badge-asr">--</span></div>
@@ -711,6 +714,15 @@ limitations under the License.
                 </div>
             </div>
 
+            <!-- v6-lite.22 — 输入 section：与「模型」section 平级，承载 camBtn/liveVideoBtn 等已迁移的视频控件
+                 内容来自 captureOverlay（同 source of truth），但 popover 入口 camBtn 已被 v6-lite.22 隐藏，
+                 这里给用户一个稳定的设置面板入口。 -->
+            <div class="settings-section" id="capSettingCard" style="grid-column: 1 / -1;">
+                <div class="settings-section-title" data-i18n>Input / Video Source</div>
+                <div class="input-hint" style="margin: 6px 0 10px;">Pick a video source for live analysis. Same controls as the in-app capture popover; this panel is the stable entry point.</div>
+                <div id="capSettingCardBody"><!-- popover 控件由 wiki 团队落地的 capture_webcam/rtsp/screen 复用，结构同 captureOverlay --></div>
+            </div>
+
             <!-- [Local Wiki] F4: Knowledge Base panel (ADR-0012 §7.3) -->
             <div class="panel">
                 <div class="panel-header" onclick="togglePanel('knowledgeBase')">
@@ -750,7 +762,16 @@ limitations under the License.
                     <div id="wikiStatus" class="input-hint" style="margin-top: 8px;"></div>
                 </div>
             </div>
+            <!-- v6-lite.22 — 关于：版本、链接、授权（about footer 锚点对应 nav-item "关于 About"） -->
+            <div class="settings-section" id="aboutFooter" style="grid-column: 1 / -1;">
+                <div class="settings-section-title" data-i18n>About</div>
+                <div class="input-hint" style="margin: 6px 0 10px;">
+                    JoyAI VL Interaction · v6-lite.22<br>
+                    MIT-licensed open source. See <a href="https://github.com/" target="_blank" rel="noopener" style="color:var(--brand-bright);">repository</a> for issues, roadmap, and changelog.
+                </div>
+            </div>
         </div>
+    </div>
     </div>
 
 
@@ -2818,7 +2839,22 @@ limitations under the License.
                     nav.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
                     it.classList.add('active');
                     var t = document.getElementById(it.getAttribute('data-target'));
-                    if (t && t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    if (!t) return;
+                    // 1) 自动展开 target 自身或任何折叠的父级 .settings-section / .panel-content
+                    var node = t;
+                    while (node && node !== body) {
+                        if (node.classList && (node.classList.contains('settings-section') || node.classList.contains('panel-content')) && node.classList.contains('collapsed')) {
+                            node.classList.remove('collapsed');
+                            var tg = document.getElementById(node.id + 'Toggle');
+                            if (tg) tg.classList.remove('collapsed');
+                        }
+                        node = node.parentElement;
+                    }
+                    // 2) 短暂 outline 高亮（5s 自动消失）
+                    t.classList.add('nav-flash');
+                    setTimeout(function () { t.classList.remove('nav-flash'); }, 5000);
+                    // 3) scroll
+                    if (t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 });
             });
         }
