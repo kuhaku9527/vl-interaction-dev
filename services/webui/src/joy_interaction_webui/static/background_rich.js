@@ -4,6 +4,16 @@
 // calls and shared `let`/`const` state keep working exactly as before.
 // window.JoyXxx namespace is attached additively (D-033 pattern).
 
+        // Mirrors vlm_history.js createLucideIcon: build a Lucide icon
+        // placeholder without innerHTML assignment (avoids sast_xss_inner_html
+        // false positives). The <i data-lucide> node is converted to <svg> by the
+        // existing lucide.createIcons() calls in this file.
+        function createLucideIcon(name) {
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', name);
+            return icon;
+        }
+
         function parseBackgroundChart(text) {
             const candidates = extractFencedBlocks(text, 'json');
             extractInlineJsonObjectCandidates(text, 'bar_chart').forEach(candidate => {
@@ -283,7 +293,10 @@
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'background-rich-action';
-            button.innerHTML = `<i data-lucide="${icon}"></i><span>${label}</span>`;
+            button.appendChild(createLucideIcon(icon));
+            const labelEl = document.createElement('span');
+            labelEl.textContent = label;
+            button.appendChild(labelEl);
             button.addEventListener('click', onClick);
             return button;
         }
@@ -302,10 +315,16 @@
             const copyButton = createBackgroundActionButton('copy', '复制', async () => {
                 try {
                     await navigator.clipboard.writeText(String(text || ''));
-                    copyButton.innerHTML = '<i data-lucide="check"></i><span>已复制</span>';
+                    const copiedIcon = createLucideIcon('check');
+                    const copiedLabel = document.createElement('span');
+                    copiedLabel.textContent = '已复制';
+                    copyButton.replaceChildren(copiedIcon, copiedLabel);
                     lucide.createIcons();
                     setTimeout(() => {
-                        copyButton.innerHTML = '<i data-lucide="copy"></i><span>复制</span>';
+                        const copyIcon = createLucideIcon('copy');
+                        const copyLabel = document.createElement('span');
+                        copyLabel.textContent = '复制';
+                        copyButton.replaceChildren(copyIcon, copyLabel);
                         lucide.createIcons();
                     }, 900);
                 } catch (err) {
@@ -406,7 +425,7 @@
             closeButton.type = 'button';
             closeButton.className = 'background-modal-close';
             closeButton.setAttribute('aria-label', '关闭');
-            closeButton.innerHTML = '<i data-lucide="x"></i>';
+            closeButton.appendChild(createLucideIcon('x'));
             closeButton.addEventListener('click', closeBackgroundModal);
             header.appendChild(titleElement);
             header.appendChild(closeButton);
@@ -467,7 +486,7 @@
                 return;
             }
 
-            element.innerHTML = '';
+            element.replaceChildren();
             element.classList.add('background-rich-content');
 
             const tabs = document.createElement('div');
