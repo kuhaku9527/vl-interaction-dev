@@ -4833,23 +4833,80 @@
 
         /* 旧 .capture-overlay 全屏样式已被上方 #captureOverlay id 规则覆盖（cap-pop） */
 
-        /* v6-lite.22 — 输入栏精简（2026-08-18）
+        /* v6-lite.23 — 输入栏精简（2026-08-18，部分回滚 v6-lite.22）
          * 详见 reports/integration-inputbar-vs-settings-2026-08-18.md
-         * 5 个底部输入栏元素按用户反馈「优化去除/移到后台」用 CSS display:none
-         * 全部 id 在 DOM 中保留（契约不查的 id 完全可删；保留是为文档留痕 + 后端 JS 引用仍可用）
-         * 红框（优化去除，写说明）：camBtn → 设置面板「输入」#capSettingCard；btListenBtn → 顶部 quick-tabs jarvis chip（功能重复）
-         * 黄框（放后台）：liveEnrollRow/liveVideoRow/liveProactiveToggle → 设置面板「语音」#ttsSectionCard +「输入」#capSettingCard
-         * 副：promptPresetBtn/Menu（快速预设不常用、低频、占视觉）一并隐藏
+         * 用户复核截图（clipboard-2026-08-18T02-00-09-246Z-f616c7a4.png）确认：
+         *   • camBtn（视频）+ liveModeBtn（实时）= 设计原型入口按钮（design/joyai-redesign-preview.html line 621/681），必须保留并加图标+文字双行布局
+         *   • btListenBtn = 与顶栏 quick-tabs jarvis chip 功能重复，仍隐藏
+         *   • liveEnrollRow / liveVideoRow / liveProactiveToggle = Live 常驻模式展开控件，黄框放后台（设置页）
+         *   • promptPresetBtn / promptPresetMenu = 低频浮层，一并隐藏（功能可经由设置/手动输入完整覆盖）
+         * id 在 DOM 中保留：契约不查的 id 可安全删除，为文档留痕 + 后端 JS 引用而保留
          * 用后代选择器「空格」（不是直接子「>」）：camBtn/liveModeBtn 等是 .chat-prompt-shell 后代，.prompt-editor-inline 是祖父 */
-        .prompt-editor-inline #camBtn,
         .prompt-editor-inline #btListenBtn,
-        .prompt-editor-inline #liveModeBtn,
         .prompt-editor-inline #liveEnrollRow,
         .prompt-editor-inline #liveVideoRow,
         .prompt-editor-inline #promptPresetBtn,
         .prompt-editor-inline #promptPresetMenu{display:none !important;}
 
+        /* v6-lite.23 — 视频 / 实时 入口按钮：图标 + 文字双行布局（参考 design/joyai-redesign-preview.html .ctrl-labeled） */
+        .chat-prompt-action#camBtn,
+        .chat-prompt-action#liveModeBtn{
+            flex-direction:column;height:52px;min-width:54px;padding:6px 8px;gap:2px;
+            border-radius:10px;border:1px solid var(--border);background:var(--bg-elev);
+            color:var(--text-2);
+        }
+        .chat-prompt-action#camBtn svg,
+        .chat-prompt-action#liveModeBtn svg{width:18px;height:18px;}
+        .chat-prompt-action#camBtn .ctrl-label,
+        .chat-prompt-action#liveModeBtn .ctrl-label{font-size:11px;line-height:1;color:var(--text-2);}
+        .chat-prompt-action#camBtn:hover,
+        .chat-prompt-action#liveModeBtn:hover{border-color:var(--border-strong);color:var(--text);}
+        .chat-prompt-action#camBtn.is-on,
+        .chat-prompt-action#liveModeBtn.is-on{border-color:var(--brand);color:var(--brand);background:rgba(200,30,42,.10);}
+
+        /* v6-lite.23 — chat-prompt-shell 调整：视频/实时按钮放在 textarea 之前，speechBtn 与 send 不变 */
+        .chat-prompt-shell{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:14px;}
+
         /* btListenBtn 隐藏后，残留 label「Jarvis 唤醒」/icon 视觉归零；inputbar 视觉只剩 mic+textarea+send 三件套 */
+
+        /* v6-lite.23 — 视频面板 placeholder（design/joyai-redesign-preview.html .video-placeholder）
+         * 与设计一致：摄像头图标 + "摄像头 / 屏幕捕获预览" 文字，置于 video 元素之上
+         * 视频流激活（srcObject 有源时）通过 JS 给 .video-card 加 .video-active 移除该占位 */
+        .video-card .video-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--text-3);font-size:14px;background:linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.05));pointer-events:none;}
+        .video-card .video-placeholder svg{width:48px;height:48px;opacity:.55;}
+        .video-card.video-active .video-placeholder{display:none;}
+
+        /* v6-lite.23 — 顶栏清理（2026-08-18）
+         * 设计原型 design/joyai-redesign-preview.html：左 JD logo + JoyAI VL + 本地·开源 Apache 2.0 副标 + 状态包 + ⚙ + 夜色
+         * 实际：左 ≡ (sidebarToggle) + JoyAI VL Live + 内嵌 live/kws/health-pill + 一堆 status-badge 右
+         * 1) ≡ 汉堡菜单：设计无，已被 ⚙ 替代（设置入口）；用 CSS 隐藏
+         * 2) 顶栏多余 status-badge（LLM/TTS/KWS/Jarvis/Live/记忆/知识库/静默关/连接状态）：设计未显示，CSS 隐藏（JS 仍轮询 + 更新 DOM，但不渲染）
+         * 3) .title-section 新增 .subtitle 样式（"本地 · 开源 Apache 2.0" 副标，弱化对比） */
+        .header .sidebar-toggle-btn{display:none !important;}
+        .header .header-right > .status-badge,
+        .header .header-right > .health-menu{display:none !important;}
+        .title-section .subtitle{font-size:11px;color:var(--text-3);margin-top:1px;letter-spacing:.02em;display:block !important;}
+        .title-section h1{font-size:18px;line-height:1.1;}
+
+        /* v6-lite.23 — 右栏 panel 标题（VLM Output Info → 实时输出） */
+        .result-card .panel-header .panel-title{font-weight:600;color:var(--text);}
+        .result-card .panel-header .panel-actions{display:flex;gap:6px;margin-left:auto;}
+        .result-card .panel-header .panel-actions .ghost-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;color:var(--text-2);font-size:12px;cursor:pointer;}
+        .result-card .panel-header .panel-actions .ghost-btn:hover{border-color:var(--border-strong);color:var(--text);}
+
+        /* v6-lite.23 — result-card 标题行布局：标题 + chips + actions 三段；actions 浮在最右 */
+        .result-card .result-header{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;}
+        .result-card .result-header-left{flex:0 0 auto;min-width:0;}
+        .result-card .result-header-metrics{flex:1 1 auto;min-width:0;}
+        .result-card .result-header-actions{flex:0 0 auto;display:flex;gap:6px;margin-left:auto;}
+        .result-card .result-header-actions .ghost-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;color:var(--text-2);font-size:12px;cursor:pointer;transition:border-color .15s,color .15s;}
+        .result-card .result-header-actions .ghost-btn:hover{border-color:var(--border-strong);color:var(--text);}
+        .result-card .result-header-actions .ghost-btn svg{width:13px;height:13px;}
+        .result-card .result-header-actions .ghost-btn.is-on{color:var(--brand);border-color:var(--brand);}
+
+        /* v6-lite.23 — 隐藏嵌入式 markdownToggle/copyButton（v6-lite.22 已被移到 chat 内容区位置错乱，新版迁到 result-header-actions） */
+        .result-text .markdown-toggle-embedded,
+        .result-text .copy-button-embedded{display:none !important;}
 
         /* v6-lite.22 — 设置页 nav 跳转的 5s 高亮（fade outline），anchors 自动展开 */
         @keyframes nav-flash-fade{0%{outline:2px solid var(--brand);outline-offset:4px;}50%{outline-color:var(--brand-bright);}100%{outline-color:transparent;}}

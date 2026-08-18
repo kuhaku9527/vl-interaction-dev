@@ -129,7 +129,8 @@ limitations under the License.
                 </svg>
             </div>
             <div class="title-section">
-                <h1>JoyAI VL Live</h1>
+                <h1>JoyAI VL</h1>
+                <div class="subtitle" data-i18n>本地 · 开源 Apache 2.0</div>
             </div>
             <div class="quick-tabs">
                 <button class="chip mode-chip active" data-mode="live" type="button"><span class="cdot"></span>live</button>
@@ -828,12 +829,13 @@ limitations under the License.
                     <button class="video-control-btn" id="mirrorBtn" title="Mirror video" aria-label="Mirror video">
                         <i data-lucide="flip-horizontal"></i> Mirror
                     </button>
-                    <button class="video-control-btn" id="resetSessionBtn" title="Reset session: new session id, clear prompt, cleanup server" aria-label="Reset session: new session id, clear prompt, cleanup server">
-                        <i data-lucide="rotate-ccw"></i> Reset
-                    </button>
                 </div>
 
                 <video id="videoElement" autoplay playsinline muted></video>
+                <div class="video-placeholder" id="videoPlaceholder" aria-hidden="true">
+                    <i data-lucide="video"></i>
+                    <span>摄像头 / 屏幕捕获预览</span>
+                </div>
                 <div class="video-overlay" id="videoOverlay"></div>
             </div>
 
@@ -842,7 +844,7 @@ limitations under the License.
                 <div class="result-header">
                     <div class="result-header-left">
                         <div class="result-title">
-                            <i data-lucide="bot"></i> VLM Output Info
+                            <i data-lucide="lock"></i> <span data-i18n>实时输出</span>
                         </div>
                         <div class="result-subtitle" style="display: none;" aria-hidden="true">
                             Model: <span id="modelName" style="font-weight: 600; color: var(--accent-color);">--</span>
@@ -883,6 +885,14 @@ limitations under the License.
                                 <span class="metric-value" id="countValue">--</span>
                             </div>
                         </div>
+                    </div>
+                    <div class="result-header-actions">
+                        <button class="ghost-btn" id="mdToggleHeader" type="button" title="Toggle Markdown Rendering" aria-label="Toggle Markdown">
+                            <i data-lucide="code"></i><span>MD</span>
+                        </button>
+                        <button class="ghost-btn" id="copyBtnHeader" type="button" title="Copy to clipboard" aria-label="Copy">
+                            <i data-lucide="copy"></i><span data-i18n>复制</span>
+                        </button>
                     </div>
             </div>
 
@@ -1006,7 +1016,14 @@ limitations under the License.
     </div>
 
     <div class="chat-prompt-shell" id="promptEditor">
-            <button class="chat-prompt-action" id="camBtn" title="Video source" type="button" aria-label="Video source"><i data-lucide="video"></i></button>
+            <button class="chat-prompt-action" id="camBtn" title="视频捕获（点击选择采集源）" type="button" aria-label="视频">
+                <i data-lucide="video"></i>
+                <span class="ctrl-label">视频</span>
+            </button>
+            <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="实时">
+                <i data-lucide="radio-tower"></i>
+                <span class="ctrl-label">实时</span>
+            </button>
             <button class="chat-prompt-action" id="promptPresetBtn" title="快速预设" type="button" aria-label="快速预设">
                 <i data-lucide="sparkles"></i>
             </button>
@@ -1040,17 +1057,7 @@ limitations under the License.
                     <span class="check">✓</span>
                 </button>
             </div>
-            <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="输入文字，或点麦克风语音识别后发送给 BT-7274"></textarea>
-            <div class="mode-group" role="radiogroup" aria-label="交互模式（Jarvis 唤醒 / Live 常驻，单选互斥）">
-                <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
-                    <i data-lucide="radio"></i>
-                    <span class="listen-label">Jarvis 唤醒</span>
-                </button>
-                <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="Live 常驻模式（持续聆听）">
-                    <i data-lucide="radio-tower"></i>
-                    <span class="live-label">Live 常驻</span>
-                </button>
-            </div>
+            <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="和 BT-7274 对话..."></textarea>
             <div class="live-enroll-row" id="liveEnrollRow">
                 <button class="chat-prompt-action live-enroll" id="liveEnrollBtn" title="注册你的声音（Addressee 过滤：只响应你）" type="button" aria-label="注册声音" disabled>
                     <i data-lucide="user-check"></i>
@@ -1125,6 +1132,15 @@ limitations under the License.
         const markdownIcon = document.getElementById('markdownIcon');
         const markdownText = document.getElementById('markdownText');
         const copyButton = document.getElementById('copyButton');
+        // v6-lite.23 — header MD/复制 按钮（v6-lite.22 起移到 result-header）：转发点击到内嵌实现，单一真值保持不动
+        const mdToggleHeader = document.getElementById('mdToggleHeader');
+        const copyBtnHeader = document.getElementById('copyBtnHeader');
+        if (mdToggleHeader && markdownToggle) {
+            mdToggleHeader.addEventListener('click', () => markdownToggle.click());
+        }
+        if (copyBtnHeader && copyButton) {
+            copyBtnHeader.addEventListener('click', () => copyButton.click());
+        }
         const latencyValue = document.getElementById('latencyValue');
         const avgLatencyValue = document.getElementById('avgLatencyValue');
         const countValue = document.getElementById('countValue');
@@ -2191,7 +2207,7 @@ limitations under the License.
             speechButtons.forEach(button => {
                 button.disabled = false;
             });
-            promptText.placeholder = '输入文字，或点麦克风语音识别后发送给 BT-7274';
+            promptText.placeholder = '和 BT-7274 对话...';
             promptSendBtn.title = '发送给 BT-7274';
             syncSpeechButtons();
 

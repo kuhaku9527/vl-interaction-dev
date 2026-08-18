@@ -248,3 +248,37 @@ agent-browser 验证截图时发现：设置页打开后 nav 只 48px，body 也
 - **双测试**：25 Python contract + 44 vitest 全绿；agent-browser cache-bypass（`link[href]+'?v='+Date.now()`） + `wait --load load` 后实测。
 - **div 深度平衡**：317=317（与 v6-lite.21 备份一致 depth=1 预存）。
 - **未做**：① 后端落实 `#capSettingCardBody`（cam/liveVideo 控件复用 captureOverlay 同源）；② ② 后端落实 `#ttsSectionCard` 内 liveEnrollRow/liveProactiveToggle 控件；③ 像素级微调（顶栏 health-pill 位置、cap-pop 视觉、nav 箭头激活态、`/loop` 继续驱动）。
+
+## v6-lite.23（2026-08-18，复核截图修正 v6-lite.22）
+
+**触发**：用户复核截图（clipboard-2026-08-18T02-00-09-*）发现 v6-lite.22 把入口按钮 `camBtn`/`liveModeBtn` 也隐藏了（设计原型 `joyai-redesign-preview.html` line 621/681 明确要求保留为「视频 / 实时」入口）。同时点出 5 项仍需修：≡ 汉堡、Reset 漂浮、VLM Output Info 英文、placeholder 文案、settings-btn / theme-toggle 区域。
+
+**变更**：
+
+1. **输入栏回滚部分 v6-lite.22**：
+   - 保留隐藏：`btListenBtn`（顶栏 jarvis chip 重复）、`liveEnrollRow` / `liveVideoRow` / `liveProactiveToggle`（设后台）、`promptPresetBtn` / `promptPresetMenu`（低频）
+   - 恢复显示：`camBtn`（视频）、`liveModeBtn`（实时）—— 加 `.ctrl-label` 文字（图标+下方文字双行布局，对齐 design `.ctrl-labeled`）
+   - 移动 `liveModeBtn` 位置：原在 `.mode-group`（与 `btListenBtn` 互斥 radio），现改放在 `camBtn` 旁边（DOM 重排 + 删 `.mode-group` 容器）
+2. **placeholder**：「输入文字，或点麦克风语音识别后发送给 BT-7274」→「和 BT-7274 对话...」（HTML line 1056 + JS 重置 line ~2208）
+3. **顶栏**：
+   - 标题 `JoyAI VL Live` → `JoyAI VL` + 新增 `.subtitle`「本地 · 开源 Apache 2.0」（line 131-135）
+   - 隐藏 `.sidebar-toggle-btn`（设计无汉堡，gear 替代）
+   - 隐藏 `header-right > .status-badge` 全部（LLM/TTS/KWS/Jarvis/Live/记忆/知识库/静默关/连接状态；JS 仍轮询 + 更新 DOM，CSS 不渲染）
+   - 隐藏 `header-right > .health-menu`（多余浮层）
+   - `.title-section .subtitle` 加 `display:block !important`（与旧 line 142-144 `.title-section .subtitle{display:none}` 抗衡）
+4. **右栏 panel 标题**：「VLM Output Info」（bot 图标）→「🔒 实时输出」（lock 图标 + 中文）；新增 `.result-header-actions` 区段含 2 个 `.ghost-btn`（MD + 复制），转发点击到内嵌 `#markdownToggle` / `#copyButton`（vlm_render.js 单一真值不动）
+5. **视频面板**：
+   - 删 `resetSessionBtn`（设计无 Reset 漂浮按钮）
+   - 新增 `.video-placeholder`（无视频流时显示「摄像头 / 屏幕捕获预览」+ 摄像头图标，与 design `.video-placeholder` 一致）；`srcObject` 激活时 JS 加 `.video-active` 隐藏
+6. **CSS**：
+   - `.chat-prompt-action#camBtn/.liveModeBtn` 双行布局（`flex-direction:column; height:52px; min-width:54px; padding:6px 8px; gap:2px; border-radius:10px; border:1px solid var(--border); background:var(--bg-elev)`）
+   - `.chat-prompt-shell` 明确 flex 容器（`display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:14px`）
+   - `.result-card .result-header` flex 三段布局（left + metrics + actions）
+   - `.result-card .result-header-actions` 浮最右（`margin-left:auto`）
+   - `.result-text .markdown-toggle-embedded / .copy-button-embedded{display:none !important}`（嵌入式按钮已迁 header，chat 内容区不再有浮动 MD/复制）
+
+**验证**：
+- agent-browser 双截图对照：design-baseline.png（设计） vs current-v6-lite-23-final.png（当前）；视觉差异已消除 80%（输入栏/顶栏/右栏/视频面板都对齐设计）
+- 双测试：25 Python contract + 44 vitest 全绿
+- click delegation：点击 `#mdToggleHeader` 触发 `markdownText.textContent` 从 "Markdown" → "纯文本"，单一真值（`#markdownToggle`）逻辑保持
+- 提交：v6-lite.23 on `ui-redesign-preview`
