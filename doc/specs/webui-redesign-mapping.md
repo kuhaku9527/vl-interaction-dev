@@ -156,7 +156,7 @@ v6-lite.19 **引入了样板预览自带的 token 名**（`--brand/--bg-elev/--b
 5. **校验**：全局 div 深度平衡与备份 `index.html.bak` 完全一致（depth=1 为旧 sidebar 注释区历史不平衡，非本轮引入）；`test_webui_static_contract.py` 25 passed、`vitest` 44 passed 全绿；8 个关键契约 id（promptSendBtn/captureOverlay/btMicGainSelect/camBtn/promptEditor/modalNav/healthPill/svc-llm-api-base）均在位。
 
 ### 6.7 像素级对齐（v6-lite.21 · 2026-08-18）：agent-browser 驱动的 OBSERVE 闭环
-> v6-lite.20 收口后结构骨架（flex 列 / 输入栏锚底 / 视频左 1.5fr + 结果右 1fr）已对齐样板，但「亮背景 / 卡片顺序反 / 输入栏塌缩 / 顶栏 9 个 status-badge 撑高 / healthPill 英文」等像素偏差仍需在真实浏览器里逐项修。本轮安装 `agent-browser` 技能（CLI 本地装在 `~/.workbuddy/binaries/node/workspace`，Chromium 152 已就位，截图缓存 `~/.agent-browser/tmp/screenshots/`）替代 chrome-devtools MCP，把 `/loop` 的 OBSERVE 环节自动化：
+> v6-lite.20 收口后结构骨架（flex 列 / 输入栏锚底 / 视频左 1.5fr + 结果右 1fr）已对齐样板，但「亮背景 / 卡片顺序反 / 输入栏塌缩 / 顶栏 9 个 status-badge 撑高 / healthPill 英文」等像素偏差仍需在真实浏览器里逐项修。本轮安装 `agent-browser` 技能（当时 CLI 装在 `~/.workbuddy/binaries/node/workspace`——**该路径属 WorkBuddy 环境，DSH 下无效**；Chromium 152 已就位，截图缓存 `~/.agent-browser/tmp/screenshots/`）替代 chrome-devtools MCP，把 `/loop` 的 OBSERVE 环节自动化：
 
 1. **body 加载即 light-theme**（headless Chrome `prefers-color-scheme: light`）—— `:root` 暗 token（`--bg/#0A0A0B`）正确但被 `body.light-theme` 全套覆盖。`init` 无 `localStorage.theme` 时改默认 `'dark'`（line 1793），保留 toggle 切 light/auto；契约零主题引用，此修改安全。
 2. **`.chat-prompt-shell` 嵌套在 `#captureOverlay` 内部**（`parentElement.className === 'capture-overlay hidden'`）—— capture-overlay 隐藏时输入药丸整块塌缩（offsetHeight=0）。外科修法：capture-overlay-card 闭合 `</div>` 后插一行 `</div>` 提前关闭 capture-overlay，并移除原 capture-overlay 闭合 `</div>`（line 1064），使 chat-prompt-shell 与 capture-overlay 平级作为 `.prompt-editor-inline` 直接子元素。修后 `parent='prompt-editor-inline'`, `height=131px`, `offsetHeight=131`。div 深度平衡与备份一致（depth=1 预存）。
@@ -164,7 +164,7 @@ v6-lite.19 **引入了样板预览自带的 token 名**（`--brand/--bg-elev/--b
 4. **顶栏 9 个 `.status-badge` 撑高**（无后端全错 + `flex-wrap:wrap` 换行 3 行）—— `.header .status-badge{display:none}`（设置面板 `.service-badge` 不受影响；契约只检查 `.status-badge.jarvis-confirm` 类在 CSS 存在，隐藏元素不破契约）。修后 header 60px 单行。
 5. **healthPill 默认文案** `All systems nominal`（176px）—— 改 `系统正常`（115px），匹配样板紧凑款。
 6. **agent-browser 调用规约**（替代 chrome-devtools MCP）：
-   - `export PATH="/c/Users/22186/.workbuddy/binaries/node/workspace/node_modules/.bin:$PATH"`
+   - `export PATH="/c/Users/22186/.workbuddy/binaries/node/workspace/node_modules/.bin:$PATH"` <!-- 历史环境路径，DSH 下无效 -->
    - `agent-browser open <url>`（绕过缓存用 `?v=$(date +%s)` 缓存旁路）
    - `agent-browser wait --load load`（SPAs 永不 networkidle，故用 `load`）
    - `agent-browser eval "..."` 拿量化数据（body class / getBoundingClientRect / gridColumn / parentElement）

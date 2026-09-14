@@ -1,10 +1,12 @@
 # JoyAI-VL-Interaction 文档库
 
-> **最近更新**: 2026-08-18 | **状态**: ⚠️ 部分条目滞后于代码（见下方「索引维护告警」）
->
-> ⚠️ **索引维护告警（2026-09-14 核查）**：本页「分类索引」仅覆盖 2026-07-14 之前建立的文档，**2026-08-11 之后新增的 30+ 份 spec 未收录**（正式 spec 见 [`specs/README.md`](specs/README.md)，草稿见 `specs/draft-*.md`）。页面顶部的 `HEAD=021f429` 为历史快照号，该 commit 已不在本仓库对象库中，**不作为当前基线**。
+> **最近更新**: 2026-09-14 | **状态**: ✅ 索引已重建（`specs/README.md` 覆盖全部 47 份；6 个目录各有索引）
 >
 > **如何读这页**：新人先按 👇 入口路径走（35 分钟入门）。需要查特定子系统的设计/规格/决策时，按"分类索引"找。历史文档 `deprecated/` 不进常规阅读路径。
+>
+> ⚠️ **环境特定内容纪律（2026-09-14 立）**：本项目历经 WorkBuddy / Codex / DSH 三种 agent 环境。
+> **凡条目主语是"某 agent 的沙箱/工具"（而非项目本身）的，一律不属于真值源** → 归 `history-agent-environments.md`。
+> 当前环境的约束见 `environment-dsh.md`。**发现环境特定内容混入 `决策/` 或活文档时，按此纪律移出。**
 >
 > **关键文档（最常被读到）**：
 > - 📌 [`specs/README.md`](specs/README.md) — **正式 spec 索引（最新，优先看这个）**
@@ -19,13 +21,16 @@
 ## 🎯 入口路径（新人在此起步）
 
 1. **[`runtime-topology.md`](runtime-topology.md)** — ⭐ **现行运行拓扑（唯一权威）**：服务/端口/启动模式/交互模式/前端结构（**先读这个**）
-2. **[`main/00-main-direction.md`](main/00-main-direction.md)** — 主方向 + v3.37 路线图
-3. **[`../决策/README.md`](../决策/README.md)** — 决策书 SSOT（已拍板事实；与其他文档冲突时以它为准）
-4. **[`service-startup.md`](service-startup.md)** — 启动细节与踩坑 ｜ **[`runtime-matrix.md`](runtime-matrix.md)** — 各服务 venv/解释器矩阵
-5. **[`glossary.md`](glossary.md)** — BT 语音交互栈术语表
-6. 按需要展开到子系统 / ADR / Spec —— 见下方分类索引
+2. **[`environment-dsh.md`](environment-dsh.md)** — ⭐ **当前环境的约束与坑**（终端/python stub/审批/已验证命令）—— **动手前必读**
+3. **[`main/00-main-direction.md`](main/00-main-direction.md)** — 主方向 + v3.37 路线图
+4. **[`../决策/README.md`](../决策/README.md)** — 决策书 SSOT（已拍板事实；与其他文档冲突时以它为准）
+5. **[`service-startup.md`](service-startup.md)** — 启动细节与踩坑 ｜ **[`runtime-matrix.md`](runtime-matrix.md)** — 各服务 venv/解释器矩阵
+6. **[`glossary.md`](glossary.md)** — BT 语音交互栈术语表
+7. 按需要展开到子系统 / ADR / Spec —— 见下方分类索引
 
 > ⚠️ **不要读这两份找"当前架构"**：`local/architecture-current.md`（2026-07-14 快照）与 `local/architecture-local.md`（2026-07-12，11 进程旧设计）**均已过时**，正文保留仅为历史。同理 `specs/2026-07-13-current-state.md` 的端口/模块部分已漂移（其自述也承认）。
+>
+> ⚠️ **历史环境文档**：`history-agent-environments.md` 记录 WorkBuddy/Codex 时代的操作技巧（**对当前环境不适用**），仅供追溯。
 
 ---
 

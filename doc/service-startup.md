@@ -1,6 +1,6 @@
 # JoyAI-VL-Interaction 服务启动运维手册
 
-> 写给 workbuddy / 任何接手 launcher 的人。
+> 写给任何接手 launcher 的人（不限于特定 agent 应用）。
 > 涵盖：环境位置、启动指令、env 配置、模型路径、端口（高频失败原因）、启动验证。
 > 最后修改：2026-08-04（Codex 写于本会话首轮重启修复之后）。
 

@@ -14,22 +14,44 @@
 
 ---
 
+## 0. 环境分支（先确认你在哪个环境）
+
+> **2026-09-14 新增**。本项目历史上由 WorkBuddy / Codex 操作，现由 **DSH** 操作。
+> 两者的**沙箱模型不同**，下文部分段落是 WorkBuddy 时代写的，**在 DSH 下照做会卡住**。
+
+| 项 | WorkBuddy 时代（历史） | **DSH（当前）** |
+|---|---|---|
+| 网络沙箱 | 默认拦截 git/gh 网络，须 `dangerouslyDisableSandbox:true` 逃逸 | **无此开关**；用 `ask`/`auto` 审批模型 |
+| gh 凭据 | 沙箱下 `gh auth status` 露出**缺 workflow 的影子 token**（误判） | **直接可读宿主 keyring 真实 token**（实测含 `workflow` scope） |
+| git 推送 | 走 gh-proxy `insteadOf`（直连被 Connection reset） | **直连 github.com**；实测**无任何 insteadOf 规则** |
+| 终端 | Bash（自带） | FastCtx（`mcp__fastctx__*`），**每次须显式传 `cwd`** |
+
+**DSH 下的正确做法**：
+1. `gh auth status` **可信** —— 直接看 scope，不要假设有"影子 token"问题。
+2. **直连推送**，不要加 `insteadOf`；`gh-proxy` 已废弃（见 §1）。
+3. 推送需 VPN 连通；失败先查 VPN，再查 scope。
+4. `git push` / `gh` 在 DSH 下正常执行（2026-09-14 实测 commit 成功）。
+
+> 完整历史环境记录见 [`../doc/history-agent-environments.md`](../doc/history-agent-environments.md)。
+
+---
+
 ## 1. 访问与网络（VPN / gh-proxy / 沙箱）
 
-- ✅ 走用户 **VPN 直连 github.com**；沙箱内任何网络命令（含 `git push`/`gh`）须 `dangerouslyDisableSandbox:true`。
-- ❌ **禁用 gh-proxy**：代理会顶掉 VPN，导致推送失败 / 错连。曾误记"有 gh-proxy `insteadOf` 规则"——核查 `.gitconfig` **无此规则**，旧 token-URL 绕路已作废。
+- ✅ 走用户 **VPN 直连 github.com**。
+- ✅ **DSH 下不需要任何沙箱逃逸参数**（原 WorkBuddy 的 `dangerouslyDisableSandbox:true` 在 DSH 不存在）。
+- ❌ **禁用 gh-proxy**：代理会顶掉 VPN，导致推送失败 / 错连。曾误记"有 gh-proxy `insteadOf` 规则"——核查 `.gitconfig` **无此规则**（**2026-09-14 复核仍为无**），旧 token-URL 绕路已作废。
 - ⚠️ **VPN 断开 = 立即暂停并提醒用户**；不得自改 `.gitconfig` 代理 / `insteadOf`，不得重启 gh-proxy。
-- 实证：2026-08-02 立；误记纠正 2026-08-02。
+- 实证：2026-08-02 立；误记纠正 2026-08-02；**2026-09-14 复核（无 insteadOf 规则，DSH 直连可用）**。
 
 ---
 
 ## 2. PAT / Token 权限
 
-- ⚠️ **沙箱遮蔽 gh 凭据（重点坑）**：宿主 keyring 的 `gho_` token **本身带 `workflow` scope**（scopes 含 `gist, read:org, repo, workflow`）。但 **WorkBuddy Bash 沙箱下 `gh auth status` 会露出缺 `workflow` 的影子 OAuth token**——这是沙箱遮蔽宿主凭据造成的**误判**，并非真实缺 scope。
-- ✅ 修法：**`dangerouslyDisableSandbox:true` 逃沙箱**后 `gh auth status` 即显示宿主 keyring 真实 token（含 workflow），直接 `git push` / `gh` 改 `.github/workflows/*` 即可成功。本会话改 `quality.yml` 直接 `git push`（带 sandbox 逃逸）即成功，无需 MCP 通道。
-- ❌ **沙箱下 `gh auth status` 不可信**：遇 gh 凭据/网络权限（如 push 被拒、403）问题，**先逃沙箱复核 token scopes**，不要急着 `gh auth refresh -s workflow` 或走 MCP 绕路——那是基于误判的多余动作。
-- fine-grained PAT 缺其它 scope 仍会静默失败 → 报错先看 scope，不是重试推送。
-- 实证：2026-08-07（本会话核实，推翻 2026-08-01 / 2026-08-02 旧记）。
+- ✅ **当前 token 已含 `workflow` scope**（2026-09-14 实测：`Token scopes: 'gist', 'read:org', 'repo', 'workflow'`）→ **可直接推 `.github/workflows/*`**，无需 fine-grained PAT。
+- ⚠️ **WorkBuddy 沙箱的"影子 token"问题在 DSH 下不存在**：当时沙箱下 `gh auth status` 会露出缺 `workflow` 的 OAuth token（误判）；DSH 直接读宿主 keyring，显示真实 scope。**在 DSH 下看到缺 scope 就是真缺**，此时才需 `gh auth refresh -s workflow`。
+- fine-grained PAT 缺 scope 仍会静默失败 → 报错先看 scope，不是重试推送。
+- 实证：2026-08-07（WorkBuddy 会话核实）；**2026-09-14 在 DSH 下重核，结论更新**。
 
 ---
 
