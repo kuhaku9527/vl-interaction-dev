@@ -57,12 +57,30 @@ if (-not (Test-Path $PidDir)) { New-Item -ItemType Directory -Path $PidDir -Forc
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
 
+# ---------------------------------------------------------------------------
+# 跨项目隔离（2026-09-14）
+# ---------------------------------------------------------------------------
+# 本机存在多个 agent 应用（本项目 + D:\Workspace\hermes-agent 等），它们通过
+# 【用户级环境变量】共享若干全局配置。为避免互相污染，本脚本在解析前显式
+# 钉死本项目自己的路径，不依赖任何全局变量的当前值。
+#
+# 背景事故：services/background-agent/scripts/start-hermes-gateway.ps1 的注释
+# 记录了「prior agent rewrote HERMES_HOME to a stale path, corrupting the env」
+# —— 同一类问题在别的项目上已发生过一次。
+#
+# 检查工具：scripts/cross_project_isolation.py
+# 说明文档：doc/environment-dsh.md §跨项目隔离
+# ---------------------------------------------------------------------------
+
+$HermesHome    = if ($env:JOYAI_HERMES_HOME) { $env:JOYAI_HERMES_HOME }
+                 elseif ($env:HERMES_HOME)   { $env:HERMES_HOME }
+                 else { Join-Path $env:LOCALAPPDATA "hermes" }
+
 $BinRoot       = if ($env:JOYAI_BIN_ROOT)    { $env:JOYAI_BIN_ROOT }    else { "D:\AI\bin" }
 $ModelsRoot    = if ($env:JOYAI_MODELS_ROOT) { $env:JOYAI_MODELS_ROOT } else { "D:\AI\models" }
 $ToolsRoot     = if ($env:JOYAI_TOOLS_ROOT)  { $env:JOYAI_TOOLS_ROOT }  else { "D:\AI\tools" }
 $LlamaServer   = if ($env:LLAMA_SERVER)   { $env:LLAMA_SERVER }   else { Join-Path $BinRoot "llama.cpp\llama-server.exe" }
 $WhisperServer = if ($env:WHISPER_SERVER) { $env:WHISPER_SERVER } else { Join-Path $BinRoot "whisper.cpp\whisper-server.exe" }
-$HermesHome    = if ($env:HERMES_HOME)    { $env:HERMES_HOME }    else { Join-Path $env:LOCALAPPDATA "hermes" }
 $HermesExe     = if ($env:HERMES_EXE)     { $env:HERMES_EXE }     else { Join-Path $HermesHome "bin\hermes.cmd" }
 $VenvPy        = if ($env:JOYAI_VENV_PY)  { $env:JOYAI_VENV_PY }  else { Join-Path $ServicesDir ".venv\Scripts\python.exe" }
 

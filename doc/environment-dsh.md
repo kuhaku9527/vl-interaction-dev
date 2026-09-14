@@ -101,8 +101,67 @@ pwsh -File stop-joyai.ps1
 # Drift Gate（决策态↔运行态一致性）—— 有 block 时 exit 1
 /d/AI/envs/joyai-main/python.exe scripts/drift_gate.py --contract config/drift-contract.json --phase static --no-history
 
+# 跨项目隔离检查（防止污染其他 agent 项目）—— 有 block 时 exit 1
+/d/AI/envs/joyai-main/python.exe scripts/cross_project_isolation.py
+
 # SSOT 变更记录同步（改代码后）
 /d/AI/envs/joyai-main/python.exe services/scripts/sync-docs.py --version vX.Y --change "..."
+```
+
+### 4.3 跨项目隔离（重要）
+
+本机同时存在**多个独立 agent 项目**，通过**用户级环境变量**共享配置 —— 共享即可能互相污染。
+
+| 项目 | 路径 | 性质 |
+|---|---|---|
+| **本项目** | `D:\AI\workspace\JoyAI-VL-Interaction-main` | 待隔离方 |
+| `hermes-agent` | `D:\Workspace\{hermes-agent,hermes-data,hermes-workspace}` | **另一个独立项目**（`NousResearch/hermes-agent`，Node 项目） |
+
+**已实测的污染**：用户级 `npm_config_cache` 指向 `D:\Workspace\hermes-agent\.cache\npm`
+→ 本项目跑 `npm ci` / `npm test` 会**写进 hermes-agent 的缓存目录**。
+
+**为什么不直接改用户级变量**：`hermes-agent` 的代码 `mcp_tool_config.py` **读取该变量**定位 npx 缓存，
+且有 **344 MB 实际缓存** —— 改它会**破坏那个项目**。
+
+**本项目采用的方案（进程级覆盖，双向隔离）**：
+
+```bash
+# 在本项目 shell / CI 里 source 一次即可
+source scripts/isolate-env.sh
+```
+
+它把 `npm_config_cache` 等缓存变量钉回本项目 `.cache/`。
+
+> ⚠️ **关键陷阱（已实测）**：npm 的配置优先级为
+> **`env (npm_config_*)` > `project .npmrc` > `user .npmrc` > `builtin`**
+> —— **环境变量高于项目 `.npmrc`**（与部分文档描述相反）。
+> 因此**单加 `services/webui/.npmrc` 不足以覆盖**（实测输出
+> `cache = "<本项目>/.cache/npm" ; overridden by env`），必须靠进程级覆盖。
+
+**本项目的其他隔离措施**：
+- `services/webui/.npmrc` — 声明意图 + 兜底（在无 env 污染的环境里生效）
+- `services/scripts/run-windows.ps1` — 显式优先读 `JOYAI_HERMES_HOME`，不依赖全局 `HERMES_HOME`
+- `scripts/cross_project_isolation.py` — 可重复运行的检查器
+
+**不动的项（有意保留，附理由）**：
+
+| 项 | 为何不动 |
+|---|---|
+| `HERMES_HOME` / `HERMES_DESKTOP_*` / `CUA_DRIVER_*`（6 个） | 是 **hermes-agent 自己的**运行时变量；本项目仅在 `run-windows.ps1` 用作 fallback，已改为优先读 `JOYAI_HERMES_HOME` |
+| Path 里的 `D:\Workspace\hermes-agent\venv\Scripts` | ⚠️ **那是 hermes-agent 有意装的**（内含 `hermes-agent.exe` / `hermes-acp.exe` / `hermes-scope-recall.exe`，供其命令全局可用）。**去掉会破坏那个项目**。本项目全程用绝对路径调 python，不受 Path 顺序影响 |
+| Path 里的 `D:\Workspace\hermes-data\bin\cua-driver` | 同上，是 hermes-agent 的组件 |
+
+> **隔离原则**：**只修"本项目会写进别人目录"的方向**（npm 缓存）；
+> **不修"别人给自己的变量"**（HERMES_* / CUA_DRIVER_*）—— 那些是它的正常配置，动了才叫污染。
+
+### 4.4 npm 命令的安全用法
+
+```bash
+# 推荐：先隔离再跑
+source scripts/isolate-env.sh && cd services/webui && npm ci && npm test
+
+# 或显式传参（等价）
+cd services/webui && npm ci --cache="D:/AI/workspace/JoyAI-VL-Interaction-main/.cache/npm"
 ```
 
 > ⚠️ `bash scripts/verify.sh --ci` **已失效**（`--ci` 参数被移除，现只支持 `--quiet`）。静态断言已迁至 `drift_gate.py` + `config/drift-contract.json`。
