@@ -10,15 +10,15 @@ In one sentence: the frontend/WebUI sends video frames to `8070`; `live_adapter.
 
 | File | Purpose |
 | ---- | ------- |
-| `live_adapter.py` | Core aiohttp service; implements the OpenAI-compatible API, session state, chunk memory, main-model forwarding, and output persistence. |
+| `live_adapter.py` | ⚠️ **Facade only (~73 lines, re-exports).** Implementation moved to `app.py` / `adapter_core.py` (see ADR-0007). The OpenAI-compatible API, session state, chunk memory and main-model forwarding now live there. |
 | `memory_summarizer.py` | Summary component; calls summary vLLM to generate chunk-level intermediate summaries and compress multiple summaries into long-term memory. |
 | `scripts/run.sh` | Unified entrypoint; centralizes Python and model path configuration, then calls the startup scripts below. |
 | `scripts/start_adapter.sh` | Starts the adapter, listening on `127.0.0.1:8070` by default. |
 | `scripts/start_all_models.sh` | Starts main-model vLLM services in batch. Model paths and names are passed by `scripts/run.sh` by default. |
 | `scripts/start_model.sh` | Starts one main-model vLLM OpenAI API service. |
 | `scripts/start_summary_model.sh` | Starts one summary vLLM service; intermediate summaries and long-term memory compression share it. |
-| `deploy.md` | Frontend API integration examples, including request/response JSON. |
-| `summary_vllm_logs/` | Logs and PID files from `scripts/start_summary_model.sh`. |
+| ~~`deploy.md`~~ | ❌ **Does not exist** (2026-09-14). |
+| ~~`summary_vllm_logs/`~~ | ❌ **Does not exist** (2026-09-14); `scripts/start_summary_model.sh` is not in the repo either. |
 
 ## Default Ports and Models
 
@@ -39,7 +39,7 @@ cd services/webinfer
 # Download models to /tmp/models
 ../../install/download-models.sh --all
 
-# Start one summary service in the background; logs go to summary_vllm_logs/
+# Start one summary service in the background (logs go to /tmp/summary_vllm_logs/) <!-- known-absent: summary_vllm_logs/ 不在仓库内 -->
 bash scripts/run.sh summary
 
 # Start the main model in the foreground
@@ -98,7 +98,7 @@ Recommended image input format is the OpenAI format:
 }
 ```
 
-`file:///absolute/path.jpg` is also supported, but `ALLOWED_LOCAL_IMAGE_ROOTS` must be configured and the file must be under an allowed directory. See `deploy.md` for a fuller frontend request example.
+`file:///absolute/path.jpg` is also supported, but `ALLOWED_LOCAL_IMAGE_ROOTS` must be configured and the file must be under an allowed directory. See the API tests under `tests/` for fuller frontend request examples. <!-- known-absent: deploy.md 不存在 -->
 
 ## Character / Persona Prompts
 
@@ -135,7 +135,7 @@ different host (for example a `llama-server` started on a remote GPU box):
 $env:MAIN_API_BASE   = "http://127.0.0.1:7060/v1"
 $env:MAIN_MODEL      = "JoyAI-VL-Interaction-Preview"
 $env:SUMMARIZER_API_BASE = "http://127.0.0.1:8065/v1"
-$env:SUMMARIZER_MODEL    = "Qwen2.5-VL-3B-Instruct"
+$env:SUMMARIZER_MODEL    = "Qwen3-VL-4B-Instruct"   # corrected 2026-09-14 (was Qwen2.5-VL-3B, contradicted L176/L177)
 
 python services\webinfer\live_adapter.py `
     --main-api-base $env:MAIN_API_BASE `
@@ -216,7 +216,7 @@ kill $(cat summary_vllm_logs/vllm_8065.pid)
 `scripts/start_all_models.sh` and `scripts/start_adapter.sh` are foreground processes and are usually stopped with `Ctrl+C`. After stopping, check the ports:
 
 ```bash
-ss -ltnp | rg ':(7060|8065|8070)\b'
+Get-NetTCPConnection | Where-Object ':(7060|8065|8070)\b'
 ```
 
 ## Common Pitfalls

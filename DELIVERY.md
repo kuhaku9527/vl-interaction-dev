@@ -1,8 +1,11 @@
 # 本地化交付清单（Windows + RTX 5060 Ti 16GB）
 
 > **历史交付快照**：本文主体记录 2026-07-06 的初版 11 进程/CosyVoice 方案，不是当前启动规范。
-> **当前链路（2026-07-12）**：`7060` 本地社区量化 LLM/VLM + `8070` webinfer + `8099` WebUI + `8985` MiniMax TTS/声音克隆；KWS/ASR 在 WebUI 内本地运行。
-> 当前操作以 `doc/main/00-main-direction.md`、`doc/local/architecture-local.md`、`doc/subsystems/jarvis-mode.md` 和 `start-joyai.ps1` 为准。
+> **当前链路**：`7060` 本地社区量化 LLM/VLM + `8070` webinfer + `8079` background-agent + `8099` WebUI + `8985` MiniMax TTS/声音克隆 + `8997` memory-store；KWS/ASR 在 WebUI 内本地运行。
+> **当前操作以 [`doc/runtime-topology.md`](doc/runtime-topology.md)（现行拓扑唯一权威）、[`doc/README.md`](doc/README.md)、`doc/subsystems/jarvis-mode.md` 和 `start-joyai.ps1` 为准。**
+> ⚠️ 2026-09-14 更正：原指引中的 `doc/local/architecture-local.md` **已过时**（该文件第 1 行自述「🚫 已过时」）。
+>
+> **阅读说明**：本文是**历史记录型**文档（按日期累积）。§7 是**唯一权威变更表**；§9/§11/§13/§15/§17 为分版本快照，其中的路径与端口反映**当时**状态，失效属正常，不要据此实施。
 
 ---
 

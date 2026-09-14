@@ -56,12 +56,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 
 # 扫描时跳过的目录（依赖 / 缓存 / 归档 / 外部状态）
+# ⚠️ 2026-09-14 修正：原把 doc/research/ 的两个证据链子目录整体排除 → 造成
+# 「健康检查报 ✅ 通过，但这两个目录里的死链与索引缺失永远不报」的盲区
+# （实际漏掉了 doc/specs/addressee-detection.md 的一处断链）。
+# 它们是**文档**不是记录，必须扫。
 SKIP_DIRS = {
     ".git", ".cache", ".venv", "node_modules", "__pycache__",
     ".pytest_cache", ".ruff_cache", "dist", "build", "htmlcov",
     "site-packages", ".mypy_cache", "archive", ".workbuddy",
-    ".workbuddy_tmp", "doc/deprecated", "doc/research/turn-controller-2026-08-11",
-    "doc/research/addressee-detection-2026-08-12",
+    ".workbuddy_tmp", "doc/deprecated",
 }
 
 TEXT_EXT = {".md", ".py", ".js", ".ts", ".html", ".css", ".ps1", ".sh",
@@ -88,8 +91,20 @@ DOC_PATH_RE = re.compile(
     r"\.(?:json|yaml|yml|mermaid|toml|ps1|sh|md|py|js)"
     r"(?![A-Za-z0-9])"
 )
+# 概略路径（`.../services/x.py`、`services/.../y.py`）：文档惯用的缩写，
+# 不是可解析路径。2026-09-14 实测 jarvis_config.py:435 的注释
+# `# .../services/webui/.../jarvis_config.py` 被 DOC_PATH_RE 从 `services/`
+# 起匹配 → 误报。行内出现 `...` 即视为概略写法。
+ELLIPSIS_RE = re.compile(r"\.\.\.[/\\]|[/\\]\.\.\.")
 BARE_MD_RE = re.compile(r"`([A-Za-z0-9_.\u4e00-\u9fff-]+\.md)`")
 SHA_RE = re.compile(r"\b([0-9a-f]{7,40})\b")
+
+# Markdown 链接目标：`[text](path)`。
+# ⚠️ 2026-09-14 补：原只扫 DOC_PATH_RE（要求 doc/ 等前缀），导致两类漏报：
+#   ① 裸文件名指针（`pm-local.md` / §2 表的 13 条）
+#   ② 相对链接（`[pm-local.md](pm-local.md)` / `](research/...)`）
+# 实测曾漏掉 14 条真实死链，其中 1 条是 09-14 迁移时自己引入的。
+MD_LINK_RE = re.compile(r"\]\(([^)\s]+\.(?:md|py|js|json|ps1|sh|yml|yaml))\)")
 
 # 只在「来源 / 校验」字段里查 SHA，避免把行号、hash 字面量误判
 DECISION_ENTRY_RE = re.compile(r"^#{2,4}\s+(D-[\w-]+)", re.M)
@@ -192,7 +207,12 @@ def resolve_doc_ref(ref: str, origin: Path) -> Path | None:
     `<service>/scripts/run.sh`（相对自身），而非仓库根的 `scripts/`。
     故**先试引用者所在目录**，再退到仓库根。
     """
-    ref = ref.strip().strip("`").lstrip("./")
+    ref = ref.strip().strip("`")
+    # ⚠️ 不能用 lstrip("./")：它按字符集剥离，会把 `../adr/x.md` 的前导 `..`
+    # 一起吃掉变成 `adr/x.md`，导致相对上级目录的链接全部误报。
+    # 只剥单独的前导 `./`。
+    while ref.startswith("./"):
+        ref = ref[2:]
     base = origin if origin.is_dir() else origin.parent
     for c in (base / ref, REPO / ref):
         try:
@@ -253,6 +273,26 @@ def check_links() -> list[dict]:
             # 核查备注行（声明「此处引用已失效」）是记录事实，不是活指针
             if any(mk in line_text for mk in AUDIT_NOTE_MARKERS):
                 continue
+            # Markdown 链接目标（含相对链接与裸文件名）——2026-09-14 新增覆盖
+            # ⚠️ 只对 .md/.html 检查：源码注释里的 `](...path...)` 形态是路径
+            # 示例而非链接（实测 jarvis_config.py:435 被此误报）。
+            if p.suffix in (".md", ".html", ".htm"):
+                for lm in MD_LINK_RE.finditer(line_text):
+                    ref = lm.group(1)
+                    if ref.startswith(("http://", "https://", "mailto:", "#")):
+                        continue
+                    key = f"mdlink::{ref}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    if "..." in ref or VAR_PATH_RE.search(line_text[: lm.start()]):
+                        continue
+                    if resolve_doc_ref(ref, p) is None:
+                        issues.append({
+                            "check": "LINK", "severity": _severity_for(rp, text),
+                            "file": rp, "line": lineno, "ref": ref,
+                            "msg": f"Markdown 链接目标不存在: {ref}",
+                        })
             for m in DOC_PATH_RE.finditer(line_text):
                 ref = m.group(0)
                 if ref in seen:
@@ -269,6 +309,9 @@ def check_links() -> list[dict]:
                     continue
                 # 说明性注释（"改用 xxx 脚本"）是推荐，不是依赖声明
                 if NOTE_CTX_RE.search(line_text):
+                    continue
+                # 概略路径（`.../services/x.py`）是文档缩略写法，非可解析路径
+                if ELLIPSIS_RE.search(line_text):
                     continue
                 # 省略号缩写（如 services/webui/.../jarvis_mode.py）是文档惯用的
                 # 概略写法，不是可解析路径 → 跳过，否则噪声淹没真问题。

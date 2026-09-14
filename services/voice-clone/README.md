@@ -62,9 +62,10 @@ pip install -r D:\AI\models\CosyVoice\requirements.txt -i https://mirrors.aliyun
 
 # Launch via the helper script
 .\services\voice-clone\scripts\start-cosyvoice.ps1
+<!-- known-absent: services/voice-clone/scripts/ 目录已删除；此为初版设计的历史说明 -->
 ```
 
-The script writes its PID to `services/voice-clone/scripts/cosyvoice.pid`
+~~The script writes its PID to `services/voice-clone/scripts/cosyvoice.pid`~~ <!-- known-absent: 该路径不存在 -->
 and probes `http://127.0.0.1:8991/` until the model reports ready.
 
 ### 2. Start the voice-clone service
@@ -77,9 +78,10 @@ pip install -e services/voice-clone
 
 # Launch via the helper script
 .\services\voice-clone\scripts\run-windows.ps1
+<!-- known-absent: services/voice-clone/scripts/ 目录已删除；此为初版设计的历史说明 -->
 ```
 
-The script writes its PID to `services/voice-clone/scripts/voice_clone_api.pid`
+~~The script writes its PID to `services/voice-clone/scripts/voice_clone_api.pid`~~ <!-- known-absent: 该路径不存在 -->
 and probes `http://127.0.0.1:8985/health` until the service responds.
 
 ### 3. Tell the TTS adapter to use the clone service
@@ -201,13 +203,17 @@ server -> client: {"type": "done", "voice_id": "..."}
 
 ## Port map
 
-| Service               | Port | Override env var          |
-|-----------------------|------|---------------------------|
-| whisper.cpp ASR       | 8993 | `ASR_UPSTREAM_URL`        |
-| TTS adapter (this)    | 8992 | `TTS_ADAPTER_PORT`        |
-| CosyVoice3            | 8991 | `COSYVOICE_PORT`          |
-| voice-clone (this)    | 8985 | `VOICE_CLONE_PORT`        |
-| webui                 | 7860 | (webui)                   |
+> ⚠️ **2026-09-14 corrected.** This table described the *initial design* (CosyVoice3 era).
+> Only **voice-clone 8985** is active; `8991`/`8992` are deprecated and `webui` is **8099** (not 7860).
+> Authoritative map: `doc/runtime-topology.md`.
+
+| Service               | Port | Override env var          | Status |
+|-----------------------|------|---------------------------|--------|
+| voice-clone           | **8985** | `VOICE_CLONE_PORT`    | ✅ active |
+| webui                 | **8099** | (webui)               | ✅ active |
+| whisper.cpp ASR       | 8993 | `ASR_MODEL_PORT`          | ❌ not in any startup plan |
+| TTS adapter           | 8992 | `TTS_ADAPTER_PORT`        | ❌ removed |
+| CosyVoice3            | 8991 | `COSYVOICE_PORT`          | ❌ removed |
 
 ## Configuration
 

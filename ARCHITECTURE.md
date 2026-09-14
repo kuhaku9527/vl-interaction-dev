@@ -63,14 +63,15 @@ flowchart TB
 | **7060** | llama-server | VLM 推理主进程 | GGUF IQ4_NL，单卡 ~5.8GB VRAM。**唯一 SPOF**（挂=全瘫） |
 | **8099** | WebUI | 创作者交互端 | WebRTC + 进程内 sherpa-onnx |
 | **8985** | voice_clone API | 声音克隆注册 | MiniMax Rapid Clone 同步路径（ADR0001） |
-| **8991** | 本地 TTS 模型 | TTS adapter 上游 | 本地推理进程（CozyVoice 等） |
-| **8992** | TTS adapter | 语音合成流式（ws） | 本地 CozyVoice / MiniMax fallback |
+| ~~8991~~ | ~~本地 TTS 模型~~ | — | ❌ **已移除**（CosyVoice3 于 2026-07-12 从代码库删除；不在 `$PortMap`，永不启动） |
+| ~~8992~~ | ~~TTS adapter~~ | — | ❌ **已移除**（同上；TTS 现由 voice-clone 8985 承担） |
 | **8997** | memory-store | 记忆管理 | sqlite + 向量语义召回（USearch/bge-m3，BM25 兜底已移除，D-2026-08-05-003）；**内嵌 Local Wiki 知识库模块（同进程同端口，非独立服务）**；8996 为遗留默认空壳端口 |
-| 8079 | Hermes shim | 委派适配 | `/v1/solve` 协议转换 |
-| 8642 | Hermes gateway | 委派网关 | 严格隔离智能委派 |
+| **8079** | background-agent | 委派后端（默认 provider=**codex**） | `/v1/solve`；**2026-08-15 起进全部启动计划** |
+| ~~8642~~ | ~~Hermes gateway~~ | — | ⚠️ 端口在表中但**不在任何启动计划**（仅 `-Restart` 分发表） |
 
-- **默认启动计划**（ADR0004）：仅 `7060 / 8070 / 8099 / 8985`（TTS 子系统另占 `8991` 本地模型 / `8992` adapter）。
-- **全 11 进程计划**为容量目标（VRAM ~11.5GB），非默认。
+- **默认启动计划**（2026-09-14 按 `Plan-For` 校正）：`7060 / 8079 / 8070 / 8099 / 8985` + `8997`（memory-store 默认 ON，除非 `JOYAI_ENABLE_MEMORY_STORE=0`）—— **共 6 个**。
+- 原写「仅 7060/8070/8099/8985」漏了 background-agent(8079) 与 memory-store(8997)；原「全 11 进程」含已删除的 CosyVoice 8991 / TTS adapter 8992，**不再是目标**。
+- 权威拓扑见 [`doc/runtime-topology.md`](doc/runtime-topology.md)。
 - 入口路径：浏览器 → `localhost:8099`（WebUI）→ `8070`（webinfer）。
 
 ## 4. 决策 Token
@@ -112,7 +113,7 @@ flowchart TB
 | 编排 | PowerShell（start/stop-joyai.ps1） | Windows 单机一键启停 + 依赖顺序校验（ADR0004） |
 | 运行时 | Python 3.12 | WebUI/webinfer 已基于 3.12，统一避免双运行时 |
 
-## 7. 已冻结架构决策（ADR0001~0008, 0011~0014；0009/0010 跳过）
+## 7. 已冻结架构决策（ADR0001~0008 + 0011~0020；0009/0010 跳过；目录实有 19 份 .md + 4 份 mermaid）
 
 详细记录见 [`doc/adr/`](doc/adr/)：
 
@@ -127,7 +128,7 @@ flowchart TB
 | 0007 | 拆分 live_adapter.py 巨文件 |
 | 0008 | P0 适配器正确性修复（多服务端口 / 协议对齐） |
 | 0011 | 分阶段 Lint 门禁（baseline + burn-down） |
-| 0012 | bge-m3 全本地化部署（独立本地嵌入服务，云端降为可选 fail-over） |
+| ~~0012~~ | ⚠️ **`ADR-0012-v6-proposal.md` 自述状态为「提议（Proposed）」，不是已冻结决策**——原列入本表属实质性错误（2026-09-14 更正）。方案内容：bge-m3 全本地化（独立嵌入服务，云端降为可选 fail-over） |
 | 0013 | webinfer↔memory-store 客户端韧性策略（v0.3） |
 | 0014 | 日志事件 schema（JSONL 每服务文件） |
 
@@ -148,7 +149,7 @@ flowchart TB
 ## 9. 部署形态
 
 - **硬件**：Windows 11 + 单卡 NVIDIA RTX 5060 Ti 16GB；Python 3.12。
-- **编排**：`start-joyai.ps1` / `stop-joyai.ps1`，默认启动 4 个核心服务。
+- **编排**：`start-joyai.ps1` / `stop-joyai.ps1`；默认启动 **6** 个服务（llama-main + background-agent + webinfer + webui + voice-clone + memory-store）。见 `doc/runtime-topology.md`。
 - **环境隔离**：dev/int/uat/prod 同机不同目录（独立 venv + 端口偏移可选），不引入 VPC/K8s。
 - **自愈**：M11 监控各进程 `/health`，崩溃自动重启（P99 ≤ 30s）。
 - **容量上限**：VRAM 已满预算，扩容方向为关非必要服务 / 降上下文，而非加机器。
@@ -188,7 +189,7 @@ flowchart TB
 - [`doc/README.md`](doc/README.md) — 文档库总索引（入口路径 + 分类索引）
 - [`doc/main/00-main-direction.md`](doc/main/00-main-direction.md) — 项目定位与主方向
 - [`决策/README.md`](决策/README.md) — **决策书 SSOT**（已拍板事实；冲突时以它为准）
-- [`doc/adr/`](doc/adr/) — 19 份架构决策记录（+ 4 份 mermaid 图；⚠️ 编号 0007/0008 各被 3 个文件占用，待消歧）
+- [`doc/adr/`](doc/adr/) — 19 份架构决策记录（+ 4 份 mermaid 图；⚠️ 编号冲突：**0007 被 4 个文件占用**（2 md + 2 mermaid），0008 被 3 个占用，待消歧）
 - [`doc/subsystems/memory-architecture.md`](doc/subsystems/memory-architecture.md) — 记忆架构（含 Local Wiki 融合、召回链路细节）
 - `start-joyai.ps1` / `stop-joyai.ps1` — 启动与停止编排
 

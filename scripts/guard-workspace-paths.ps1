@@ -1,7 +1,7 @@
 # guard-workspace-paths.ps1
 # ---------------------------------------------------------------------------
 # 防外溢看门狗（dry-run，绝不自动删除）。
-# 扫描已知的“外溢盘符根” D:/c D:/d D:/Cache D:/tmp，若再冒出 Joy/WorkBuddy 相关
+# 扫描已知的“外溢盘符根” D:/c D:/d D:/Cache D:/tmp，若再冒出本项目相关
 # 文件即告警，供人工或 CI 发现回归。
 #
 # 用法：
@@ -16,7 +16,8 @@ param(
 
 $Roots = @('D:\c', 'D:\d', 'D:\Cache', 'D:\tmp')
 
-# 判定“Joy/WorkBuddy 相关”的令牌（路径或文件名包含其一即视为命中）
+# 判定“本项目相关”的令牌（路径或文件名包含其一即视为命中）。
+# 注：'workbuddy' 系列保留 —— 历史环境遗留的目录名仍在四盘符下，属需清理的产物。
 $Tokens = @(
     'joyai', 'JoyAI', 'joy_ai',
     'workbuddy', '.workbuddy',
@@ -42,7 +43,7 @@ foreach ($root in $Roots) {
 }
 
 if ($hits.Count -eq 0) {
-    Write-Host "[guard] OK - 四盘符未发现 Joy/WorkBuddy 外溢文件。"
+    Write-Host "[guard] OK - 四盘符未发现本项目外溢文件。"
     exit 0
 }
 

@@ -2,7 +2,7 @@
 
 > **目的**：本项目在 GitHub / git 上踩过的所有坑，集中钉死成一份可检索参考。任何对话端（本端或其他端）要做 GitHub/git 操作前，**先读这份，不要重新踩坑、不要重新推导**。
 > **维护纪律**：本文件是「GitHub/git 操作知识」的 SSOT。新增坑须附 **实证日期 + 根因 + 正确动作**；删旧换代时同步删旧。它与 `决策/`（架构/L1–L4 决策）互补但不重叠——决策讲"为什么这样设计"，本文件讲"怎么安全操作 git/GitHub"。
-> **关联**：`docs/local-wiki-methodology.md`（测试资产钉死）、`决策/`（单源真值）、`~/.workbuddy/MEMORY.md`（操作硬约束指针）。
+> **关联**：`docs/local-wiki-methodology.md`（测试资产钉死）、`决策/`（单源真值）、`doc/environment-dsh.md`（当前环境约束）、`doc/history-agent-environments.md`（历史环境记录）。
 
 ---
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 0. 环境分支（先确认你在哪个环境）
+## 0.1 环境分支（先确认你在哪个环境）
 
 > **2026-09-14 新增**。本项目历史上由 WorkBuddy / Codex 操作，现由 **DSH** 操作。
 > 两者的**沙箱模型不同**，下文部分段落是 WorkBuddy 时代写的，**在 DSH 下照做会卡住**。
@@ -82,10 +82,10 @@
 ## 5. worktree 陷阱
 
 - 路径坑：`git worktree add` 用 **Windows 绝对路径 `D:/AI/...`**（勿 `/d/AI/...`，会畸形成 `D:/d/...`）。
-- ref 不持久：Bash 沙箱跨调用 ref 可能不持久，但 loose object 留 `.git/objects`。
+- ref 不持久：~~Bash 沙箱~~跨调用 ref 可能不持久（**该沙箱行为属 WorkBuddy 历史环境**，见 §0），但 loose object 留 `.git/objects`。
 - 本地 ref 丢 → push 报 **refspec 不符** → 改推 `<sha>:refs/heads/<branch>`。
 - 注册跨会话静默丢失：`git worktree list` 不列，但工作目录 + 指针仍在 → `git -C` 报 not a git repo。
-  - 恢复：备份改动（二进制写回 LF）→ `rm -rf` 孤儿 → `git worktree prune` → `git worktree add <同路径> <branch>` → 拷回 → **精确 `git add` 具体文件**（禁 `git add -A`）。
+  - 恢复：备份改动 → `rm -rf` 孤儿 → `git worktree prune` → `git worktree add <同路径> <branch>` → 拷回 → **精确 `git add` 具体文件**（禁 `git add -A`）。
 - 本地验证：缺 node_modules 时从 main 软链跑 npm test/eslint，**提交前 `rm -f` 软链**。
 - 实证：2026-08-01（路径坑 / 软链）、2026-08-03（注册丢失）。
 
@@ -123,7 +123,7 @@
 - 正常：`gh pr merge --squash`（需 reviewer 通过，且 **CI 门禁全绿**）。
 - CI 红了先**本地复现并修复**，跑绿本地门禁（`scripts/quality-check.sh`）再推；修到绿才合。
 - ❌ 绝不用 `gh pr merge --squash --admin` 这类 `--admin` 绕过门禁。
-- 改 `.github/workflows/*` 须 `workflow` scope——宿主 token 本就带，沙箱下 `gh auth status` 误判缺（见 §2）。
+- 改 `.github/workflows/*` 须 `workflow` scope——**当前 token 已含**（2026-09-14 实测）；若真缺则 `gh auth refresh -s workflow`（见 §0/§2）。
 - 实证：PR #53 / #54 / #78 / #87 / #88（旧记"CI 假红可 --admin 绕过"已纠正）。
 
 ---
@@ -179,7 +179,7 @@
 | 要做 X | 先查 |
 |---|---|
 | push / 开 PR | VPN 开？`git status` 干净？refspec 对？ |
-| 改 `.github/workflows/*` | 宿主 token 本带 `workflow`；沙箱下 `gh auth status` 误判缺 → 逃沙箱 `dangerouslyDisableSandbox:true` 再推（见 §2） |
+| 改 `.github/workflows/*` | **DSH 下 `gh auth status` 可信**（实测 token 已含 `workflow` scope）→ 直接 `git push`。若真缺：`gh auth refresh -s workflow`（见 §0/§2） |
 | push `.sh` / `.yml` / Makefile | 转 LF 了吗（`.gitattributes` 会归一化新 blob） |
 | 工作树异常（` D` / 全未跟踪） | `git ls-files` / `git cat-file -e HEAD:<path>` 确认真丢没 |
 | 想 `git clean -fd` | index 空吗？空 = 先按 §6 重建 tracked，否则删光树 |

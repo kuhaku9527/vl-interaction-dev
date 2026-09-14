@@ -18,7 +18,7 @@ powershell -ExecutionPolicy Bypass -File .\install\windows\start-llama-server.ps
 
 | 命令 | 说明 |
 |---|---|
-| `start-llama-server.ps1` | 启动 multimodal (LLM + mmproj)，端口 7060，ctx 4096 |
+| `start-llama-server.ps1` | 启动 multimodal (LLM + mmproj)，端口 7060，ctx **16384** |
 | `start-llama-server.ps1 -Port 8080 -CtxSize 8192` | 自定义端口和 ctx |
 | `start-llama-server.ps1 -NoMmproj` | 纯文本 LLM（省 ~1.2 GB 显存） |
 | `start-llama-server.ps1 -Status -Port 7060` | 查看状态 |
@@ -57,7 +57,7 @@ curl -s http://127.0.0.1:7060/v1/chat/completions -H "Content-Type: application/
 | mmproj | `D:\AI\models\main\mmproj\mmproj-joyai-vl-interaction-preview-f16.gguf` (1.16 GB, F16) |
 | llama.cpp | `D:\AI\bin\llama.cpp\llama-server.exe` (b9330, Clang 19.1.5) |
 
-性能（IQ4_NL + mmproj, ctx 4096, ngl 999）：
+性能（IQ4_NL + mmproj, ctx 16384, ngl 999）：
 
 | 指标 | 值 |
 |---|---|

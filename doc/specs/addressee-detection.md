@@ -1,7 +1,7 @@
 # Spec：Addressee Detection（说话对象判定）落地方案
 
 > 生命周期: **正式**（2026-08-13 定稿，走 草稿→设计评审→实现→QA→真机 流程完成）
-> 上游: 云端调研 [`doc/research/addressee-detection-2026-08-12/`](research/addressee-detection-2026-08-12/)（终稿 `final_report_addressee_detection.md` + 4 份支撑，共 5 份）+ 交叉验证 `doc/research/addressee-cross-validation-2026-08-12.md`
+> 上游: 云端调研 [`doc/research/addressee-detection-2026-08-12/`](../research/addressee-detection-2026-08-12/)（终稿 `final_report_addressee_detection.md` + 4 份支撑，共 5 份）+ 交叉验证 `doc/research/addressee-cross-validation-2026-08-12.md`
 > 用户授权（20:4x/20:5x）：**效果优先，大改不怕，云端兜底，硬件不设限**；**ADR0006 可演进**（旧框架不是不可改，新功能走 spec 记录+后续整合流程）
 > 实现: 2b10c0c（Phase1：CAM++ 声学预筛 detector + 本地基准）→ ce641fc（live_mode 门控 + enroll 端点 + 前端）→ 80cffce（Phase2：四态 decision token `+not-for-me` 六层）
 > 验证: QA PASS（webui `test_addressee_detector` / `test_addressee_qa_edges` + webinfer 四态 `test_decision_notforme` / `test_qa_4state_supplement` 回归）

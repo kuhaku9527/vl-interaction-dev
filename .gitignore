@@ -16,11 +16,11 @@ dist/
 
 # Agent-internal state (memory/skills/tmp under .workbuddy) and runtime PID dirs
 # — local-only, never belong in VCS.
+#   这些目录属【历史 agent 环境】（WorkBuddy / Codex），当前环境为 DSH。
+#   仍保留忽略规则：目录内容仍在磁盘上（含历史决策旁证），且不应进版本控制。
+#   背景见 doc/history-agent-environments.md 与 doc/environment-dsh.md。
 .workbuddy/
-# Codex-side scratch dirs (see AGENTS.md §2):
-#   .workbuddy_tmp/ - probe/fix scripts written by Codex during debugging
-#   会话记录/       - one-off per-session JSON dump built from ~/.codex/sessions/
-#                      (130+ MB; re-runnable via .workbuddy_tmp/extract_sessions.py)
+#   会话记录/       - one-off per-session JSON dump（130+ MB，已不产生新内容）
 .workbuddy_tmp/
 会话记录/
 services/.pids/

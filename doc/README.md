@@ -1,6 +1,6 @@
 # JoyAI-VL-Interaction 文档库
 
-> **最近更新**: 2026-09-14 | **状态**: ✅ 索引已重建（`specs/README.md` 覆盖全部 47 份；6 个目录各有索引）
+> **最近更新**: 2026-09-14 | **状态**: ✅ 索引已重建（`specs/README.md` 覆盖全部 46 份；**8 个目录**各有索引：specs / subsystems / adr / research / acceptance / architecture / docs / reports）
 >
 > **如何读这页**：新人先按 👇 入口路径走（35 分钟入门）。需要查特定子系统的设计/规格/决策时，按"分类索引"找。历史文档 `deprecated/` 不进常规阅读路径。
 >

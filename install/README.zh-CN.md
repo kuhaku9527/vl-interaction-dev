@@ -220,10 +220,16 @@ D:\AI\workspace\JoyAI-VL-Interaction-main\services\.venv\
 
 | 模式 | 启动的服务 |
 | --- | --- |
-| `default` | main、summary、whisper、cosyvoice、voice-clone、hermes、background-agent、webinfer、tts-adapter、asr-adapter、webui |
-| `minimal` | main、webinfer、webui（最小端到端冒烟） |
-| `voice`   | main、whisper、cosyvoice、voice-clone、tts-adapter、asr-adapter、webinfer、webui（完整语音流，无后台 agent） |
+| `default` | llama-main、voice-clone、webinfer、webui、background-agent |
+| `minimal` | llama-main、webinfer、webui、background-agent（最小端到端冒烟） |
+| `voice`   | 与 `default` 相同（KWS/ASR 在 webui 进程内经 sherpa-onnx 运行） |
 | `gaming`  | `default` + `FORCE_SILENCE_BEFORE_QUERY=false` + `LOG_LEVEL=WARNING` |
+
+> ⚠️ **本表于 2026-09-14 按 `services/scripts/run-windows.ps1` 的 `Plan-For` 校正**。
+> 原表列出的 **summary / whisper / cosyvoice / hermes / tts-adapter / asr-adapter 均不在任何 plan 中**——
+> 它们只存在于 `-Restart` 分发表，**从不启动**。权威服务/端口表见 `doc/runtime-topology.md`。
+>
+> `memory-store` 在所有模式下都会追加启动，除非设 `JOYAI_ENABLE_MEMORY_STORE=0`（默认 ON，端口 8997）。
 
 ### 重启 / 停止单个服务
 

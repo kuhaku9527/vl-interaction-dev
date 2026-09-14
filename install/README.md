@@ -222,10 +222,19 @@ D:\AI\workspace\JoyAI-VL-Interaction-main\services\.venv\
 
 | Mode | Services started |
 | --- | --- |
-| `default` | main, summary, whisper, cosyvoice, voice-clone, hermes, background-agent, webinfer, tts-adapter, asr-adapter, webui |
-| `minimal` | main, webinfer, webui (smallest end-to-end smoke) |
-| `voice`   | main, whisper, cosyvoice, voice-clone, tts-adapter, asr-adapter, webinfer, webui (full voice loop, no background agent) |
+| `default` | llama-main, voice-clone, webinfer, webui, background-agent |
+| `minimal` | llama-main, webinfer, webui, background-agent (smallest end-to-end smoke) |
+| `voice`   | same as `default` (KWS/ASR run inside webui via sherpa-onnx) |
 | `gaming`  | `default` + `FORCE_SILENCE_BEFORE_QUERY=false` + `LOG_LEVEL=WARNING` |
+
+> ⚠️ **Table corrected 2026-09-14** to match `services/scripts/run-windows.ps1`
+> `Plan-For`. The previous version listed **summary / whisper / cosyvoice /
+> hermes / tts-adapter / asr-adapter**, which are **not in any plan** — they
+> exist only in the `-Restart` dispatch table and never start. Authoritative
+> service/port map: `doc/runtime-topology.md`.
+>
+> `memory-store` is added to every mode unless `JOYAI_ENABLE_MEMORY_STORE=0`
+> (default ON, port 8997).
 
 ### Restart / stop one service
 

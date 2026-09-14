@@ -10,8 +10,9 @@ Runs six invocations:
   5. **Positive PASS case**: build a temp contract pointing at the real
      run-windows.env (which we know contains MAIN_CONTEXT=16384 + 8997);
      every check should pass and rc=0. Closes the smoke-test blind spot
-     flagged in workbuddy audit: prior smoke only checked exit codes,
-     never a compliant env's actual passed=True verdict.
+     flagged in a 2026-08 audit:
+     prior smoke only checked exit codes, never a compliant env's actual
+     passed=True verdict.
   6. **Runtime probe + drift_gate integration**: run
      scripts/vlm_runtime_probe.py (writes logs/vlm-runtime-props.json)
      then re-run drift_gate --phase all --mode closed; expects 4/4 PASS.
@@ -146,8 +147,8 @@ def main():
     # 5. Positive PASS case: build a temp contract pointing at the real
     #    run-windows.env (which contains MAIN_CONTEXT=16384 + 8997).
     #    Every check should pass and rc=0. Closes the smoke-test blind
-    #    spot flagged in workbuddy audit: prior smoke only checked exit
-    #    codes, never a compliant env's actual passed=True verdict.
+    #    spot flagged in a 2026-08 audit: prior smoke only checked exit codes,
+    #    never a compliant env's actual passed=True verdict.
     tmpdir = Path(tempfile.mkdtemp(prefix="drift_gate_smoke_"))
     try:
         compliant_contract = {

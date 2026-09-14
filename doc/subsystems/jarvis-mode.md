@@ -115,8 +115,8 @@ powershell -ExecutionPolicy Bypass -File start-joyai.ps1 -Restart webui
 ```
 
 无需改源码。env 字符串拼错（比如 `JARVIS_KWS_SCORE=abc`）会打 WARNING 日志回退默认，
-不会让 webui 启动崩溃。详见 [adr/0002-kws-config-env.md](adr/0002-kws-config-env.md) 与
-[services/webui/tests/test_jarvis_config_env.py](../services/webui/tests/test_jarvis_config_env.py)。
+不会让 webui 启动崩溃。详见 [adr/0002-kws-config-env.md](../adr/0002-kws-config-env.md) 与
+[services/webui/tests/test_jarvis_config_env.py](../../services/webui/tests/test_jarvis_config_env.py)。
 
 
 ### §2.4 调参建议（2026-07-11，针对干净录音）

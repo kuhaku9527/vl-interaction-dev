@@ -7,7 +7,7 @@
   - Uses D:\AI\bin\llama.cpp (b9330 CUDA 13.1 sm_120 build)
   - Loads IQ4_NL GGUF + F16 mmproj
   - Writes PID file to .pids/ and timestamped log to logs/
-  - Defaults: port 7060, ctx 4096, ngl 999
+  - Defaults: port 7060, ctx 16384, ngl 999
   - -NoMmproj to run text-only LLM (smaller memory)
 
 .EXAMPLE

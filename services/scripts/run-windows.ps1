@@ -1,15 +1,18 @@
-﻿#requires -Version 5.1
+#requires -Version 5.1
 <#
 .SYNOPSIS
   One-shot orchestrator for the native Windows + RTX 5060 Ti JoyAI-VL-Interaction
   stack.
 
 .DESCRIPTION
-  Modes:
-    default  ->  main + voice-clone + webinfer + webui (current production path)
-    minimal  ->  main + webinfer + webui (smallest end-to-end smoke)
+  Modes (2026-09-14 corrected to match Plan-For below):
+    default  ->  llama-main + voice-clone + webinfer + webui + background-agent
+    minimal  ->  llama-main + webinfer + webui + background-agent
     voice    ->  same as default; KWS/ASR run inside webui via sherpa-onnx
     gaming   ->  default + FORCE_SILENCE_BEFORE_QUERY=false + LOG_LEVEL=WARNING
+  memory-store is added to every plan unless JOYAI_ENABLE_MEMORY_STORE=0
+  (default ON, port 8997). See doc/runtime-topology.md for the authoritative
+  service/port map.
 
   Usage:
     powershell -ExecutionPolicy Bypass -File services\scripts\run-windows.ps1

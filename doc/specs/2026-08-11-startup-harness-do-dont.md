@@ -2,9 +2,13 @@
 
 > 生命周期标记：`<正式>`
 > 作者端点：`<通用诊断>`
-> 关联：`决策/启动链路.md`（D-2026-08-04-001）、`doc/service-startup.md`、`.workbuddy/memory/MEMORY.md` §2/§10
+> 关联：`决策/启动链路.md`（D-2026-08-04-001）、`doc/service-startup.md`、`doc/environment-dsh.md`（当前环境约束）
 > 合规：本 spec 套用 `决策/spec编写规范.md` 四要素（因果链 / 条件 harness / 负面约束 / 生命周期标记）。
 > 目的：把"启动服务"的正确 harness 与踩过的错误做法对照固化，防复发。具体错误案例仅作反例，不进入 MEMORY.md（MEMORY 只收抽象纪律）。
+>
+> ⚠️ **环境说明（2026-09-14）**：本文 §3.2 E1 与 §4 提到的"沙箱怪癖"指 **WorkBuddy 环境**（当时主用）。
+> 该环境已不再使用（现为 DSH），但其**核心原则仍然成立且值得保留**——「**沙箱怪癖应临时处理，不落盘成永久 repo 脚本**」。
+> 本条原则是本 spec 最有价值的部分，与具体是哪个 agent 无关。历史环境记录见 `doc/history-agent-environments.md`。
 
 ## 1. 因果链（Why / Why-this-choice）
 
@@ -50,7 +54,9 @@
   2. 若需起：真机后台窗口执行 `powershell -ExecutionPolicy Bypass -File start-joyai.ps1 -Mode minimal`。
   3. 验证：`logs/launcher-<UTC>.log` 末行 `All services ready` + 端口监听。
 - **错误对照（禁做）**：用 `.workbuddy/scripts/launch-joyai-safe.ps1` 作启动入口；在 AI 前台工具里直接跑 `run-windows.ps1` 等阻塞式启动（进程树被回收）。 <!-- known-absent: scripts/launch-joyai-safe.ps1 不存在（一次性调试产物/未落盘） -->
-- **沙箱注意（非真机问题，不落盘为脚本）**：AI 沙箱内 `Start-Process` 可能因环境块 `Path`/`PATH` 大小写重复键撞键、且进程树在工具返回时被回收，导致无法在沙箱内起满栈。这是 sandbox 怪癖，不是真机问题；真机用 canonical 即可。如需沙箱验证，临时归一化 PATH 或在命令内处理，不要写永久 repo wrapper。
+- **沙箱注意（非真机问题，不落盘为脚本）**：~~AI 沙箱内 `Start-Process` 可能因环境块 `Path`/`PATH` 大小写重复键撞键、且进程树在工具返回时被回收~~ —— 这是 **WorkBuddy 环境**特有的沙箱怪癖（见 `doc/history-agent-environments.md`），**不是真机问题**。
+  **保留下来的通用原则**：沙箱/工具环境的怪癖应**临时处理，不要固化成永久 repo 脚本**；真机用 canonical 启动入口即可。
+  > 当前环境（DSH）的进程拉起方式见 `doc/environment-dsh.md`。
 
 ## 5. 验收 / 排除
 
