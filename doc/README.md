@@ -286,6 +286,55 @@ JoyAI-VL-Interaction-main/
 | 6 | `doc/specs/README.md` 称"7 份 draft 已删除"，实际仍有 8 个 `draft-*.md` | draft→正式 的转正流程自 2026-08-13 停摆 |
 | 7 | `scripts/log_query.py` 被 ADR-0014 与 `决策/服务-日志.md` 引为校验工具，**从未落盘** <!-- known-absent --> | 已锁定决策的验收检查无法执行 |
 
+---
+
+## 🧪 测试现状（2026-09-14 首次全量跑，**重要的新发现**）
+
+> **背景**：本轮文档收口共 6 个提交、改了约 60 个文件，但**全程未跑测试**。用户追问"还有没注意的点吗"后才跑 —— 结果发现 **9 个失败**。经 git worktree 二分确认：**这 9 个在我改动之前（`3a282ef`）就存在**，是历史遗留，非本轮引入。
+
+### 各套件实测结果
+
+| 套件 | 结果 | 备注 |
+|---|---|---|
+| **webinfer** | ✅ **436 passed / 0 failed / 0 skipped**（3.8s） | 三次重跑（含反转文件顺序）结果一致，无 flaky。**无 skip/xfail 掩码**（grep 零匹配） |
+| **tts** | ✅ 28 passed | — |
+| **voice-clone** | ✅ 11 passed | — |
+| **asr** | ✅ 2 passed | — |
+| **webui** | 🔴 **9 failed / 862 passed**（2 skipped） | 详见下 |
+
+### webui 的 9 个失败（历史遗留，**已决定暂不修**）
+
+**根因**：`28c90ec`（S2 重构）把跨模块全局移到 `window.JoyState`（新文件 `joy_state.js`），但**测试的 `_SPLIT_JS` 文件列表没同步**（12 个测试文件全缺 `joy_state.js`），且断言停留在旧的字符串形态。
+
+**回归根因**：`483fd88`（v6-lite.23 输入栏回滚）删掉了 `<div class="mode-group" role="radiogroup">` 容器，但
+- 两个按钮**仍带 `role="radio"`**（孤立 —— WAI-ARIA 要求 `role=radio` 必须在 `radiogroup` 内）
+- `styles.css` 里**还留着 7 处 `.mode-group` 规则**（悬空）
+
+| # | 失败用例 | 性质 |
+|---|---|---|
+| 1-3 | `test_reply_epoch_guard.py`（epoch guard / adopt epoch / declaration） | 断言形态未跟上 S2 |
+| 4-5 | `test_qa_phase_c_edges.py`（no local self-increment / guard precedes render） | 同上 |
+| 6 | `test_live_frontend_contract.py` | 同上 |
+| 7 | `test_live_mode_qa_boundary.py` | 同上 |
+| 8 | `test_live_visual_frontend_contract.py` | 同上 |
+| 9 | `test_webui_mode_radio_contract.py` | **真回归**：radiogroup 容器缺失 + CSS 悬空 |
+
+> **用户决定（2026-09-14）**：**暂不修**。原话："先不动 ui，那是一大块屎山代码，很多坑还没填上。"
+> 故本轮**未改任何 webui 测试或 UI 代码**（曾试图适配后又全部回退，工作树保持干净）。
+> **接手者注意**：这 9 个失败是**已知的、有意保留的**技术债，不是新问题。修 UI 时一并处理。
+
+### 另发现两个 webinfer 的"假通过"测试（子代理诊断）
+
+| 位置 | 问题 |
+|---|---|
+| `test_summarizer_routing.py:219` `test_flush_chunk_fail_open_when_summary_raises` | 桩被写成 `async def _boom`，但真实 `_build_mid_term_summary_entry` 是**同步**函数（经 `asyncio.to_thread` 调用）→ 桩返回**未被 await 的 coroutine**，**永不 raise**。测试通过，但它宣称锁住的失败模式**从未被执行**（把守卫从 `except Exception` 收窄仍会通过）。**生产代码本身正确**，是测试缺陷。修法：把桩改成同步 `def` |
+| `pyproject.toml:87` | 声明 `timeout = 60`，但 **pytest-timeout 未安装** → 该超时**实际失效**（`PytestConfigWarning: Unknown config option: timeout`） |
+
+> **教训（写入本文件防重犯）**：
+> **改了代码就必须跑测试。** 本轮 6 个提交、约 60 个文件全程未跑测试，若这 9 个失败中有任何一个是我引入的，就会带着它提交。
+> 好在二分证明了不是；但**这是运气，不是纪律**。
+> 后续任何改动，收尾前至少跑受影响服务的 `pytest -q`。
+
 ### 📌 一条经验规律（值得记住）
 
 > **文档的状态头只会朝一个方向衰减：从"已实现"退不回"待实现"，但"待实现"会一直停留在那里，即使功能早已上线。**

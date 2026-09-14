@@ -240,7 +240,13 @@ def test_flush_chunk_fail_open_when_summary_raises(monkeypatch):
     adapter.summarizer = _BoomSummarizer()
     adapter.config = SimpleNamespace(compress_every_n_chunks=4)
 
-    async def _boom(state, chunk):
+    # ⚠️ 2026-09-14 修正：桩必须是**同步** def。
+    # 真实 `_build_mid_term_summary_entry` 是 `def`（summarizer_routing.py:119），
+    # 经 `await asyncio.to_thread(...)` 调用（:86-90）。原桩写成 `async def` →
+    # to_thread 在线程里返回一个**未被 await 的 coroutine**，永不 raise，
+    # 导致本测试一直在「假通过」：它宣称锁住的 fail-open 失败模式从未被执行
+    # （把守卫从 except Exception 收窄仍会通过）。
+    def _boom(state, chunk):
         raise RuntimeError("cloud summarizer down")
 
     # 打桩：_build_mid_term_summary_entry 抛异常（走 fail-open 分支）
