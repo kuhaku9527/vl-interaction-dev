@@ -62,31 +62,31 @@ pwsh -File scripts/guard-workspace-paths.ps1      # 0=无命中, 1=发现外溢
 - `D:/d/AI/{workspace,envs,tmp_ruff}` 与 `D:/d/tmp/{ruff69,ruff-check-venv,rv3}` → 删除（spillover / lint 临时）。
 - `D:/c/Users/<user>/.workbuddy` → 删除（错位 HOME，真实 HOME 在 `C:/Users/<user>/.workbuddy`）。
 
-### 4.1 ⚠️ 现行外溢（2026-09-14 实测发现，**未修复**）
+### 4.1 `npm_config_cache` 指向 hermes-agent —— **不是外溢，是正确的项目隔离**
 
-**这是 D-011「所有产物必须收口在工作树内」第一次被实测违反。**
+> **2026-09-14 结论修正**：本条曾被我（AI）误判为「D-011 第一次被实测违反」并标 🔴。
+> **用户质疑后复核，原判定错误。** 保留此条以记录推理错误的教训。
 
-| 变量 | 应为 | **实测值** | 状态 |
-|---|---|---|---|
-| `HF_HOME` | `<ws>\.cache\huggingface` | 同 | ✅ |
-| `HF_HUB_CACHE` | `<ws>\.cache\huggingface\hub` | 同 | ✅ |
-| `PIP_CACHE_DIR` | `<ws>\.cache\pip` | 同 | ✅ |
-| **`npm_config_cache`** | `<ws>\.cache\npm` | ❌ **`D:\Workspace\hermes-agent\.cache\npm`** | 🔴 **外溢到另一个项目** |
-| `PLAYWRIGHT_BROWSERS_PATH` | `<ws>\.cache\playwright` | 同 | ✅ |
-| `UV_CACHE_DIR` | `<ws>\.cache\uv` | 同 | ✅ |
-| `ELECTRON_CACHE` | `<ws>\.cache\electron` | 同 | ✅ |
+**实测**：用户级 `npm_config_cache` = `D:\Workspace\hermes-agent\.cache\npm`；其余 6 个缓存变量均正确指向本工作区。
 
-**影响**：npm 缓存被导向 `hermes-agent` 项目；本仓库 `<ws>/.cache/npm` **不存在**。
+**为什么这不是外溢**（证据）：
 
-**看门狗盲区**：`scripts/guard-workspace-paths.ps1` 的 `$Roots = @('D:\c','D:\d','D:\Cache','D:\tmp')` **不含 `D:\Workspace`**，`$Tokens` 也无 `hermes-agent` → **抓不到这条外溢**。
+| 事实 | 证据 |
+|---|---|
+| `hermes-agent` 是**独立项目**，非本项目产物 | `git -C /d/Workspace/hermes-agent remote -v` → `NousResearch/hermes-agent.git` |
+| 它是 **Node 项目**，有自己的 npm 需求 | 存在 `package.json` + `.npmrc`（engine-strict、min-release-age 等策略） |
+| 它有**自己的** npm 缓存目录 | `/d/Workspace/hermes-agent/.cache/npm` 存在 |
+| 它是本项目的**上游依赖** | `install/setup-hermes.ps1` 负责安装（`NousResearch/hermes-agent v0.17.0`） |
 
-**修复方式**（需用户确认后执行，属用户级环境变更）：
-```powershell
-setx npm_config_cache "D:\AI\workspace\JoyAI-VL-Interaction-main\.cache\npm"
-```
-并在 `guard-workspace-paths.ps1` 的 `$Roots` 增加 `D:\Workspace`（或至少记录该盲区）。
+→ 该值是 **hermes-agent 为自身设置的项目级缓存隔离**，符合"每个项目缓存收口在自己的工作树内"的精神。
 
-> ⚠️ **修改用户级环境变量属越界操作**，本文件仅记录事实，未执行。请用户决定。
+**D-011 的正确范围**：约束的是「**本项目**的产物收口在**本项目**工作树内」，**不是**「这台机器上所有 npm 缓存」。
+
+**唯一真实观察（低危）**：用户级 `setx` 是全局的，故在**本项目**内跑 npm 时缓存也会落到 hermes-agent 目录。本项目 npm 用量极小（仅 `services/webui` 的 eslint/vitest），可忽略。若将来本项目 npm 用量上升，再考虑改用项目级 `.npmrc`（`cache=./.cache/npm`）覆盖。
+
+> ⚠️ **推理教训（写在此处防重犯）**：看到「本项目的变量指向项目外」时，**必须先问「那个目录是什么、属于谁」**，再判定是否为外溢。
+> 本例中「6 个变量正确、仅 1 个不同」本身就是反证 —— 环境被污染不会只改一个变量。
+> 参见 `doc/README.md` 维护规则：**先验证前提，再下结论**。
 
 > ⚠️ 上文提到的"WorkBuddy HOME"是**历史环境概念**。本环境（DSH）的约束见 [`../environment-dsh.md`](../environment-dsh.md)。
 

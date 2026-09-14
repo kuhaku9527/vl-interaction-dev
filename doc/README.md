@@ -198,6 +198,14 @@ JoyAI-VL-Interaction-main/
    **绝不可改写**（见 `scripts/doc_health.py` 的 `NEVER_REWRITE`）：
    `logs/`、`services/logs/`、`services/.logs/`、`reports/webui-preview-*`、`doc/research/data/`、`.cache/`、`.workbuddy*/`、`doc/deprecated/`。
    **判据**：该文件描述的是**"当时发生了什么"**（记录）还是**"现在应该是什么"**（文档）？前者一律不改。
+9. **⚠️ 先问"这是什么"，再下结论**（2026-09-14 教训，**范畴错误**）：
+   实测发现用户级 `npm_config_cache` 指向本工作区**之外**（`D:\Workspace\hermes-agent\.cache\npm`），
+   当时（AI）直接判定为「违反 D-011 外溢」并标 🔴 —— **判定错误**。
+   复核后发现：`hermes-agent` 是**另一个独立项目**（`NousResearch/hermes-agent`，Node 项目，有自己的 `package.json`/`.npmrc`），
+   那是**它自己的项目级缓存隔离**，完全正确。
+   **D-011 约束的是「本项目的产物收口在本项目工作树内」，不是「这台机器上所有缓存」。**
+   **判据**：看到「本项目的变量指向项目外」时，**先问那个目录属于谁**再判定。
+   **反证信号**：同组变量中**只有一个不同、其余全对** → 几乎不可能是"环境被污染"，更可能是该值被**另一个项目**按需设置。
 
 ---
 
