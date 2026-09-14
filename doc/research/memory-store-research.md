@@ -2,7 +2,7 @@
 
 > 状态：A+C 调研已完成（Phase A 本地现码 + Phase C 外部资料）。Phase B（环境实情）按用户指令延后。
 > 目的：在写 `spec` 与 `ADR` 前，把"现码做了什么 / 不做什么"摸清，把 embedding 服务化、sqlite-vec、召回语义、backend 耦合这四条线挖到底。
-> 范围：仅覆盖 `doc/memory-architecture.md §6 P2-1` 的骨架阶段，不做 live_adapter 钩子（§6 P2-1.1 / 1.2）、bge-m3（§6 P2-3）、obsidian（§6 P2-2）。
+> 范围：仅覆盖 `doc/subsystems/memory-architecture.md §6 P2-1` 的骨架阶段，不做 live_adapter 钩子（§6 P2-1.1 / 1.2）、bge-m3（§6 P2-3）、obsidian（§6 P2-2）。
 > 后续动作：§5 列出的开放项交给 `doc/specs/memory-store-skeleton-spec.md` 与 `doc/adr/0005-memory-store-start.md` 决定。
 
 ---
@@ -11,7 +11,7 @@
 
 ### 1.1 触发
 
-`doc/memory-architecture.md v3.1` 已写完，但 `services/memory-store/` 还没起。所有相关代码仍在 `services/webinfer/` 进程内的 `SessionState`（`live_adapter.py:586`）里——`mid_term_summaries`、`mid_term_history`、`long_term_history` 三层 dict 一停即丢。
+`doc/subsystems/memory-architecture.md v3.1` 已写完，但 `services/memory-store/` 还没起。所有相关代码仍在 `services/webinfer/` 进程内的 `SessionState`（`live_adapter.py:586`）里——`mid_term_summaries`、`mid_term_history`、`long_term_history` 三层 dict 一停即丢。
 
 按 v3.2 路线图（`00-main-direction.md §4`），#3 P2 记忆持久化要在 P0 走顺后再开排期；本调研是 P2 启动前的最后一道设计输入。
 
@@ -336,9 +336,9 @@ services/memory-store/
 
 ### 6.1 项目内已读
 
-- `doc/memory-architecture.md`（v3.1 全读）
-- `doc/00-main-direction.md §4`（v3.2 路线图）
-- `doc/hermes-integration.md`（头 120 行；其余 Phase C.4 不需要）
+- `doc/subsystems/memory-architecture.md`（v3.1 全读）
+- `doc/main/00-main-direction.md §4`（v3.2 路线图）
+- `doc/subsystems/hermes-integration.md`（头 120 行；其余 Phase C.4 不需要）
 - `services/webinfer/live_adapter.py`（grep 结构 + line 586 SessionState + line 823 _session_cleanup_loop + line 2059 _compress_mid_terms）
 - `services/webinfer/memory_summarizer.py`（grep 结构 + line 286 SummarizerModel + 280-630 行阅读）
 - `services/webinfer/system_prompts.py`（全读 180 行）

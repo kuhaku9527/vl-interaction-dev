@@ -1,6 +1,6 @@
 # JoyAI-VL-Interaction · 架构概览
 
-> 面向开源贡献者的精简架构说明。完整决策记录见 [`doc/adr/`](doc/adr/)，运行指引见 [`README.zh-CN.md`](README.zh-CN.md)。
+> 精简架构说明。完整决策记录见 [`doc/adr/`](doc/adr/)，项目定位与主方向见 [`doc/main/00-main-direction.md`](doc/main/00-main-direction.md)，运行指引与文档索引见 [`doc/README.md`](doc/README.md)。
 
 > ⚠️ **维护纪律（防偏移）**：本文件是 **指针式镜像**，不是细节源。唯一事实源（SSOT）为 `决策/`（L1–L4 决策）、`doc/specs/`（需求/设计意图）、`doc/adr/`（架构决策记录）。**发生以下「大更新」并落地后，必须从 SSOT 同步更新本文件**：① 端口变更；② 服务拆分或新增；③ 召回等行为语义变更；④ 新子系统；⑤ 新增 ADR。更新时只改端口号、指针与一句话结论，**不要在此搬运具体字段选型或业务细节**（那会污染上下文且必漂移）；深层细节一律用链接指向 SSOT。
 
@@ -184,10 +184,14 @@ flowchart TB
 
 ## 13. 文档索引
 
-- [`README.zh-CN.md`](README.zh-CN.md) — 项目介绍与快速开始
-- [`doc/adr/`](doc/adr/) — 12 份架构决策记录（ADR0001~0008, 0011~0014；0009/0010 跳过）
-- [`doc/local/architecture-current.md`](doc/local/architecture-current.md) — 已冻结架构基线（D4）
+- [`doc/runtime-topology.md`](doc/runtime-topology.md) — ⭐ **现行运行拓扑（唯一权威）**：服务/端口/启动模式/交互模式
+- [`doc/README.md`](doc/README.md) — 文档库总索引（入口路径 + 分类索引）
+- [`doc/main/00-main-direction.md`](doc/main/00-main-direction.md) — 项目定位与主方向
+- [`决策/README.md`](决策/README.md) — **决策书 SSOT**（已拍板事实；冲突时以它为准）
+- [`doc/adr/`](doc/adr/) — 19 份架构决策记录（+ 4 份 mermaid 图；⚠️ 编号 0007/0008 各被 3 个文件占用，待消歧）
 - [`doc/subsystems/memory-architecture.md`](doc/subsystems/memory-architecture.md) — 记忆架构（含 Local Wiki 融合、召回链路细节）
 - `start-joyai.ps1` / `stop-joyai.ps1` — 启动与停止编排
+
+> ⚠️ 本文件的端口表（§3）与上述文档已对齐；但 `doc/local/architecture-*.md` **已过时**，不再作为架构基线引用。
 
 > 本文档由 9 份生成式架构交付稿（高层/系统/部署/安全/UserStory 等）提炼精简而成，保留端口、SPOF、模块边界、关键决策与成本等实质内容，去除企业级流程仪式。

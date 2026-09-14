@@ -1,7 +1,7 @@
 # Memory-Store Skeleton Spec (v0.1)
 
-> 状态：**设计完整**，待实施。配套调研文档 `doc/memory-store-research.md`（18KB）。
-> 范围：仅 `doc/memory-architecture.md §6 P2-1` 骨架阶段，不做 live_adapter 钩子（§6 P2-1.1 / 1.2）、bge-m3（§6 P2-3）、obsidian（§6 P2-2）、psql + pgvector（Phase B 之后）。
+> 状态：**设计完整**，待实施。配套调研文档 `doc/research/memory-store-research.md`（18KB）。
+> 范围：仅 `doc/subsystems/memory-architecture.md §6 P2-1` 骨架阶段，不做 live_adapter 钩子（§6 P2-1.1 / 1.2）、bge-m3（§6 P2-3）、obsidian（§6 P2-2）、psql + pgvector（Phase B 之后）。
 > 配套 ADR：`doc/adr/0005-memory-store-start.md`。
 
 ## Problem Statement
@@ -14,13 +14,13 @@
 
 现在没有持久化、没有 RAG、没有外部接口。唯一的"持久化"是 `LIVE_SAVE_OUTPUTS=true` 把响应写 `logs/sessions/<sid>.jsonl`——那是响应日志，**不是记忆**。
 
-`doc/memory-architecture.md v3.1` 已经把架构写完，但 `services/memory-store/` 没起。本次骨架（v0.1）目的是把"会话结束 push + 启动首轮 pull"两端落到**可运行代码**，embedding / psql / obsidian 全部留 v0.2+。
+`doc/subsystems/memory-architecture.md v3.1` 已经把架构写完，但 `services/memory-store/` 没起。本次骨架（v0.1）目的是把"会话结束 push + 启动首轮 pull"两端落到**可运行代码**，embedding / psql / obsidian 全部留 v0.2+。
 
 ## Solution
 
 起 `services/memory-store/`，FastAPI 跑在 `:8996`。`SqliteBackend` 用 sqlite FTS5 BM25（`agent-knowledge` 项目 R@5 96.6% 零向量方案证明足够；sqlite-vec pre-v1 breaking-change 风险绕开）作为唯一可用 backend；`PsqlBackend` / `ObsidianBackend` 占位（raise NotImplementedError）。
 
-v0.1 **不引入 embedding 服务**；**不渲染 HTML，不挂 `static/`**——按 `doc/memory-store-research.md §4.1` 的"对外 web 表面唯一由 webui 承担"原则。memory-store 只暴露 JSON API。
+v0.1 **不引入 embedding 服务**；**不渲染 HTML，不挂 `static/`**——按 `doc/research/memory-store-research.md §4.1` 的"对外 web 表面唯一由 webui 承担"原则。memory-store 只暴露 JSON API。
 
 live_adapter 三段钩子形状（v0.1 **不实现**，spec 锁定）：`_memory_warmup`（接 `SessionState.__init__` 后的首轮 pull，缓存到 `state._memory_block_cache`）、`_memory_push`（接 `_session_cleanup_loop`，session 结束整批 push）、`_memory_recall`（per-question 走缓存，未命中或 q 与缓存相似度过低时 hot-fetch 长对话定期刷新）。
 
@@ -183,14 +183,14 @@ memory-store = "memory_store.app:main"
 
 ### D-9 live_adapter / system_prompts 钩子接口（v0.1 不实现；spec 锁定形状）
 
-按 `doc/memory-store-research.md §4.3` 三段钩子：
+按 `doc/research/memory-store-research.md §4.3` 三段钩子：
 
 - `_memory_warmup(state)`：首轮 pull → `state._memory_block_cache`
 - `_memory_push(state)`：session 结束 push（接 `_session_cleanup_loop` `live_adapter.py:823`）
 - `_memory_recall(state, question)`：per-question 走缓存，未命中 hot-fetch 长对话定期
 - `compose_system_prompt_with_memory(base, prompts, lang, memory_context)`：接 `[Local Wiki]` 注入位
 
-完整代码块见 `doc/memory-store-research.md §4.3`。
+完整代码块见 `doc/research/memory-store-research.md §4.3`。
 
 ## Testing Decisions
 

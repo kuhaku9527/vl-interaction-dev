@@ -90,7 +90,7 @@
 
 ## 六、spec 草稿候选（走 草稿→验证→替换 流程）
 
-1. **`doc/specs/draft-unified-turn-controller.md`**（高优先）：统一 Turn Controller 状态机——收敛 jarvis 唤醒链路 / live 三判断 / Smart Turn v3.2 / VAD 门控，输出统一 turn 语义；直接服务块4（live/jarvis 归一化验证）与块3（barge-in 深化）。验证方式：先以草稿形式设计状态机 + 与现有三套逻辑对照，真机试点后再替换/新建 spec。
+1. **`doc/specs/unified-turn-controller.md`**（高优先）：统一 Turn Controller 状态机——收敛 jarvis 唤醒链路 / live 三判断 / Smart Turn v3.2 / VAD 门控，输出统一 turn 语义；直接服务块4（live/jarvis 归一化验证）与块3（barge-in 深化）。验证方式：先以草稿形式设计状态机 + 与现有三套逻辑对照，真机试点后再替换/新建 spec。
 2. **`doc/specs/draft-bargein-context-recovery.md`**（中优先）：打断后上下文恢复（历史截断 + interrupted flag + LLM 感知），对照报告 52/54 与项目现状。
 3. **块1/块2 输入**：KWS 99% 目标基准（块1）；LLM 长输出截断与 TTFT 500-2000ms 的关联（块2，报告 89 风险一）。
 

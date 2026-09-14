@@ -1,6 +1,6 @@
 """Tests for the radio-silence proxy (webui /api/live/silence -> webinfer).
 
-Pins the spec contract (``doc/specs/draft-radio-silence.md`` §3/§7):
+Pins the spec contract (``doc/specs/radio-silence.md`` §3/§7):
 
 - GET returns ``{suppressed, settings, source}`` — ``suppressed`` comes from
   webinfer (the live owner), ``settings`` from the local persisted file.

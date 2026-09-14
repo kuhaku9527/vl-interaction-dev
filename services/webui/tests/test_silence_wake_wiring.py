@@ -1,6 +1,6 @@
 """B2/B3 wiring tests: radio-silence KWS wake channel + wake.wav ceremony.
 
-Reviewer-gate fixes (spec ``doc/specs/draft-radio-silence.md`` §4/§5):
+Reviewer-gate fixes (spec ``doc/specs/radio-silence.md`` §4/§5):
 
 - **B2 (KWS wake channel)**: the webui live session runs a KWS engine while
   suppressed + kws_enabled; a wake-word hit pushes ``kws_event`` to webinfer

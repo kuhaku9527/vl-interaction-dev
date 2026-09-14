@@ -1,7 +1,7 @@
 # ruff: noqa: RUF001
 """Tests for the radio-silence (无线电静默) control on the webinfer side.
 
-Covers spec ``doc/specs/draft-radio-silence.md`` §2/§3/§4/§6/§7:
+Covers spec ``doc/specs/radio-silence.md`` §2/§3/§4/§6/§7:
 
   ① suppressed suppression — a live round with a query is fully muted (no
      inference, no TTS) while frames keep flowing;

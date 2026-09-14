@@ -2,7 +2,7 @@
 
 > 目标：Windows 11 + RTX 5060 Ti 16GB + 32GB RAM，本地轻量化部署 + 角色化（bt-7274）+ 声音克隆 + Hermes-agent + 游戏中对话。
 
-> 配套技术文档：doc/tech-local.md（含部署、架构、代码、运维、扩展）。本文档说"做什么/为什么"，技术文档说"怎么做"。
+> 配套技术文档：doc/local/tech-local.md（含部署、架构、代码、运维、扩展）。本文档说"做什么/为什么"，技术文档说"怎么做"。
 
 ---
 
@@ -17,13 +17,13 @@
 | 原 PM 文档 | 本地化版本 |
 | --- | --- |
 | README.zh-CN.md（产品介绍 + 快速开始） | **不变**，仍适用作产品入门 |
-| doc/architecture.zh-CN.md（Linux vLLM 部署） | **新增** doc/architecture-local.md（Windows llama-server 部署） |
-| doc/getting_started.zh-CN.md（Linux 安装步骤） | **新增** doc/tech-local.md 第二节"Windows 部署步骤" |
+| doc/architecture.zh-CN.md（Linux vLLM 部署） | **新增** doc/local/architecture-local.md（Windows llama-server 部署） |
+| doc/getting_started.zh-CN.md（Linux 安装步骤） | **新增** doc/local/tech-local.md 第二节"Windows 部署步骤" |
 | doc/rtsp_streaming.zh-CN.md | **不变** |
-| doc/troubleshooting.zh-CN.md | **新增** doc/tech-local.md 第四节"故障排查" |
-| — | **新增** doc/pm-local.md（本文） |
-| — | **新增** doc/gaming-mode.md（游戏中对话指南） |
-| — | **新增** doc/voice-clone.md（声音克隆工作流） |
+| doc/troubleshooting.zh-CN.md | **新增** doc/local/tech-local.md 第四节"故障排查" |
+| — | **新增** doc/local/pm-local.md（本文） |
+| — | **新增** doc/subsystems/gaming-mode.md（游戏中对话指南） |
+| — | **新增** doc/subsystems/voice-clone.md（声音克隆工作流） |
 
 ---
 
@@ -281,7 +281,7 @@ un-windows.ps1 到对话可交互 | 计时 |
 un-windows.ps1 -Mode gaming 验证
 6. （可选）填本文档第 12 节的所有 checkbox
 
-详细操作步骤见 doc/tech-local.md。
+详细操作步骤见 doc/local/tech-local.md。
 
 ## 14. 变更记录
 
@@ -294,7 +294,7 @@ un-windows.ps1 -Mode gaming 验证
 ## 15. 复盘后路线图修订（追加 P1 / P2）
 
 > 上一版路线图（§9）只列了"如何跑通"的阶段。复盘后补两个**功能深化**阶段。
-> 配套设计文档：`doc/asr-streaming.md`（P1）、`doc/memory-architecture.md`（P2）。
+> 配套设计文档：`doc/subsystems/asr-streaming.md`（P1）、`doc/subsystems/memory-architecture.md`（P2）。
 
 ### 15.1 P1：ASR 流式化（游戏中对话核心痛点）
 
@@ -310,7 +310,7 @@ un-windows.ps1 -Mode gaming 验证
 
 **代价**：中文 CER -1%（6% → 7%）。游戏闲聊完全无感。
 
-**工作量**：~350 行 Python + 150 行 PowerShell + 1 个新 doc（`doc/asr-streaming.md`）。
+**工作量**：~350 行 Python + 150 行 PowerShell + 1 个新 doc（`doc/subsystems/asr-streaming.md`）。
 
 **触发条件**：游戏模式跑通后、用户主观感觉"延迟明显"时启动。
 
@@ -327,7 +327,7 @@ un-windows.ps1 -Mode gaming 验证
 - 角色 lore 总是注入到 system prompt
 - webinfer / hermes-api 都能查
 
-**代价**：~500 行 Python + 100 行 PowerShell + 1 个新 doc（`doc/memory-architecture.md`）。
+**代价**：~500 行 Python + 100 行 PowerShell + 1 个新 doc（`doc/subsystems/memory-architecture.md`）。
 主对话每轮多 50-300ms（embedding + 检索）。**主对话显存无变化**（embedding 走 CPU）。
 
 **工作量**：~500 行 Python + 100 行 PowerShell + 1 个新 doc。
@@ -368,7 +368,7 @@ un-windows.ps1 -Mode gaming 验证
 
 > 复盘 `services/webinfer/live_adapter.py`（2935 行）后修正：实际 **100% 跨平台**。
 >
-> 详细静态扫描见 `doc/tech-local.md` §12。证据：
+> 详细静态扫描见 `doc/local/tech-local.md` §12。证据：
 >
 > - 0 处 `signal` / `os.kill` / `fcntl` / `termios` / `tty` / `epoll` / `uvloop` / `subprocess.Popen` / `os.fork` 调用
 > - 依赖全是跨平台（aiohttp / openai / PIL / numpy / pathlib）
@@ -390,7 +390,7 @@ un-windows.ps1 -Mode gaming 验证
 
 ## 19. API 化（突破本地性能天花板）
 
-> 详细方案见 `doc/api-optimization.md`（19.3KB，含协议、成本、3 档策略、隐私分级）。
+> 详细方案见 `doc/api/api-optimization.md`（19.3KB，含协议、成本、3 档策略、隐私分级）。
 > 触发：本地 16GB 显存吃紧到 40MB 余量，gaming 模式体验被 ASR/TTS 延迟拖垮。
 
 ### 19.1 核心观点
@@ -481,8 +481,8 @@ un-windows.ps1 -Mode gaming 验证
 
 ## 21. 推荐供应商与套餐（2026-07-08 调研后）
 
-> 详细对比见 `docs/token-plan-comparison.md`（14.7KB，8 家厂商 + 5 套推荐组合）。
-> 配套技术实现：`doc/api-optimization.md §13` + `doc/tech-local.md §14`。
+> 详细对比见 `doc/api/token-plan-comparison.md`（14.7KB，8 家厂商 + 5 套推荐组合）。
+> 配套技术实现：`doc/api/api-optimization.md §13` + `doc/local/tech-local.md §14`。
 
 ### 21.1 核心结论
 
@@ -545,7 +545,7 @@ un-windows.ps1 -Mode gaming 验证
 
 ## 23. 声音克隆 7 天保活风险（2026-07-08 补充）
 
-> 用户反馈之前没看到声音克隆细节。详细见 `docs/token-plan-comparison.md §1.3` + `doc/voice-clone.md §1-§10`。
+> 用户反馈之前没看到声音克隆细节。详细见 `doc/api/token-plan-comparison.md §1.3` + `doc/subsystems/voice-clone.md §1-§10`。
 
 ### 23.1 MiniMax Rapid Clone 关键约束
 
@@ -569,7 +569,7 @@ un-windows.ps1 -Mode gaming 验证
 voice_clone_api (8985) → MiniMax Rapid Clone API（10s 样本，99% 相似）
 ```
 
-详细工作流见 `doc/voice-clone.md §3`，配置见 `api-optimization.md §14.7`。
+详细工作流见 `doc/subsystems/voice-clone.md §3`，配置见 `api-optimization.md §14.7`。
 
 ### 23.4 决策项（2026-07-09 更新）
 
@@ -597,8 +597,8 @@ voice_clone_api (8985) → MiniMax Rapid Clone API（10s 样本，99% 相似）
 ## 23. Jarvis 模式（2026-07-08 重大更新）
 
 > 详细产品设计：`doc/subsystems/jarvis-mode.md`（26KB）
-> 技术实现：`doc/asr-streaming.md`
-> 使用指南：`doc/gaming-mode.md`（已升级为 Jarvis 模式）
+> 技术实现：`doc/subsystems/asr-streaming.md`
+> 使用指南：`doc/subsystems/gaming-mode.md`（已升级为 Jarvis 模式）
 
 ### 23.1 核心产品定位变化
 
@@ -677,9 +677,9 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 - `prompts/bt/events/error.wav`（复制）
 
 **改写**：
-- `doc/asr-streaming.md`（与 jarvis-mode 协同）
-- `doc/gaming-mode.md`（升级为 Jarvis 模式）
-- `doc/api-optimization.md §15`（ASR 选型修订）
+- `doc/subsystems/asr-streaming.md`（与 jarvis-mode 协同）
+- `doc/subsystems/gaming-mode.md`（升级为 Jarvis 模式）
+- `doc/api/api-optimization.md §15`（ASR 选型修订）
 
 **实施工作量**：~700 行 Python + 150 行 PowerShell + 3 个 wav 生成
 
@@ -741,8 +741,8 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 
 ### 25.5 关联文档
 
-- `doc/memory-architecture.md`（v3.1 完整设计）
-- `doc/tech-local.md` §18（P2 技术实现）
+- `doc/subsystems/memory-architecture.md`（v3.1 完整设计）
+- `doc/local/tech-local.md` §18（P2 技术实现）
 - `services/background-agent/hermes_api/main.py`（psql 复用点）
 
 ### 25.6 风险
@@ -766,8 +766,8 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 ## 25. 屏幕捕获 + Hermes 隔离（2026-07-09）
 
 > 详细方案：
-> - `doc/screen-capture.md`（9.3KB）
-> - `doc/hermes-integration.md`（10.5KB）
+> - `doc/subsystems/screen-capture.md`（9.3KB）
+> - `doc/subsystems/hermes-integration.md`（10.5KB）
 
 ### 25.1 屏幕捕获（getDisplayMedia）
 

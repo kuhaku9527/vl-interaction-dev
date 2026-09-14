@@ -1,7 +1,7 @@
 # Hermes-agent 集成（严格隔离）
 
 > 状态：**P0 落地 + 闭环（v3.28）**。`prompts/bt-7274.txt` 加 Delegation Protocol 章节、`jarvis_session.py::_make_llm_callback` 调 `BackgroundModelService.handle_foreground_response` 触发 `</delegation>` → shim(8079) → gateway(8642) → MiniMax M2 + web_extract → `background_result_ready` WS 广播。E2E 烟测：BT-7274 4-case 行为符合预期 + 真实查 Cyberpunk 螳螂帮攻略 11s 拿到 MiniMax 返回。
-> 配套文档：`doc/subsystems/jarvis-mode.md` §6 + `doc/tech-local.md §3.6` + `services/background-agent/hermes_api/`。
+> 配套文档：`doc/subsystems/jarvis-mode.md` §6 + `doc/local/tech-local.md §3.6` + `services/background-agent/hermes_api/`。
 > **2026-07-23 更新**：[Local Wiki] 已落地（shim 委派前先 recall memory-store）；Hermes 本体/配置位置统一为 **`D:\Workspace\hermes-data`**（前 agent 曾误用 `$LOCALAPPDATA\hermes` 并改坏环境，见 §11）。
 
 ---
@@ -274,7 +274,7 @@ D:\Workspace\hermes-data\
 ## 12. Codex 桥接（2026-08-13 起默认后端）
 
 > **状态**：已实现 + 单测/端到端验证，待真机验收（2026-08-14 验收计划 C1-C6）。
-> 关联 spec：`doc/specs/draft-background-agent-codex-bridge.md`；代码：`services/background-agent/codex_api/main.py`。
+> 关联 spec：`doc/specs/background-agent-codex-bridge.md`；代码：`services/background-agent/codex_api/main.py`。
 
 ### 为什么切
 
@@ -326,10 +326,10 @@ webui ── :8079 ──► agent_app:app（统一入口）
 ## 9. 关联文档
 
 - `doc/subsystems/jarvis-mode.md §6`（决策 token `</delegate>` 触发）
-- `doc/tech-local.md §3.6`（shim 实现）
+- `doc/local/tech-local.md §3.6`（shim 实现）
 - `services/background-agent/hermes_api/main.py`（代码）
 - `services/background-agent/codex_api/main.py`（Codex shim 代码，2026-08-13 起默认）
-- `doc/specs/draft-background-agent-codex-bridge.md`（Codex 桥接 spec 草稿）
+- `doc/specs/background-agent-codex-bridge.md`（Codex 桥接 spec 草稿）
 - 外部：https://hermes-agent.nousresearch.com/docs/
 
 ---

@@ -2,7 +2,7 @@
 
 - 状态: Accepted（v3.38 演进，2026-08-13）
 - 日期: 2026-07-13（原版）→ 2026-08-13（四态 + frames 边界更新）
-- 上下文: doc/specs/2026-07-13-llm-path-consolidation.md + doc/specs/draft-addressee-detection.md（四态）+ doc/specs/draft-live-visual-cb.md（frames）
+- 上下文: doc/specs/2026-07-13-llm-path-consolidation.md + doc/specs/addressee-detection.md（四态）+ doc/specs/live-visual-cb.md（frames）
 
 ## 决策
 所有 LLM 调用必须经过 webinfer :8070。webui 不再持有指向 :7060 llama-server
@@ -42,8 +42,8 @@
 
 ## 引用
 - doc/specs/2026-07-13-llm-path-consolidation.md
-- doc/specs/draft-addressee-detection.md（四态 §4）
-- doc/specs/draft-live-visual-cb.md（frames §2.3）
+- doc/specs/addressee-detection.md（四态 §4；原 `addressee-detection.md` 已转正）
+- doc/specs/live-visual-cb.md（frames §2.3；原 `live-visual-cb.md` 已转正）
 - services/webinfer/response_format.py（parse_model_decision 四态）
 - services/webinfer/prompt_constants.py（LIVE_SYSTEM_PROMPT_EN 四态）
 - services/webinfer/prompt_assembly.py（_resolve_base_system_prompt 路由 + compose_live_visual_messages）

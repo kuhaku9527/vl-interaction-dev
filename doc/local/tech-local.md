@@ -1,8 +1,8 @@
 # JoyAI-VL-Interaction 本地化技术文档
 
 > 目标平台：**Windows 11 + RTX 5060 Ti 16GB (sm_120) + 32GB RAM**
-> 配套 PM 文档：`doc/pm-local.md`（说"做什么/为什么"）
-> 调研报告：`docs/lightweight-replacement.md`（说不动的"怎么做"）
+> 配套 PM 文档：`doc/local/pm-local.md`（说"做什么/为什么"）
+> 调研报告：`doc/research/lightweight-replacement.md`（说不动的"怎么做"）
 
 ---
 
@@ -545,13 +545,13 @@ tail 命令：`Get-Content services\.logs\webinfer.log -Wait`
 | **IQ4_NL 量化漂移** | 主模型用 4-bit 量化（`IQ4_NL`），相对 FP16 在中文长文本上 WER 可能 1-3%、在指令遵循上可能掉 5-10% 严格度。游戏闲聊/陪伴可忽略，但做"代码 review / 法律分析"不行 | 关掉 `MAIN_TEMPERATURE` 至 0.3；重要场景切 `Q5_K_M`（6.5GB，仍能装下） |
 | **mmproj F16 占显存** | Vision tower（mmproj）通常必须 F16 不能量化，否则图像理解崩。本地版用 0.6GB 显存开销固定 | 接受；如要省可切"纯文本主对话 + 不传图"模式 |
 | **Q8_0 KV cache** | 16K context + Q8_0 cache ≈ 800MB 显存，介于 Q4_0（省）和 FP16（精度）之间 sweet spot | 监控 `nvidia-smi` 峰值；如不足切 Q4_0 |
-| **whisper.cpp 大模型离线** | `large-v3-turbo q5_0` 是**离线**识别，必须等用户停 0.6-0.8s 才出结果，游戏场景 2-4s 延迟偏高 | **P1 计划**：迁 `sherpa-onnx streaming-paraformer`（详见 `doc/asr-streaming.md`） |
+| **whisper.cpp 大模型离线** | `large-v3-turbo q5_0` 是**离线**识别，必须等用户停 0.6-0.8s 才出结果，游戏场景 2-4s 延迟偏高 | **P1 计划**：迁 `sherpa-onnx streaming-paraformer`（详见 `doc/subsystems/asr-streaming.md`） |
 
 ### 11.2 架构风险
 
 | 风险 | 详情 | 缓解 |
 | - | - | - |
-| **无持久化记忆** | `live_adapter.py` 用进程内 dict，`LIVE_SAVE_OUTPUTS=true` 只写 `result_v2/` 单次输出，不算记忆。**重启 = 30 天对话清零** | **P2 计划**：加 `services/memory-store/`（详见 `doc/memory-architecture.md`） |
+| **无持久化记忆** | `live_adapter.py` 用进程内 dict，`LIVE_SAVE_OUTPUTS=true` 只写 `result_v2/` 单次输出，不算记忆。**重启 = 30 天对话清零** | **P2 计划**：加 `services/memory-store/`（详见 `doc/subsystems/memory-architecture.md`） |
 | **无外部知识注入** | 游戏 wiki / 角色 lore 只能靠 system prompt 一次性塞，不能查 | 同上，P2 解决 |
 | **声音克隆不跨平台训练** | 录音采样率/编码不匹配时克隆效果掉 | 强制 `voice_clone_api` 入口校验 16kHz mono PCM |
 | **Hermes-agent Win beta** | Nous Research 官方标记 Hermes 0.17.0 仍为 beta，Win 上偶有 subprocess pipe 卡死 | 自动重试 3 次 + 切回 `codex_api` 兜底（代码保留） |
@@ -649,13 +649,13 @@ webui 端**完全无感**：aiohttp WebSocket + HTTP 在 Win 上行为与 Linux 
 | 日期 | 版本 | 变更 | 作者 |
 | - | - | - | - |
 | 2026-07-06 | v1.0 | 初版：Windows 5060Ti 16GB 本地化 | Codex |
-| 2026-07-07 | v1.1 | 追加 §11 Known Limitations、§12 webinfer Win 复现性；引用 `doc/asr-streaming.md` + `doc/memory-architecture.md` | Codex |
+| 2026-07-07 | v1.1 | 追加 §11 Known Limitations、§12 webinfer Win 复现性；引用 `doc/subsystems/asr-streaming.md` + `doc/subsystems/memory-architecture.md` | Codex |
 
 ---
 
 ## 14. API 化（突破本地性能天花板）
 
-> 详细方案见 `doc/api-optimization.md`（19.3KB）。本节是技术实现层摘要。
+> 详细方案见 `doc/api/api-optimization.md`（19.3KB）。本节是技术实现层摘要。
 > 触发：本地 11.5GB 显存只剩 40MB 余量，gaming 模式被 ASR/TTS 延迟拖累。
 
 ### 14.1 适配器扩展点（已有 / 新增）
@@ -855,10 +855,10 @@ JOYAI_PRIVACY_TIER=voice_cloud   # all_local | voice_cloud | all_cloud
 
 ### 14.11 关联文档
 
-- `doc/api-optimization.md`（完整方案）
-- `doc/asr-streaming.md`（本地流式，被 API 化取代）
-- `doc/memory-architecture.md`（embedding 切 API）
-- `doc/pm-local.md` §19（PM 视角）
+- `doc/api/api-optimization.md`（完整方案）
+- `doc/subsystems/asr-streaming.md`（本地流式，被 API 化取代）
+- `doc/subsystems/memory-architecture.md`（embedding 切 API）
+- `doc/local/pm-local.md` §19（PM 视角）
 
 ---
 
@@ -875,7 +875,7 @@ JOYAI_PRIVACY_TIER=voice_cloud   # all_local | voice_cloud | all_cloud
 ## 16. Jarvis 模式（2026-07-08）
 
 > 详细产品设计：`doc/subsystems/jarvis-mode.md`（26KB）
-> 技术实现：`doc/asr-streaming.md`
+> 技术实现：`doc/subsystems/asr-streaming.md`
 > 改动代码：
 > - `services/asr/jarvis/kws.py`（KWS 引擎，~80 行）
 > - `services/asr/jarvis/asr.py`（流式 ASR 引擎，~100 行）
@@ -898,7 +898,7 @@ JOYAI_PRIVACY_TIER=voice_cloud   # all_local | voice_cloud | all_cloud
 
 `rule1_min_trailing_silence=2.0` 是避免"首字丢失"的关键参数。
 
-详见 `doc/asr-streaming.md §3.4`。
+详见 `doc/subsystems/asr-streaming.md §3.4`。
 
 ### 16.3 实施步骤
 
@@ -1060,8 +1060,8 @@ sequenceDiagram
 
 ### 18.10 关联文档
 
-- `doc/memory-architecture.md`（v3.1 完整设计）
-- `doc/pm-local.md` §25（P2 决策落地）
+- `doc/subsystems/memory-architecture.md`（v3.1 完整设计）
+- `doc/local/pm-local.md` §25（P2 决策落地）
 - `doc/subsystems/jarvis-mode.md`（状态机，记忆层下游）
 
 ---
@@ -1078,7 +1078,7 @@ sequenceDiagram
 
 ## 18. 屏幕捕获实现（getDisplayMedia）
 
-> 详细方案见 `doc/screen-capture.md`（9.3KB）
+> 详细方案见 `doc/subsystems/screen-capture.md`（9.3KB）
 
 ### 18.1 接入点
 
@@ -1111,7 +1111,7 @@ webui 端 WebRTC 链路完全复用——`video_frame` 类型消息走现有 vlm
 
 ## 19. Hermes-agent 严格隔离实现
 
-> 详细方案见 `doc/hermes-integration.md`（10.5KB）
+> 详细方案见 `doc/subsystems/hermes-integration.md`（10.5KB）
 
 ### 19.1 shim 端实现
 

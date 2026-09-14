@@ -1,7 +1,7 @@
 # 真机验收计划 — 2026-08-15（全链路）
 
 > 目的：真机集中验收，覆盖**全部待真机项**（含 08-13/08-14 新增），每轮留痕可追溯。
-> 前置阅读：`doc/specs/draft-background-agent-codex-bridge.md`（AgentProvider 插件化）、`doc/specs/draft-call-mode-unknown-delegation.md`（N2）、`doc/specs/draft-live-empathy-tuning.md`（共情调优）、`doc/specs/draft-mode-isolation-boundaries.md`（三模式边界）、`doc/acceptance/live-ca-acceptance-2026-08-12.md`（三决策诱发方法）
+> 前置阅读：`doc/specs/background-agent-codex-bridge.md`（AgentProvider 插件化）、`doc/specs/call-mode-unknown-delegation.md`（N2）、`doc/specs/draft-live-empathy-tuning.md`（共情调优）、`doc/specs/draft-mode-isolation-boundaries.md`（三模式边界）、`doc/acceptance/live-ca-acceptance-2026-08-12.md`（三决策诱发方法）
 > 测试人：＿＿＿＿＿＿　日期：2026-08-15　环境：＿＿＿＿＿＿（麦型号：＿＿＿＿＿＿）
 > 被测栈：生产 llama.cpp(7060) + webinfer(8070) + webui(8099) + **agent_app(8079, provider=codex)** + memory-store(8997) + relay(57321)
 
@@ -126,9 +126,9 @@
 
 ## §10 验收后动作（测试完执行）
 
-1. **Codex 桥接**：C1-C7 全过 → spec 草稿转正式（`draft-background-agent-codex-bridge.md` → 正式）+ 触发审查组更新 D-049（决策/唯一写者）
-2. **call 模式委派**：C6 全过 → spec 转正式（`draft-call-mode-unknown-delegation.md`）
+1. **Codex 桥接**：C1-C7 全过 → spec 草稿转正式（`background-agent-codex-bridge.md` → 正式）+ 触发审查组更新 D-049（决策/唯一写者）
+2. **call 模式委派**：C6 全过 → spec 转正式（`call-mode-unknown-delegation.md`）
 3. **共情调优**：E1-E2 全过 → spec 转正式（`draft-live-empathy-tuning.md`）；E3 benchmark 数值留档
-4. **ASR cloud**：A1-A4 语义差异确认可接受 → spec 定稿（`draft-asr-provider-unified.md`）
-5. **TTS 插件化（N5）**：真机 TTS 播报正常（行为零变化）→ spec 转正式（`draft-tts-provider-unified.md`）
+4. **ASR cloud**：A1-A4 语义差异确认可接受 → spec 定稿（`asr-provider-unified.md`）
+5. **TTS 插件化（N5）**：真机 TTS 播报正常（行为零变化）→ spec 转正式（`tts-provider-unified.md`）
 6. 记录本表到 `.workbuddy/memory/2026-08-15.md`

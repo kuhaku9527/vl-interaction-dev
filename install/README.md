@@ -147,7 +147,7 @@ Start:
 
 ## Windows Native Deployment (PowerShell)
 
-> Reference: `doc/lightweight-replacement.md`.
+> Reference: `doc/research/lightweight-replacement.md`.
 > All scripts are PS 5.1-compatible (no PowerShell-7-only syntax).
 
 The Windows native stack replaces `vLLM` / `vLLM-Omni` (Linux-only) with native Windows binaries:

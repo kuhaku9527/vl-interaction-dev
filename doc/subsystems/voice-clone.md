@@ -1,7 +1,7 @@
 # 声音克隆工作流（云端 MiniMax Rapid Clone + 2.8-hd 模型）
 
 > **本项目声音克隆统一走云端 MiniMax Rapid Clone**，不再保留本地 CosyVoice3 实现（已于 2026-07-12 从代码库删除）。
-> 配套：`services/voice-clone/README.md`（API 细节）、`doc/tech-local.md` §3.3（旧本地实现，已弃用）。
+> 配套：`services/voice-clone/README.md`（API 细节）、`doc/local/tech-local.md` §3.3（旧本地实现，已弃用）。
 >
 > **2026-07-11 升级**：模型升级到 `speech-2.8-hd`（支持笑声 / 叹息 / 呼吸等语气标签），
 > 并启用可选的 `clone_prompt.prompt_audio` 二次提音方案；详情见 §13 / §14。
@@ -413,7 +413,8 @@ Add-Content -Path "$env:USERPROFILE\.joyai\minimax_creds.json" -Value (@{
 # 1. 重启 voice-clone 加载新 ref.wav + 默认 speech-2.8-hd
 $env:MINIMAX_API_KEY  = "<paste-here>"
 $env:MINIMAX_GROUP_ID = "<paste-here>"
-.\servicesoice-clone\scripts
+.\services
+oice-clone\scripts
 un-windows.ps1   # 没 -Restart 时手动 stop + start
 
 # 2. 重新克隆（自动取新 voice_id）
@@ -424,10 +425,12 @@ Invoke-RestMethod -Method POST `
     language = "zh"
     audio    = Get-Item "D:\AI\workspacet-voice
 ef_audiot_reference.wav"
-  } | Tee-Object -FilePath "D:oice-clone-new.json"
+  } | Tee-Object -FilePath "D:
+oice-clone-new.json"
 
 # 3. 把返回的 voice_id 写进 env（替换占位符）
-$newVoiceId = (Get-Content D:oice-clone-new.json | ConvertFrom-Json).voice_id
+$newVoiceId = (Get-Content D:
+oice-clone-new.json | ConvertFrom-Json).voice_id
 notepad services\scripts
 un-windows.env   # 改两处：TTS_DEFAULT_VOICE_ID 与 JARVIS_TTS_VOICE_ID
 
@@ -450,7 +453,7 @@ un-windows.env   # 改两处：TTS_DEFAULT_VOICE_ID 与 JARVIS_TTS_VOICE_ID
 | 订阅 Key（`sk-cp-...`）| Token Plan 套餐内 | `/v1/chat`, `/v1/t2a_v2`, `/v1/t2a_async_v2`, `/v1/voice_clone`, `/v1/files/upload` | **`/v1/get_voice`, `/v1/files/list`, `/v1/delete_voice`**（管理类） |
 | 按量付费 API Key（`sk-api-...`）| API 余额按调用计费 | 上面所有 + 管理类 | 无 |
 
-文档原话："订阅 Key 与按量计费 API Key **不互通**" — https://platform.minimaxi.com/docs/token-plan/quickstart.md
+文档原话："订阅 Key 与按量计费 API Key **不互通**" — https://platform.minimaxi.com/docs/token-plan/quickstart.md <!-- known-absent: docs/token-plan/quickstart.md 不存在（一次性调试产物/未落盘） -->
 
 实际测试（用订阅 Key 试管理类 endpoint 全都 1004）：
 - `POST /v1/get_voice` body=`{"voice_type":"all"}` → HTTP 200 但 body `status_code:1004 login fail`

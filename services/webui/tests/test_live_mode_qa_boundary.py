@@ -2,7 +2,7 @@
 
 Written by QA (Edward) as a second-opinion layer over the engineer's
 ``test_live_mode.py`` / ``test_live_frontend_contract.py``. Every case here
-targets a behaviour the spec (``doc/specs/draft-live-interaction-layer.md``
+targets a behaviour the spec (``doc/specs/live-interaction-layer.md``
 §4 C.A) demands but the existing suite exercises only lightly:
 
   * two consecutive turns — ``reply_epoch`` monotonic + history growth;

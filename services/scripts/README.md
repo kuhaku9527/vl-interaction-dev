@@ -7,7 +7,7 @@
 
 | 脚本 | 用途 | 用法 |
 |---|---|---|
-| **`sync-docs.py`** | 改代码后自动追加 `DELIVERY.md §7` 一行 + `doc/00-main-direction.md §4.0` 一项；打印受影响 doc 的复核清单 | `python services\scripts\sync-docs.py --version v3.4 --change "..." --affected doc\adr\0003-llm-reply-panel.md` |
+| **`sync-docs.py`** | 改代码后自动追加 `DELIVERY.md §7` 一行 + `doc/main/00-main-direction.md §4.0` 一项；打印受影响 doc 的复核清单 | `python services\scripts\sync-docs.py --version v3.4 --change "..." --affected doc\adr\0003-llm-reply-panel.md` |
 
 ## 服务生命周期（启动 / 停止 / 单服务重启）
 

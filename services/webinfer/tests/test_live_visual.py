@@ -1,4 +1,4 @@
-"""Tests for the live visual path (spec draft-live-visual-cb.md §3 层 1).
+"""Tests for the live visual path (spec live-visual-cb.md §3 层 1).
 
 Layer 1 adds an optional top-level ``frames`` field to ``POST /v1/text/chat``
 when ``interaction_mode="live"``:

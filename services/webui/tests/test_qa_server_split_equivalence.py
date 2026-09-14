@@ -156,12 +156,12 @@ _BUGFIX_DIVERGED = {
         "backend processor existed)."
     ),
     "_probe_asr": (
-        "2026-08-13 ASR provider unification (doc/specs/draft-asr-provider-unified.md): "
+        "2026-08-13 ASR provider unification (doc/specs/asr-provider-unified.md): "
         "_probe_asr gained a JARVIS_ASR_PROVIDER=cloud branch that probes the "
         "upstream (new _probe_asr_cloud helper); the local (default) branch "
         "remains the pre-split body verbatim."
     ),
-    # N7.1 (2026-08-15, doc/specs/draft-provider-convergence.md): services_config
+    # N7.1 (2026-08-15, doc/specs/provider-convergence.md): services_config
     # 从 4 槽位扩到 6（+agent/embedding）——以下函数因功能演进有意偏离基线：
     # provider 白名单校验、PUT 遍历 _SERVICES_CONFIG_DEFAULTS、status 增加
     # agent/embedding 探活、传播增加 agent/embedding 热推分支。均为纯增量

@@ -16,7 +16,7 @@
 
   Exposes $env:COSYVOICE_DIR and $env:COSYVOICE_MODEL_DIR.
 
-  Reference: docs/lightweight-replacement.md
+  Reference: doc/research/lightweight-replacement.md
 #>
 
 [CmdletBinding()]

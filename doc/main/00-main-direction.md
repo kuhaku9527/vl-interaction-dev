@@ -71,7 +71,7 @@
 ### §4.0 已落地的 v3.2 项（2026-07-10 更新）
 
 - **#5 KWS 自训**（2026-07-10 完成）：唤醒词 `bt`（自训 v4 model），部署 `D:\AI\models\sherpa-onnx\models\kws\bt-zai-ma\`，FAR 2% / recall 49%（Jarvis 包装层）。详见 `doc/subsystems/jarvis-mode.md §2.4`。
-- **#2 MiniMax Token Plan 接入**（2026-07-12 半落地）：声音克隆走云端 `speech-2.8-hd`，voice_id `minimax_man_33333` 已建（MiniMax Token Plan 凭证 + GroupId `<your_minimax_group_id>`），BT-7274 persona 链路测试通过（`vllm_inference=948ms`，prompt_tokens=511 含 character_profile）。**未消除**：`run-windows.env` 凭证沉淀 + 全链路 e2e 收尾待办。详见 `doc/voice-clone.md` §13。
+- **#2 MiniMax Token Plan 接入**（2026-07-12 半落地）：声音克隆走云端 `speech-2.8-hd`，voice_id `minimax_man_33333` 已建（MiniMax Token Plan 凭证 + GroupId `<your_minimax_group_id>`），BT-7274 persona 链路测试通过（`vllm_inference=948ms`，prompt_tokens=511 含 character_profile）。**未消除**：`run-windows.env` 凭证沉淀 + 全链路 e2e 收尾待办。详见 `doc/subsystems/voice-clone.md` §13。
 - **#4 webui 文本直达链路（v3.7 已落地）+ jarvis 状态机主循环（部分）**（2026-07-12）：放弃 services/voice-ui 薄壳思路（错误方向）；webui 直接扩：清理重复 html/head/body + 重复状态徽章 + 右上角冗余 `llmReplySection`，统一使用中间 `VLM Output Info` / `resultTextContent` 作为对话面。v3.7 起 `Pilot` / `BT-7274` 对话进入 `vlmHistory` 渲染，语音 ASR 定稿通过 `pilot_utterance` 可见；文本测试模式避免 MiniMax 双 TTS 合成。DevTools 实测：点击 LLM → /api/llm/message 200 → 中间框显示 Pilot + BT-7274 → /api/tts/synthesize 200 → audio blob 播放完成。jarvis 完整 KWS→ASR→LLM→TTS→EXIT 全链路 e2e 仍待联调（doc/subsystems/jarvis-mode.md §13 自标 ⚠️）。详见 doc/subsystems/jarvis-mode.md §14。
 - #1 API 化（主路径云端化）/ #3 记忆持久化 / #4 jarvis 全链路 e2e 仍待落地。
 
@@ -86,13 +86,13 @@
 
 | # | 项 | 优先级 | 状态 | 关联文档 |
 |---|---|---|---|---|
-| **N1** | **background-agent 切 Codex 桥接**（`BACKGROUND_AGENT_PROVIDER=codex` 默认，Hermes 保留可切回） | **P1** | ✅ 代码完成（codex_api 移植 Local Wiki recall + run-windows.ps1 开关）→ **待 2026-08-14 真机验收** | `doc/specs/draft-background-agent-codex-bridge.md` |
+| **N1** | **background-agent 切 Codex 桥接**（`BACKGROUND_AGENT_PROVIDER=codex` 默认，Hermes 保留可切回） | **P1** | ✅ 代码完成（codex_api 移植 Local Wiki recall + run-windows.ps1 开关）→ **待 2026-08-14 真机验收** | `doc/specs/background-agent-codex-bridge.md` |
 | **N2** | **call 模式"不知道就委派"轻量委派检测**（call 模式 prompt 禁 `</delegation>`，模型直接答"不知道"时后端自动触发一次后台查证再补答） | P2 | 待设计（未开工） | — |
 | **N3** | **TTS 链路延迟优化**（打断效果 OK 但 TTS 链路变慢，加入后续优化） | P2 | 待排期（未开工） | `doc/specs/tts-streaming-optimization.md` |
 | **N4** | **官方量化模型评估结论**（INT4/NVFP4 compressed-tensors 13-14GB 显存占满 16GB 卡 → **维持社区 IQ4_NL GGUF + mmproj F16**，官方量化不再评估） | — | ✅ 已闭环（结论：16GB 显存约束下社区量化是当前最优） | `决策/VLM架构与模型组成.md` |
-| **N5** | **TTS 插件化**（`TTSSynthesizer` ABC + 工厂，`TTS_PROVIDER` 选择；MiniMax 为第一实现——voice-clone 的 provider 分支已留好） | P2 | ✅ 已实现（2026-08-14，`services/tts/tts_provider.py` + 工厂测试 5 项） | `doc/specs/draft-tts-provider-unified.md` |
+| **N5** | **TTS 插件化**（`TTSSynthesizer` ABC + 工厂，`TTS_PROVIDER` 选择；MiniMax 为第一实现——voice-clone 的 provider 分支已留好） | P2 | ✅ 已实现（2026-08-14，`services/tts/tts_provider.py` + 工厂测试 5 项） | `doc/specs/tts-provider-unified.md` |
 | **N6** | **Embedding 现状确认**（`EMBEDDING_PROVIDER=siliconflow` 云端召回已实证：`BAAI/bge-m3` / dim 1024 / 686ms；本地 bge-m3 仅 bulk ingest 备用） | — | ✅ 已闭环（2026-08-14 实证，配置即云端，非本地） | `services/memory-store/src/memory_store/embedder.py` |
-| **N7** | **Provider 模式收敛**（公共 `services/provider_base.py` `ProviderRegistry`：name normalize / env 默认 / 未知名 fail-loud 统一；agent/tts/asr 三个 ABC+工厂 模块迁移到注册表；embedder 因单类分派不迁移） | P2 | ✅ 已实现（2026-08-15，注册表测试 11 项，四服务全绿） | `services/provider_base.py` + `doc/specs/draft-provider-convergence.md` |
+| **N7** | **Provider 模式收敛**（公共 `services/provider_base.py` `ProviderRegistry`：name normalize / env 默认 / 未知名 fail-loud 统一；agent/tts/asr 三个 ABC+工厂 模块迁移到注册表；embedder 因单类分派不迁移） | P2 | ✅ 已实现（2026-08-15，注册表测试 11 项，四服务全绿） | `services/provider_base.py` + `doc/specs/provider-convergence.md` |
 
 ### §4.1 优先级说明
 
@@ -109,7 +109,7 @@
 
 ## §5 关联文档
 
-- 完整文档索引：见 `README.md`
+- 完整文档索引：见 `doc/README.md`
 - 交付与变更记录：`../DELIVERY.md`
 - 上游残留（已弃用）：`deprecated/`
 
@@ -117,9 +117,9 @@
 
 - **v3.32a verify-services.py/ps1 (2026-07-13)**: pure-Python end-to-end probe (no PowerShell parser issues), pings llama-server (7060) / webinfer (8070) / voice-clone (8985) / webui (8099). `stop-windows.ps1` / `verify-services.py` both green.
 - **v3.32b 撤回 v3.32 image chat (2026-07-13)**: 删除 paperclip 按钮 + `/api/vlm/chat` 端点 + `pendingVlmImage` state machine + webinfer multimodal `image_url` 分支 + static contract test。视觉走 v3.27 `screen capture` 路径（`getDisplayMedia` 1fps 推 frame -> VLM）。`JARVIS_KWS_THRESHOLD` 保留 v3.32 的 0.20（NVIDIA Broadcast 干净环境，识别率优先）。
-- **v3.33 / v3.33.1 Screen Capture 本地预览 (2026-07-13)**: `screen_capture.js` 暴露 `getScreenCaptureStream/getScreenCaptureVideo`,`index.html` 在 `start()` Screen 分支和 `screenStartBtn` click handler 都挂 `videoElement.srcObject` + 取消镜像。操作员能在 webui 上看到被捕获的窗口/标签,BT-7274 仍按 1fps WS 走原有视觉管线。详见 `doc/screen-capture.md` §3.5 + §11。
-- **v3.34 llama-server 上下文 4096->16384 + webinfer prompt guard (2026-07-13)**: 治本 `exceed_context_size_error` 502。详见 `doc/screen-capture.md` §11 v3.34 + `doc/specs/webinfer-prompt-guard-spec.md`(待落地)。
-- **v3.35 Paper-Plane 多模态 (2026-07-13)**: 让 BT-7274 通过"纸飞机"被问"你看到什么"时能看到当前屏幕。`index.html sendBtPrompt` 加 `captureBtFrameB64`(从 `getScreenCaptureVideo` / `<video id="videoElement">` 抓 JPEG,最大宽 800,q=0.7),`server.py llm_message` + `jarvis_mode._send_to_llm` 接受 `image_b64` 并把 user message 改成 OpenAI multimodal content 数组(需要 7060 llama-server 已启用 `--mmproj`,默认如此)。视觉管线 / 8070 webinfer / 4 进程编排 / 端口协议全部零改动。空源自动 fallback 到纯文本。详见 `doc/voice-ui.md` §3.6 + `doc/screen-capture.md` §11 v3.35。
+- **v3.33 / v3.33.1 Screen Capture 本地预览 (2026-07-13)**: `screen_capture.js` 暴露 `getScreenCaptureStream/getScreenCaptureVideo`,`index.html` 在 `start()` Screen 分支和 `screenStartBtn` click handler 都挂 `videoElement.srcObject` + 取消镜像。操作员能在 webui 上看到被捕获的窗口/标签,BT-7274 仍按 1fps WS 走原有视觉管线。详见 `doc/subsystems/screen-capture.md` §3.5 + §11。
+- **v3.34 llama-server 上下文 4096->16384 + webinfer prompt guard (2026-07-13)**: 治本 `exceed_context_size_error` 502。详见 `doc/subsystems/screen-capture.md` §11 v3.34 + webinfer prompt guard（已实装；原规划的 spec 未落盘）。
+- **v3.35 Paper-Plane 多模态 (2026-07-13)**: 让 BT-7274 通过"纸飞机"被问"你看到什么"时能看到当前屏幕。`index.html sendBtPrompt` 加 `captureBtFrameB64`(从 `getScreenCaptureVideo` / `<video id="videoElement">` 抓 JPEG,最大宽 800,q=0.7),`server.py llm_message` + `jarvis_mode._send_to_llm` 接受 `image_b64` 并把 user message 改成 OpenAI multimodal content 数组(需要 7060 llama-server 已启用 `--mmproj`,默认如此)。视觉管线 / 8070 webinfer / 4 进程编排 / 端口协议全部零改动。空源自动 fallback 到纯文本。详见 `doc/subsystems/voice-ui.md` §3.6 + `doc/subsystems/screen-capture.md` §11 v3.35。
 - **v3.35a 隐藏 llama-server 控制台窗口 (2026-07-13)**: `install/windows/start-llama-server.ps1` 拉起 `llama-server.exe` 时 `Start-Process` 缺 `-WindowStyle Hidden`,会弹黑色控制台窗口,被误点 X 就 kill PID。补上参数后 7060 静默后台运行,只剩 PID 文件 + 时间戳日志可见。`run-windows.ps1` 本身用 `$psi.WindowStyle="Hidden"`,`start-all-services.ps1` 的 voice_clone_api 分支已带 `-WindowStyle Hidden`,均无需改动。零代码逻辑变化,纯启动参数。
 
 > 文档版本：v3.35a 配套 + 2026-08-13 新立项（N1-N4）  |  最近更新：2026-08-13（新立项）  |  作者：Codex / workbuddy

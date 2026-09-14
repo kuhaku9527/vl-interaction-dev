@@ -10,10 +10,10 @@
 | 字段 | 内容 |
 |---|---|
 | **事实** | memory-store 实际跑在 **`127.0.0.1:8997`**（非 8996）；webui 必须经 `JOYAI_MEMORY_STORE_URL=http://127.0.0.1:8997` 启动。**⚠️ `run-windows.env` 并未覆盖 `MEMORY_PORT` / `JOYAI_MEMORY_STORE_URL`**（实测 grep 零命中）~~，须每次手动设 env；这是已知漂移，待 #43 修脚本自动注入~~ **该漂移已由 PR #83/#84（D-034 端口固定 8997）闭环：run-windows.env 现含 8997 覆盖，默认连真后端；归属非 #43（#43=视频采集端到端延迟调研）**。modified: 2026-08-07｜by AI｜approved: 用户** |
-| **来源** | 8997 确立为生产后端于 2026-07-26；`services/webui/.../server.py` 默认 8996；`run-windows.ps1:114` 默认 8996 |
+| **来源** | 8997 确立为生产后端于 2026-07-26；webui 网关默认值——2026-09-14 校正：曾为 `server.py` 默认 8996、`run-windows.ps1:114` 默认 8996，**现均已为 8997**（`admin_endpoints.py:45`、`run-windows.ps1:109`） |
 | **校验** | `curl -fsS http://127.0.0.1:8997/health -m 3` |
 | **预期** | 200 OK |
-| **Drift** | 🟥 `run-windows.ps1:114` 默认 `MEMORY_PORT=8996`（空壳）；须手动 env 覆盖为 8997（详见 `启动链路.md` D-008） |
+| **Drift** | ✅ **已闭环（2026-07-29）**：`run-windows.ps1:109` 默认已由 8996 改为 8997；`run-windows.env:28-31` 含四行显式覆盖。原 🟥「默认 8996 空壳、须手动 env 覆盖」不再成立（详见 `启动链路.md` D-008） |
 | **Owner** | 运维 |
 | **锁定** | ✅ |
 
@@ -103,7 +103,7 @@
 | 字段 | 内容 |
 |---|---|
 | **事实** | `config.py` 含 `NetworkConfig` / `ProxyConfig` / `NetworkConfigStore` / `get_network_config` / `update_network_config`；模型在 `models.py` `NetworkSettingsRequest`（B2，#38 引入） |
-| **来源** | #38（2026-07-27）+ `services/memory-store/src/memory_store/config.py` + `models.py` |
+| **来源** | #38（2026-07-27）+ `services/memory-store/src/memory_store/config.py` + `services/memory-store/src/memory_store/models.py` |
 | **校验** | `grep -nE "class NetworkConfig|class ProxyConfig|NetworkConfigStore" services/memory-store/src/memory_store/config.py` |
 | **预期** | 命中 3+ 行 |
 | **Drift** | 🟥 2026-07-27 误以为配置文件被删（实际是工作树被沙箱陷阱删，已 `git checkout HEAD --` 还原） |

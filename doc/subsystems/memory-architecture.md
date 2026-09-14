@@ -1,6 +1,6 @@
 # 记忆架构设计（持久化 + 可插拔外部库）
 
-> 状态：**v3.2 落地（v0.2 hooks 2026-07-13 完成；[Local Wiki] 委派召回 2026-07-23 落地进 hermes_api shim；obsidian/bge-m3 待排期）**。配套 `doc/asr-streaming.md`（Jarvis 模式）。
+> 状态：**v3.2 落地（v0.2 hooks 2026-07-13 完成；[Local Wiki] 委派召回 2026-07-23 落地进 hermes_api shim；obsidian/bge-m3 待排期）**。配套 `doc/subsystems/asr-streaming.md`（Jarvis 模式）。
 > v0.1 skeleton（v3.25）：services/memory-store/ SqliteBackend + FTS5；v0.2 hooks（v3.26）：live_adapter.py push/pull/recall + webinfer [历史记忆] 注入；[Local Wiki]（2026-07-23）：hermes_api shim 委派前 recall memory-store。
 > 触发：原项目有 3 层进程内记忆，但**无持久化、无外部接口、无 RAG**——重启即丢。
 > 修订：
@@ -372,11 +372,11 @@ class MemoryBackend(Protocol):
 
 ## 9. 关联文档
 
-- `doc/tech-local.md` §16（Jarvis 模式）+ §P2 章节（待补）
-- `doc/pm-local.md` §23 + §P2 章节（待补）
-- `doc/gaming-mode.md` §8（让 Hermes 委派查攻略的升级版）
+- `doc/local/tech-local.md` §16（Jarvis 模式）+ §P2 章节（待补）
+- `doc/local/pm-local.md` §23 + §P2 章节（待补）
+- `doc/subsystems/gaming-mode.md` §8（让 Hermes 委派查攻略的升级版）
 - `doc/subsystems/jarvis-mode.md`（唤醒 + EXIT_WORDS 状态机，记忆层是其下游）
-- `doc/lightweight-replacement.md` §2（bge-m3 与 whisper.cpp 同源）
+- `doc/research/lightweight-replacement.md` §2（bge-m3 与 whisper.cpp 同源）
 - `services/background-agent/hermes_api/main.py`（[Local Wiki] 委派前 recall memory-store）
 
 ---

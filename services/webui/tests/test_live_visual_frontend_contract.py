@@ -1,4 +1,4 @@
-"""C.B live visual (spec draft-live-visual-cb.md §3 层 3) front-end static contracts.
+"""C.B live visual (spec live-visual-cb.md §3 层 3) front-end static contracts.
 
 Pins the live-panel additions in ``index.html`` + ``styles.css``:
 

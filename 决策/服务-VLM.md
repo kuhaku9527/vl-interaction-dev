@@ -101,13 +101,13 @@
 | 字段 | 内容 |
 |---|---|
 | **事实** | llama-server 运行时上下文窗口 = **16384 tokens**（`-c 16384`），由 2026-07-13 的 4096 提升而来；模型本身 `n_ctx_train=262144`（见 `logs/llama-*.log`），16384 是**部署窗口**而非模型上限 |
-| **来源** | commit `4dd4fc3`「v3.34: llama-server ctx 16384 + webinfer prompt guard」（2026-07-13）+ `services/scripts/run-windows.env:35 MAIN_CONTEXT=16384` + `MAIN_CTX_TOKENS=16384` + `services/scripts/run-windows.ps1:317`（读 `$env:MAIN_CONTEXT`，缺失才兜底 4096） |
+| **来源** | commit `4dd4fc3`「v3.34: llama-server ctx 16384 + webinfer prompt guard」（2026-07-13）+ `services/scripts/run-windows.env:35 MAIN_CONTEXT=16384` + `MAIN_CTX_TOKENS=16384` + `services/scripts/run-windows.ps1:317`（读 `$env:MAIN_CONTEXT`，缺失才兜底 4096） | <!-- known-absent: 4dd4fc3 因 2026-08-02 filter-repo 失效 -->
 | **校验** | `grep -n "n_ctx_slot" logs/llama-main.log` → 预期 `n_ctx_slot = 16384`；或确认启动参数含 `-c 16384` |
 | **预期** | 运行实例 `n_ctx_slot = 16384` |
 | **Drift** | 🟥 **2026-07-28 19:15 启动实例 `n_ctx_slot = 4096`**（env 未注入进程，`run-windows.ps1:317` 走 4096 兜底）→ 图片+记忆+wiki 字符输入溢出。这是**运行态回退**，决策(16384)与提交配置(env=16384)均未漂移。修复：经 `run-windows.ps1`（`-Mode llama` 或 `start-joyai.ps1 -Restart llama-main`）重启，加载 `.env` → `MAIN_CONTEXT=16384` → `-c 16384` |
 | **Owner** | 运维 |
 | **锁定** | ✅ |
-| **modified** | 2026-07-28 21:23 由主理人据 `git show 4dd4fc3` + `logs/llama-main.log:14` + `run-windows.ps1:317` 三方核对新增；推翻此前 D-021 误写的"n_ctx=4096 模型固有" |
+| **modified** | 2026-07-28 21:23 由主理人据 `git show 4dd4fc3` + `logs/llama-main.log:14` + `run-windows.ps1:317` 三方核对新增；推翻此前 D-021 误写的"n_ctx=4096 模型固有" | <!-- known-absent: 4dd4fc3 因 2026-08-02 filter-repo 失效 -->
 
 ---
 
@@ -125,7 +125,7 @@
 ### 2026-07-28 19:15（日志时间）/ 21:23（发现）｜ VLM 上下文窗口运行态回退至 4096
 - **症状**：`logs/llama-main.log:14` 显示本次启动 `n_ctx_slot = 4096`，与锁定决策 16384 不符；用户反馈「图片+记忆+wiki 字符输入直接爆」。
 - **根因（已定位，三源交叉验证）**：
-  1. 决策未漂移：`git show 4dd4fc3` 改 `run-windows.env MAIN_CONTEXT 4096→16384`；`doc/main/00-main-direction.md:108` 记载 07-13 ctx 4096→16384。
+  1. 决策未漂移：`git show 4dd4fc3` 改 `run-windows.env MAIN_CONTEXT 4096→16384`；`doc/main/00-main-direction.md:108` 记载 07-13 ctx 4096→16384。 <!-- known-absent: 4dd4fc3 因 2026-08-02 filter-repo 失效 -->
   2. 提交配置未漂移：工作树与 `git HEAD` 的 `run-windows.env:35` 均为 `MAIN_CONTEXT=16384`。
   3. 启动逻辑正确：`run-windows.ps1:317` 读 `$env:MAIN_CONTEXT`，仅当其缺失才兜底 4096；env 加载器 `:74-87` 会把 `.env` 的 `MAIN_CONTEXT` 注入进程。
   4. **结论**：本次 19:15 启动的 llama-server 进程环境里 `MAIN_CONTEXT` 未生效（启动路径未加载 `.env` 或被覆盖），故走了 `:317` 的 4096 兜底。属**运行态回退**，非决策/配置漂移。

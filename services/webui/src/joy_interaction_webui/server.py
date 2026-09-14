@@ -195,7 +195,7 @@ from .services_config import _validate_and_apply_slot as _validate_and_apply_slo
 from .services_config import _validate_api_base as _validate_api_base  # noqa: E402
 
 # Facade re-exports from silence_proxy (radio-silence proxy, spec
-# draft-radio-silence.md §7). The webui persists the silence settings and
+# radio-silence.md §7). The webui persists the silence settings and
 # forwards the live suppressed toggle to webinfer /v1/live/silence.
 # NOTE: the in-process last-known ``_silence_suppressed`` bool is intentionally
 # NOT re-exported — a bool facade would be a stale snapshot (immutable type),
@@ -684,7 +684,7 @@ def main():
     # N7.1: agent provider-route passthrough (webui -> background-agent :8079).
     app.router.add_get("/api/bg-agent/provider/route", _bg_agent_provider_route_handler)
     app.router.add_post("/api/bg-agent/provider/route", _bg_agent_provider_route_handler)
-    # Radio silence (spec draft-radio-silence.md §7): webui proxy for
+    # Radio silence (spec radio-silence.md §7): webui proxy for
     # webinfer /v1/live/silence + persisted settings (services_config silence
     # slot). Frontend combo-key / voice command both land on this single API.
     app.router.add_get("/api/live/silence", _silence_handler)

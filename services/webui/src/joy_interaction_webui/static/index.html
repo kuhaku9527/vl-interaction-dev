@@ -225,7 +225,7 @@ limitations under the License.
                 <button class="icon-btn" id="apiStatusRefresh" type="button" aria-label="Refresh API status"><i data-lucide="refresh-cw"></i> Refresh</button>
             </div>
 
-            <!-- Radio Silence (draft-radio-silence.md §3/§7): 静默设置面板。
+            <!-- Radio Silence (radio-silence.md §3/§7): 静默设置面板。
                  存在但隐身：不推理不播报，只留唤醒通道。全部设置项带说明文字。 -->
             <div class="settings-section full-width collapsed" id="radioSilenceSection">
                 <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">无线电静默</div>
@@ -1243,7 +1243,7 @@ limitations under the License.
         let liveEnrollActive = false;
         let liveEnrollTimer = null;
         let liveEnrollCompleted = false;
-        // C.B live visual (spec draft-live-visual-cb.md §3 层 3): the live
+        // C.B live visual (spec live-visual-cb.md §3 层 3): the live
         // panel owns a 1fps visual feed (screen via screen_capture.js OR
         // camera via an inline getUserMedia -> WS frame sender; single-select,
         // never both). Frames travel over the SAME main WS as jarvis/live
@@ -1681,7 +1681,7 @@ limitations under the License.
             }
         })();
 
-        // Radio Silence (draft-radio-silence.md §3/§7): init 组合键监听 + 角标 +
+        // Radio Silence (radio-silence.md §3/§7): init 组合键监听 + 角标 +
         // 初始状态读取。面板在 settingsModal 内；打开 modal 时刷新（见 settingsBtn handler）。
         (function () {
             if (window.JoyRadioSilence && window.JoyRadioSilence.init) {

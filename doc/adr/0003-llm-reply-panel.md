@@ -47,7 +47,7 @@
 
 ## 实施现状（2026-07-12 验收）
 
-> 配套补：DELIVERY.md §7 v3.3 + doc/00-main-direction.md §3 "LLM 回复面板可见" / §4.0 #2 半落地。
+> 配套补：DELIVERY.md §7 v3.3 + doc/main/00-main-direction.md §3 "LLM 回复面板可见" / §4.0 #2 半落地。
 
 | ADR 决策 | 状态 | 证据 |
 |---|---|---|

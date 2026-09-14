@@ -2,7 +2,7 @@
 """Four-state decision-token tests (addressee-detection Phase 2).
 
 Locks in the ``</not-for-me>`` extension (spec
-``doc/specs/draft-addressee-detection.md`` §4.1/§4.2):
+``doc/specs/addressee-detection.md`` §4.1/§4.2):
 
   * :func:`parse_model_decision` — four states; ``</not-for-me>`` is an
     independent single-marker state (empty body, no delegation question);

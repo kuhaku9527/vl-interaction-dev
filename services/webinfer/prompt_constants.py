@@ -82,7 +82,7 @@ Choose this when you observe something worth reporting or a significant state ch
 
 # --- live-mode system prompt (FOUR-state decision-token framework) -----
 # Used as the base prompt ONLY when ``interaction_mode == "live"``
-# (addressee-detection Phase 2, spec draft-addressee-detection.md §4.1/§4.2):
+# (addressee-detection Phase 2, spec addressee-detection.md §4.1/§4.2):
 # the three-state framework is extended with the ``</not-for-me>`` state so
 # the always-on live dialog can decline utterances that are NOT addressed to
 # the AI (self-talk / replying to someone else / talking to another person).

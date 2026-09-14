@@ -6,7 +6,7 @@
 
 | shim | 模块 | 运行时 | 适用场景 |
 | --- | --- | --- | --- |
-| **Codex API（默认）** | `codex_api/main.py` → `CodexProvider` | 系统 `codex` CLI 子进程（复用 `~/.codex` auth/config） | Windows + Linux；2026-08-13 起为默认后端（见 `doc/specs/draft-background-agent-codex-bridge.md`） |
+| **Codex API（默认）** | `codex_api/main.py` → `CodexProvider` | 系统 `codex` CLI 子进程（复用 `~/.codex` auth/config） | Windows + Linux；2026-08-13 起为默认后端（见 `doc/specs/background-agent-codex-bridge.md`） |
 | **Hermes API（保留）** | `hermes_api/main.py` → `HermesProvider` | 本地 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) HTTP gateway（OpenAI 兼容，端口 8642） | 可切换；设 `BACKGROUND_AGENT_PROVIDER=hermes` 选择 |
 
 > **插件化架构（2026-08-14）**：两个 shim 实现共享 `AgentProvider` 接口

@@ -1,6 +1,6 @@
 # Spec（草稿）— 四态共情类误响应调优（AFK 工作线）
 
-> 状态：**草稿** — 待 benchmark 真机验证后转正式。
+> 状态：**草稿**（**保留原因已核实**：功能部分已落盘，但第 3 项「persona 文件级弱化」依赖真机 benchmark 结果决定，故不转正）
 > 日期：2026-08-14（改动落盘）｜关联：`doc/research/addressee-cross-validation-2026-08-12.md` §B（必测②）、`doc/specs/addressee-detection.md`（正式，Phase2 四态）、08-13 真机失败句实证
 > 背景：live 四态（silence/response/delegation/**not-for-me**）已上线，但**共情类自言自语**（"哎呀这关怎么那么难" / "唉，好累"）仍被判 `response` 并播报共情安慰——08-13 真机实证：与 few-shot"这关怎么这么难啊"几乎同款的"哎呀这关怎么那么难呢"→ `decision=response` + "看到你遇到困难了…"。报告 §B.4 定位根因：**persona "User is your Pilot" 压制 not-for-me 召回（主阻塞）** + few-shot 措辞泛化失败。
 

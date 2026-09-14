@@ -1,7 +1,7 @@
 # ruff: noqa: RUF001
 """Benchmark: local llama.cpp 4-state decision-token not-for-me accuracy (必测②).
 
-Measures (spec draft-addressee-detection.md §4.3):
+Measures (spec addressee-detection.md §4.3):
   1. Baseline A — existing 3-state live prompt, sentence by sentence.
      Metric: non-directed sentences that got </response> (误响应基线).
   2. Enhanced B — temporary 4-state prompt (Not-For-Me definition + rules +

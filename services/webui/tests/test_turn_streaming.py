@@ -1,7 +1,7 @@
 """Independent unit tests for the shared ``turn_streaming`` consumer.
 
 The consumer is the extracted P0-A streaming logic shared by jarvis and the
-future live dialog (spec ``draft-live-interaction-layer.md`` §4.3). These
+future live dialog (spec ``live-interaction-layer.md`` §4.3). These
 tests pin the consumer's own contract (frame handling, SentenceBuffer
 flushing, fail-open, cancellation) without any jarvis state machine; the
 jarvis-side regression is covered by ``test_jarvis_tts_streaming.py``.

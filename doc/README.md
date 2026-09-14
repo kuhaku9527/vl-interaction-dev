@@ -1,24 +1,31 @@
 # JoyAI-VL-Interaction 文档库
 
-> **版本**: v3.37 + Phase 2A/B/C (HEAD = `021f429`) | **最近更新**: 2026-07-14 | **状态**: ✅ 与代码同步
+> **最近更新**: 2026-08-18 | **状态**: ⚠️ 部分条目滞后于代码（见下方「索引维护告警」）
+>
+> ⚠️ **索引维护告警（2026-09-14 核查）**：本页「分类索引」仅覆盖 2026-07-14 之前建立的文档，**2026-08-11 之后新增的 30+ 份 spec 未收录**（正式 spec 见 [`specs/README.md`](specs/README.md)，草稿见 `specs/draft-*.md`）。页面顶部的 `HEAD=021f429` 为历史快照号，该 commit 已不在本仓库对象库中，**不作为当前基线**。
 >
 > **如何读这页**：新人先按 👇 入口路径走（35 分钟入门）。需要查特定子系统的设计/规格/决策时，按"分类索引"找。历史文档 `deprecated/` 不进常规阅读路径。
 >
 > **关键文档（最常被读到）**：
-> - 📌 [`specs/2026-07-13-current-state.md`](specs/2026-07-13-current-state.md) — **项目现状唯一权威**（端口、模块流程、风险表）
+> - 📌 [`specs/README.md`](specs/README.md) — **正式 spec 索引（最新，优先看这个）**
+> - 📌 [`specs/2026-07-13-current-state.md`](specs/2026-07-13-current-state.md) — 项目现状（端口、模块流程、风险表）
 > - 📌 [`specs/2026-07-13-llm-path-consolidation.md`](specs/2026-07-13-llm-path-consolidation.md) — LLM 网关单入口（B 选项实施合同，已 ✅ 实施）
 > - 📌 [`specs/2026-07-14-loose-coupling-services.md`](specs/2026-07-14-loose-coupling-services.md) — 4-API config + 单 webinfer 主路 + 3 独立 capture（Phase 2A/B 实施合同，已 ✅ 实施）
-> - 📌 [`specs/2026-07-14-project-audit.md`](specs/2026-07-14-project-audit.md) — **项目审查（基于 HEAD=021f429 代码事实）**：整体 + 各模块流程图、风险表、与之前对比、用户疑问解答
+> - 📌 [`specs/2026-07-14-project-audit.md`](specs/2026-07-14-project-audit.md) — 项目审查（基于 HEAD=021f429 代码事实）：整体 + 各模块流程图、风险表、对比、疑问解答
 > - 📌 [`adr/0006-llm-gateway-single-entrypoint.md`](adr/0006-llm-gateway-single-entrypoint.md) — v3.37 设计决策
 
 ---
 
 ## 🎯 入口路径（新人在此起步）
 
-1. **[`main/00-main-direction.md`](main/00-main-direction.md)** — 主方向 + v3.37 路线图（**先读这个**）
-2. **[`specs/2026-07-13-current-state.md`](specs/2026-07-13-current-state.md)** — 项目现状快照（端口、模块、风险）
-3. **[`glossary.md`](glossary.md)** — BT 语音交互栈术语表
-4. 按需要展开到子系统 / ADR / Spec —— 见下方分类索引
+1. **[`runtime-topology.md`](runtime-topology.md)** — ⭐ **现行运行拓扑（唯一权威）**：服务/端口/启动模式/交互模式/前端结构（**先读这个**）
+2. **[`main/00-main-direction.md`](main/00-main-direction.md)** — 主方向 + v3.37 路线图
+3. **[`../决策/README.md`](../决策/README.md)** — 决策书 SSOT（已拍板事实；与其他文档冲突时以它为准）
+4. **[`service-startup.md`](service-startup.md)** — 启动细节与踩坑 ｜ **[`runtime-matrix.md`](runtime-matrix.md)** — 各服务 venv/解释器矩阵
+5. **[`glossary.md`](glossary.md)** — BT 语音交互栈术语表
+6. 按需要展开到子系统 / ADR / Spec —— 见下方分类索引
+
+> ⚠️ **不要读这两份找"当前架构"**：`local/architecture-current.md`（2026-07-14 快照）与 `local/architecture-local.md`（2026-07-12，11 进程旧设计）**均已过时**，正文保留仅为历史。同理 `specs/2026-07-13-current-state.md` 的端口/模块部分已漂移（其自述也承认）。
 
 ---
 
@@ -84,22 +91,35 @@
 | [`specs/webui-kws-listening-chain.md`](specs/webui-kws-listening-chain.md) | ✅ 已实施 | WebUI KWS 监听链 |
 | [`specs/2026-07-14-loose-coupling-services.md`](specs/2026-07-14-loose-coupling-services.md) | ✅ 已实施 | 4-API config + 单 webinfer 主路 + 3 独立 capture 模块（Phase 2A/B 实施合同） |
 | [`specs/2026-07-14-project-audit.md`](specs/2026-07-14-project-audit.md) | ✅ 代码事实层现状 | 项目审查（HEAD=021f429）整体+模块流程图 + 风险表 + 疑问解答 |
-| [`specs/draft-background-agent-codex-bridge.md`](specs/draft-background-agent-codex-bridge.md) | 🔧 草稿（代码完成待真机） | background-agent 切 Codex 桥接（N1，2026-08-13） |
-| [`specs/draft-call-mode-unknown-delegation.md`](specs/draft-call-mode-unknown-delegation.md) | 🔧 草稿（代码完成待真机） | call 模式"不知道就委派"（N2，2026-08-13） |
+| [`specs/background-agent-codex-bridge.md`](specs/background-agent-codex-bridge.md) | 🔧 草稿（代码完成待真机） | background-agent 切 Codex 桥接（N1，2026-08-13） |
+| [`specs/call-mode-unknown-delegation.md`](specs/call-mode-unknown-delegation.md) | 🔧 草稿（代码完成待真机） | call 模式"不知道就委派"（N2，2026-08-13） |
 | [`specs/draft-live-empathy-tuning.md`](specs/draft-live-empathy-tuning.md) | 🔧 草稿（代码完成待 benchmark） | 四态共情类误响应调优（2026-08-14） |
 
-### 架构决策记录（`adr/`）
+### 架构决策记录（`adr/`，19 份 + 4 份 mermaid）
 
-> "为什么这么改"——决策历史。
+> "为什么这么改"——决策历史。⚠️ **编号有冲突**：`0007` 与 `0008` 各被 3 个文件占用（设计 + 2 张图），待消歧。
 
-| ADR | 主题 |
-| --- | --- |
-| [`adr/0001-voice-clone-sync.md`](adr/0001-voice-clone-sync.md) | Rapid Clone 同步路径 vs `/v1/t2a_async_v2` |
-| [`adr/0002-kws-config-env.md`](adr/0002-kws-config-env.md) | KWS 调参改 env 化 |
-| [`adr/0003-llm-reply-panel.md`](adr/0003-llm-reply-panel.md) | LLM 回复面板可见性 |
-| [`adr/0004-service-lifecycle.md`](adr/0004-service-lifecycle.md) | 服务停止方案 |
-| [`adr/0005-memory-store-start.md`](adr/0005-memory-store-start.md) | 持久化层启动策略 |
-| [`adr/0006-llm-gateway-single-entrypoint.md`](adr/0006-llm-gateway-single-entrypoint.md) | LLM 网关单入口（v3.37） |
+| ADR | 主题 | 状态 |
+| --- | --- | --- |
+| [`adr/0001-voice-clone-sync.md`](adr/0001-voice-clone-sync.md) | Rapid Clone 同步路径 vs `/v1/t2a_async_v2` | Accepted |
+| [`adr/0002-kws-config-env.md`](adr/0002-kws-config-env.md) | KWS 调参改 env 化 | Accepted |
+| [`adr/0003-llm-reply-panel.md`](adr/0003-llm-reply-panel.md) | LLM 回复面板可见性 | ⚠️ 严重过时（引用符号全 0 命中） |
+| [`adr/0004-service-lifecycle.md`](adr/0004-service-lifecycle.md) | 服务停止方案 | ⚠️ 部分失效（端口表含已废 8991/8992） |
+| [`adr/0005-memory-store-start.md`](adr/0005-memory-store-start.md) | 持久化层启动策略 | ⚠️ 部分失效（锁定 8996，真值 8997） |
+| [`adr/0006-llm-gateway-single-entrypoint.md`](adr/0006-llm-gateway-single-entrypoint.md) | LLM 网关单入口（v3.37/v3.38） | ✅ Accepted（最新最准） |
+| [`adr/0007-split-live-adapter.md`](adr/0007-split-live-adapter.md) | live_adapter 拆分 | ⚠️ 已被后续重构超越 |
+| [`adr/0007-milestone2-design.md`](adr/0007-milestone2-design.md) | Milestone 2 设计 | ⚠️ mixin 数已变（5→7） |
+| [`adr/0008-p0-adapter-fixes-design.md`](adr/0008-p0-adapter-fixes-design.md) | P0 adapter 修复 | ✅ 已落地（状态待改 Accepted） |
+| [`adr/0011-phased-lint-gate.md`](adr/0011-phased-lint-gate.md) | 分阶段 lint 门禁 | ✅（Batch 2/3 已落地） |
+| [`adr/0013-webinfer-memory-client-resilience.md`](adr/0013-webinfer-memory-client-resilience.md) | memory 客户端韧性 | ✅ Accepted |
+| [`adr/0014-log-event-schema.md`](adr/0014-log-event-schema.md) | 日志事件 schema | ⚠️ 引用的 `scripts/log_query.py` 不存在 |
+| [`adr/0015-memory-store-health-observability.md`](adr/0015-memory-store-health-observability.md) | memory-store 健康可观测性 | ✅ Accepted |
+| [`adr/0016-live-adapter-drift-gate-safe-batch.md`](adr/0016-live-adapter-drift-gate-safe-batch.md) | drift-gate 安全批 | ✅ Accepted |
+| [`adr/0017-drift-gate-launcher-wiring.md`](adr/0017-drift-gate-launcher-wiring.md) | drift-gate launcher 接线 | ✅ 已落地（状态待改 Accepted） |
+| [`adr/0018-smart-turn-end-of-turn.md`](adr/0018-smart-turn-end-of-turn.md) | Smart Turn 端点检测 | ✅ Accepted |
+| [`adr/0019-webui-component-consistency.md`](adr/0019-webui-component-consistency.md) | WebUI 元件一致性（D1–D5） | ✅ 有效 |
+| [`adr/0020-webui-local-cloud-selector.md`](adr/0020-webui-local-cloud-selector.md) | 本云选择器 idiom | ✅ 有效 |
+| [`adr/ADR-0012-v6-proposal.md`](adr/ADR-0012-v6-proposal.md) | Local Wiki 方案 C（bge-m3+USearch+Obsidian） | ⚠️ 全文用 8996（真值 8997） |
 
 ### 工具书
 
@@ -126,16 +146,36 @@
 
 ```
 JoyAI-VL-Interaction-main/
-├── README.md
-├── DELIVERY.md
-├── doc/                 # 本目录
+├── ARCHITECTURE.md      # 架构概览（指针式镜像）
+├── DELIVERY.md          # 交付与变更记录
+├── 决策/                 # ⭐ SSOT：已拍板决策（冲突时以本目录为准）
+├── doc/                 # 本目录：设计/规格/调研/子系统
+├── docs/                # 操作手册（runbook，见下方「操作手册」一节）
 ├── services/            # webinfer / asr / tts / voice-clone / webui / background-agent / common
+├── scripts/             # verify.sh / drift_gate.py / 质量门
+├── config/              # drift-contract.json
 ├── install/             # 安装脚本
 ├── prompts/             # 角色 prompt 模板
-├── voices/              # 声音档案（运行时生成）
-├── datasets/            # 训练数据转换工具（运行时不需要）
-└── img/                 # README 资源
+├── reports/             # 一次性工作留痕（handoff / 审计 / 验收）
+└── datasets/            # 训练数据转换工具（运行时不需要）
 ```
+
+---
+
+## 🛠 操作手册（`docs/`，与 `doc/` 分工）
+
+> ⚠️ **两个目录只差一个字母，注意区分**：
+> - `doc/`（本目录）= **设计/规格/决策**（"为什么这样设计"）
+> - `docs/` = **操作手册**（"怎么做"，runbook 性质，跨对话端共用）
+
+| 手册 | 用途 |
+| --- | --- |
+| [`../docs/github-runbook.md`](../docs/github-runbook.md) | GitHub/git 操作钉死手册（踩过的坑 + 正确动作） |
+| [`../docs/local-wiki-methodology.md`](../docs/local-wiki-methodology.md) | Local Wiki 语料扩充 / 换游戏方法论 |
+| [`../docs/kws-training-manual-generic.md`](../docs/kws-training-manual-generic.md) | KWS 训练手册（通用） |
+| [`../docs/kws-training-manual-local.md`](../docs/kws-training-manual-local.md) | KWS 训练手册（本机环境） |
+| [`../docs/kws-training-manual-local-reality-check.md`](../docs/kws-training-manual-local-reality-check.md) | KWS 训练手册（本机现实核对） |
+| [`../docs/asrok-user-guide.md`](../docs/asrok-user-guide.md) | ASR/OK 使用指南 |
 
 ---
 
@@ -146,3 +186,98 @@ JoyAI-VL-Interaction-main/
 3. **设计决策 → 新建 ADR**：顺序编号 `adr/NNNN-{title}.md`，状态 `Accepted / Superseded / Deprecated`。
 4. **过 6 个月无引用 → 候选弃用**：先 `deprecated/`，6 个月再未引用 → 删除。
 5. **`doc/README.md`（本文件）必须反映最新分类布局**——加新文件时同步更新。
+6. **移动文件必须同步引用**：2026-09-14 核查发现，此前一次 `doc/` 目录重排（散文件收进 `subsystems/`/`local/`/`main/`）未同步引用，导致 16 处死指针。移动文件时用 `grep -rn` 全仓扫旧路径。
+7. **禁止行号引用**：`file.py:123` 这类引用漂移极快（已发现 15 条因此失效，甚至出现 `index.html:4093` 指向一个只有 2998 行的文件）。改用**关键词 grep** 或**函数名/常量名**。
+8. **⚠️ 批量替换必须排除「事实记录」目录**（2026-09-14 教训）：
+   一次性路径迁移中，批量替换曾**误改 `logs/drift-gate-history/` 下 13 份运行日志** —— 那是**当时的输出记录**，把其中的旧值"修正"成新值即造成**历史失真**，且该目录未被 git 跟踪，**无法还原**。
+   **绝不可改写**（见 `scripts/doc_health.py` 的 `NEVER_REWRITE`）：
+   `logs/`、`services/logs/`、`services/.logs/`、`reports/webui-preview-*`、`doc/research/data/`、`.cache/`、`.workbuddy*/`、`doc/deprecated/`。
+   **判据**：该文件描述的是**"当时发生了什么"**（记录）还是**"现在应该是什么"**（文档）？前者一律不改。
+
+---
+
+## 🔄 文档生命周期契约（2026-09-14 建立，防堆积）
+
+> **背景**：2026-08 的 10 天内新增 96 份文档，而 SSOT 只吸收 3 条决策；两个月新增 292 份、删除 1 份。
+> 根因是「写没有成本，退没有机制」。下面按**文档寿命类型**分类，每类给明确的维护期望。
+
+### 类型 A：稳态型 —— **必须持续更新**
+
+| 目录 | 寿命 | 维护要求 |
+|---|---|---|
+| `doc/subsystems/` | 与子系统同寿 | 子系统行为变了就必须改。**参照系：本目录 8 份文件「写完即弃率」为 0%**，是全场最健康的 |
+| `doc/main/`、`ARCHITECTURE.md` | 与项目同寿 | 端口/拓扑变更时同步（`ARCHITECTURE.md` 是「指针式镜像」，只改指针不改细节） |
+| `决策/`（SSOT） | 永久 | 走 §0 治理协议；新决策必须落这里 |
+
+**判据**：描述的是**"现在怎么工作"**。只要被描述的东西活着，文档就必须跟着改。
+**健康指标**：`写完即弃率` 应接近 0%。
+
+### 类型 B：事件型 —— **允许写完即封存**
+
+| 目录 | 寿命 | 维护要求 |
+|---|---|---|
+| `reports/` | 一次性 | handoff / integration / audit / review。**干完即封存，不要求更新** |
+| `doc/acceptance/` | 单次验收 | 验收完成后归档 |
+| `doc/architecture/` 的 audit | 快照 | 审计当时的状态，不追改 |
+
+**判据**：描述的是**"我这次干了什么"**。事件结束，文档使命即完成。
+**健康指标**：`写完即弃率` **高是正常的**（当前 73%，可接受）；但必须**定期退役**（见下）。
+
+### 类型 C：证据链型 —— **不可删，但必须可验证**
+
+| 目录 | 说明 |
+|---|---|
+| `doc/research/` | 云端调研的完整证据链（终稿 + 支撑稿）。被 spec 引为「上游」 |
+| `doc/adr/` | 决策记录 + 其 Context |
+| `决策/` 里的「来源」列 | 指向上述证据 |
+
+**要求**：被引用即不可删；但引用本身必须是**可验证的指针**（不用失效 SHA、不用漂移行号）。
+
+### 类型 D：坟场 —— **只进不出，但要有规则**
+
+`doc/deprecated/`。规则见其 `README.md`：零引用才进，半年无引用可批量删，**每次迁入必须登记**。
+
+---
+
+## 🩺 健康检查（定期跑）
+
+```bash
+/d/AI/envs/joyai-main/python.exe scripts/doc_health.py
+```
+
+六项检查：`LINK`（指针）/ `CODE`（源码注释→文档）/ `SSOT`（决策书自检）/ `INDEX`（索引覆盖）/ `ORPHAN`（零引用）/ `STALE`（陈旧度）。
+**block 级非零即须处理**；退出码 1 表示存在死链或 SSOT 指针失效。
+
+### 退役判据（满足即处置，不需要等 6 个月）
+
+| 条件 | 动作 |
+|---|---|
+| 零引用 **且** 工作已落地 **且** 无唯一证据 | **删除** |
+| 零引用 **但** 含历史/因果价值 | **归档**到 `doc/deprecated/`（须登记） |
+| 被 SSOT/doc/代码任一引用 | **保留**（引用是硬存活理由） |
+| 含**唯一证据链**（原始数据已被 gitignore / 实测态不可复得） | **保留** |
+
+> ⚠️ **不要只看引用数**：2026-09-14 发现 SSOT 引用了 6 个**磁盘上不存在**的报告，同时有真正准确的文档零引用。引用数须**实测校验**后再采信。
+
+---
+
+## ⚠️ 已知的文档债（2026-09-14 审计，待处理）
+
+| # | 问题 | 影响 |
+|---|---|---|
+| 1 | 约 40+ 条决策条目的「来源」引用已因 `git filter-repo` 失效的 commit SHA | 证据链不可复核（见 `决策/README.md` §1.1） |
+| 2 | `doc/local/` 的两份 `architecture-*.md` **都自称"当前架构"但都已过时**（其一含全仓唯一的幽灵端口 `8088`） | 现行拓扑无权威文档；`doc/runtime-matrix.md` + `service-startup.md` 实测最准却近乎零引用 |
+| 3 | `doc/subsystems/jarvis-mode.md` 描述的是**已非主线**的 jarvis 模式（EXIT_WORDS 记 8 个实为 5 个、状态机记 6 态实为 7 态） | 但 §2/§4/§12 仍是不可替代的经验资产 → 建议拆出而非删 |
+| 4 | `doc/subsystems/voice-ui.md` §1.1 的 HUD 徽章 **5/7 元素已不存在**（`llmBadge`/`ttsBadge`/`kwsBadge` 全仓 0 命中） | 仅 §9 Design Tokens 仍被 ADR-0019 依赖 |
+| 5 | 5 个 `draft-*` spec 的功能**已全部上线但状态仍写"草稿"** | 状态头只朝一个方向衰减（详见下） |
+| 6 | `doc/specs/README.md` 称"7 份 draft 已删除"，实际仍有 8 个 `draft-*.md` | draft→正式 的转正流程自 2026-08-13 停摆 |
+| 7 | `scripts/log_query.py` 被 ADR-0014 与 `决策/服务-日志.md` 引为校验工具，**从未落盘** <!-- known-absent --> | 已锁定决策的验收检查无法执行 |
+
+### 📌 一条经验规律（值得记住）
+
+> **文档的状态头只会朝一个方向衰减：从"已实现"退不回"待实现"，但"待实现"会一直停留在那里，即使功能早已上线。**
+
+本次审计的 46 份 spec 中，**所有过时的状态标注都错在"尚未实现"一侧，无一例外**。
+`log-event-schema.md` 自称"待实现"，而 SSOT `决策/服务-日志.md` 反向引用它作为「来源 spec」——**闭环建立在一个假前提上**。
+
+**推论**：检查文档陈旧度时，**优先怀疑"草稿/待实现"状态的文件**，它们最可能是"已完成但没人更新状态"。

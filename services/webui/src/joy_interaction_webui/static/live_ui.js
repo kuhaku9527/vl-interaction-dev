@@ -62,7 +62,7 @@
             }
         }
         // -------------------------------------------------------------------
-        // C.B live visual + proactive speak (spec draft-live-visual-cb.md §3
+        // C.B live visual + proactive speak (spec live-visual-cb.md §3
         // 层 3). The live panel can open a 1fps visual feed (screen capture
         // via screen_capture.js OR camera via an inline getUserMedia sender —
         // single select, never both) that ships WS `frame` messages over the

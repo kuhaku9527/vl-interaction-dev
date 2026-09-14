@@ -6,7 +6,7 @@ Wraps sherpa-onnx's native Speaker API (verified on 1.13.4):
     ``3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx`` (16 kHz, 192-dim);
   * :class:`sherpa_onnx.SpeakerEmbeddingManager` — cosine enrollment store.
 
-This module is the spec ``doc/specs/draft-addressee-detection.md`` §3.1 module.
+This module is the spec ``doc/specs/addressee-detection.md`` §3.1 module.
 It sits between VAD segmentation and ASR in the live chain: an enrolled
 target voice passes ``classify()``; any other voice scores below
 ``target_threshold`` and the caller drops the segment before ASR.

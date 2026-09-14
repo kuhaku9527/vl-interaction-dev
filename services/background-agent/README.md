@@ -7,7 +7,7 @@ Two FastAPI shims live in this package, both preserving the exact same
 
 | shim | module | runtime | best for |
 | --- | --- | --- | --- |
-| **Codex API (default)** | `codex_api/main.py` → `CodexProvider` | a system `codex` CLI subprocess (reuses `~/.codex` auth/config) | Windows + Linux; the current default backend since 2026-08-13 (see `doc/specs/draft-background-agent-codex-bridge.md`) |
+| **Codex API (default)** | `codex_api/main.py` → `CodexProvider` | a system `codex` CLI subprocess (reuses `~/.codex` auth/config) | Windows + Linux; the current default backend since 2026-08-13 (see `doc/specs/background-agent-codex-bridge.md`) |
 | **Hermes API (retained)** | `hermes_api/main.py` → `HermesProvider` | a local [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) HTTP gateway (OpenAI-compatible, port 8642) | switchable; set `BACKGROUND_AGENT_PROVIDER=hermes` to select |
 
 > **Plugin architecture (2026-08-14)**: both shims implement the shared

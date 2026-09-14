@@ -8,7 +8,7 @@ register user voice profiles (~10 s reference audio + transcript) and
 synthesise arbitrary text as PCM16 audio.
 
 As of 2026-07-12 the CosyVoice3 backend has been removed from this project;
-see doc/voice-clone.md section 2 for the migration story.
+see doc/subsystems/voice-clone.md section 2 for the migration story.
 
 Modules:
     main: FastAPI application exposing /v1/voices and /v1/synthesize.

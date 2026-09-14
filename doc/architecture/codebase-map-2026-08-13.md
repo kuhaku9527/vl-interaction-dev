@@ -195,7 +195,7 @@ live_mode.py (骨架 1479→~700)
 **依赖关系**：核心类保留，依赖子模块；`live_proactive → live_frames + live_llm`；`tts_turn_common` 独立被两模式共用。
 
 **风险标注**：
-- C.B live 视觉（doc/specs/draft-live-visual-cb.md）层 1-3 刚落地（git log: a536ef3/d9736ee/80caf37/08ab0c4，604 测试 QA 通过），proactive 默认关（`LIVE_PROACTIVE_ENABLED`）——拆解**不得**改变默认关与帧不进历史语义
+- C.B live 视觉（doc/specs/live-visual-cb.md）层 1-3 刚落地（git log: a536ef3/d9736ee/80caf37/08ab0c4，604 测试 QA 通过），proactive 默认关（`LIVE_PROACTIVE_ENABLED`）——拆解**不得**改变默认关与帧不进历史语义
 - 9 个测试文件覆盖（test_live_mode、test_live_proactive、test_live_visual、test_qa_live_*、test_webui_bargein_qa 等）
 - **优先级：3**——先抽 `tts_turn_common`（与 jarvis 同步去重）再做 frames/proactive 抽离
 
@@ -234,7 +234,7 @@ infer_loop.py (Mixin 骨架 1500→~900)
 **依赖关系**：`infer_loop` 继续作为 Mixin 宿主 import 三个新模块；`chat_payload → frame_parsing + stream_protocol + prompt_assembly`。
 
 **风险标注**：
-- 🔒 **D-029 视频端点决策回归测试**：chat/completions 视频 QA 路径被 `test_decision_token_isolation.py` 等守护（doc/specs/draft-live-visual-cb.md:23 明确「触碰 D-029 守护的视频 QA 路径回归风险大」）。**chat/completions 路径保持不动**，只做机械搬移，不改任何解析/组装逻辑
+- 🔒 **D-029 视频端点决策回归测试**：chat/completions 视频 QA 路径被 `test_decision_token_isolation.py` 等守护（doc/specs/live-visual-cb.md:23 明确「触碰 D-029 守护的视频 QA 路径回归风险大」）。**chat/completions 路径保持不动**，只做机械搬移，不改任何解析/组装逻辑
 - 🔒 D-026 `parse_model_decision` 唯一实现（response_format.py:50）——infer_loop 只能 import，不许复制
 - 🔒 D-028 state.lock 并发守卫——所有抽出的函数保持原锁语义
 - 10 个测试文件覆盖（test_text_chat_*、test_live_visual、test_decision_*、test_adapter_core_split 等）

@@ -58,7 +58,7 @@
     },
     {
       "id": "ruff-pin",
-      "decision_ref": "决策/质量约法.md D-007",
+      "decision_ref": "决策/AI代码质量约法三章.md D-007",
       "description": "CI quality.yml 固定 ruff==0.15.22（F4-P0 从 verify.sh 迁移而来）",
       "phase": "static",
       "paths": [".github/workflows/quality.yml"],

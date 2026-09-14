@@ -1,7 +1,7 @@
 """Radio-silence (无线电静默) control mixin for the webinfer adapter.
 
 Defines :class:`SilenceControlMixin`, which owns the live-mode
-``suppressed`` sub-state (spec ``doc/specs/draft-radio-silence.md``):
+``suppressed`` sub-state (spec ``doc/specs/radio-silence.md``):
 
 * ``GET/POST /v1/live/silence`` — status snapshot, settings update, manual
   toggle, and KWS wake-event intake (the webui backend proxies to this

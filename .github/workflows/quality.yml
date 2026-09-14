@@ -126,8 +126,9 @@ jobs:
   # 两个 CPU-only 服务，跑全量 verify.sh，对这两服务的端口检查（含废弃 :8996
   # 反向断言）fail-closed，拦下 DRIFT-2/3 类"监听错端口"漂移。其余 6 个服务
   # (VLM/ASR/TTS/Hermes/background-agent 等) 在 CI 未起 -> [DOWN] 不计 fail
-  # （沿用 check_port 语义）。详见 doc/adr/0015-drift-gate-runtime-v2.1.md 与
-  # doc/specs/drift-gate-runtime-v2.1-spec.md。
+  # （沿用 check_port 语义）。决策记录见 `决策/跨域铁律.md`（Drift Gate v2.1 条目）。
+  # 注：2026-09-14 核查，早前此处引用的 doc/adr/0015-drift-gate-runtime-v2.1.md 与
+  # doc/specs/drift-gate-runtime-v2.1-spec.md 从未落盘，引用已移除。
   # 注意：本 job 刻意「不 needs drift-gate」，与静态门禁并行独立跑——
   # 避免因上游红而被 skipped（之前 needs 链导致 runtime 门禁从未在 CI 真跑过，
   # 见 PR #53 run 30703927856）。两者正交：静态(drift_gate.py) vs 运行时(全量)。

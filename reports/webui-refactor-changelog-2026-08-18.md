@@ -219,4 +219,5 @@ node -e "..."  # 伺服 static/ 于 http://127.0.0.1:8099/
 
 ### 9.4 本次改动文件
 - `services/webui/src/joy_interaction_webui/static/index.html`：Column 2 移入 `#appearanceSection`；新增 appearanceSection 手风琴事件委托。
-- 截图留存：`reports/webui-preview-2026-08-18/settings-appearance-03.png`、`settings-appearance-04.png`、`settings-services-02.png`、`capture-overlay-03.png`。
+- 截图留存：`reports/webui-preview-2026-08-18/settings-appearance-03.png`、`capture-overlay-03.png`。
+  > ⚠️ **2026-09-14 更正**：本行原列 4 张，经 md5 核查其中 `settings-appearance-02/-03/-04.png` 与 `settings-services-02.png` **四张为同一张图**（md5 `288f9c4e…`，均 49459 字节，时间戳 14:25–14:30）——即当时并未真正逐状态截图，实为同一张复制 4 份。现保留 2 张（`settings-appearance-03.png` 1 份 + `capture-overlay-03.png`），其余 3 份冗余已删。**该行的证据主张（"逐状态截图留痕"）不成立**，请勿据此认为三种状态均已截图验证；如需该证据需重新实跑。

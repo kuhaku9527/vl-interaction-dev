@@ -257,7 +257,7 @@
                 }
                 console.log('ASR promotion updated:', data.enabled, data.asr_model_name || '');
             } else if (data.type === 'silence_wake') {
-                // 无线电静默唤醒音频（B3, draft-radio-silence.md §5）：后端消费 live
+                // 无线电静默唤醒音频（B3, radio-silence.md §5）：后端消费 live
                 // done frame silence:{wake:true} 后把 prompts/bt/events/wake.wav 以
                 // WAV base64 推来（live 无服务端扬声器，走浏览器播放）。与 tts_sentence
                 // 同通道但独立事件——不接队列（无 seq/会话语义）、不产生文本气泡。

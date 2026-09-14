@@ -28,7 +28,7 @@ import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DELIVERY = REPO_ROOT / "DELIVERY.md"
-MAIN_DIR = REPO_ROOT / "doc" / "00-main-direction.md"
+MAIN_DIR = REPO_ROOT / "doc" / "main" / "00-main-direction.md"
 
 
 def parse_args() -> argparse.Namespace:

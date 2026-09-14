@@ -5,7 +5,7 @@
 > 配套：本地化部署细节见 [pm-local.md](pm-local.md) / [tech-local.md](tech-local.md)。
 
 > 状态：**部分实现**。MiniMax TTS/克隆、本地社区量化 LLM、本地 KWS/ASR 已落地；memory-store 与 Hermes fallback 仍仅设计。
-> 触发：上一版 `doc/tech-local.md §7.1` 显存预算只剩 40MB，gaming 模式下显存 / 延迟两边吃紧。
+> 触发：上一版 `doc/local/tech-local.md §7.1` 显存预算只剩 40MB，gaming 模式下显存 / 延迟两边吃紧。
 > 核心思路：**不是"全上云"也不是"全本地"**，而是按模块独立选型。
 
 ---
@@ -98,7 +98,7 @@
 - **Win 官方预编译**：k2-fsa 团队提供 v1.10+ Win x64 + CUDA 包
 - **中英混合**：Paraformer-large 中文 CER ~7%，日常对话足够
 
-详细技术实现见 `doc/asr-streaming.md`。
+详细技术实现见 `doc/subsystems/asr-streaming.md`。
 
 ### 2.3 协议桥接（webui 0 修改）
 
@@ -244,7 +244,7 @@ async def run_tts_session(client_ws, settings, request):
 ### 3.4 声音克隆：MiniMax Rapid Clone 唯一路径
 
 **2026-07-09 决策**：声音克隆**只用云端 MiniMax Rapid Clone**，不再使用本地 CosyVoice3 双轨。
-详细设计见 `doc/voice-clone.md`。
+详细设计见 `doc/subsystems/voice-clone.md`。
 
 ```python
 # services/voice-clone/cloud_clone.py
@@ -274,7 +274,7 @@ class MiniMaxVoiceClone:
 
 **本地 CosyVoice3 路径已弃用**（`cosyvoice_client.py` 代码保留但不再被调用）。
 
-### 3.5 故障转移（仅 TTS；声音克隆见 §3.4 / `doc/voice-clone.md`）
+### 3.5 故障转移（仅 TTS；声音克隆见 §3.4 / `doc/subsystems/voice-clone.md`）
 
 ```text
 1. 默认走云端（启动时 ping 通火山 token）
@@ -564,12 +564,12 @@ UI 在启动时弹一个一次性选择，写入 `~\.joyai\privacy.json`：
 
 ## 11. 关联文档
 
-- `doc/asr-streaming.md`（**ASR 本地主路径**，sherpa-onnx KWS + Paraformer 流式；本方案 §2 ASR 章节的完整技术实现）
-- `doc/memory-architecture.md`（embedding 按数据量切本地/API）
-- `doc/tech-local.md` §3.5（ASR 适配器）
-- `doc/tech-local.md` §3.6（TTS 适配器）
-- `doc/pm-local.md` §9（路线图）
-- `docs/lightweight-replacement.md` §0（硬件前置）
+- `doc/subsystems/asr-streaming.md`（**ASR 本地主路径**，sherpa-onnx KWS + Paraformer 流式；本方案 §2 ASR 章节的完整技术实现）
+- `doc/subsystems/memory-architecture.md`（embedding 按数据量切本地/API）
+- `doc/local/tech-local.md` §3.5（ASR 适配器）
+- `doc/local/tech-local.md` §3.6（TTS 适配器）
+- `doc/local/pm-local.md` §9（路线图）
+- `doc/research/lightweight-replacement.md` §0（硬件前置）
 
 ## 12. 变更记录
 
@@ -581,7 +581,7 @@ UI 在启动时弹一个一次性选择，写入 `~\.joyai\privacy.json`：
 
 ## 13. 推荐供应商与套餐（2026-07-08 调研）
 
-> 详细对比见 `docs/token-plan-comparison.md`（8 家厂商 + 5 套推荐组合）。
+> 详细对比见 `doc/api/token-plan-comparison.md`（8 家厂商 + 5 套推荐组合）。
 > 核心结论：**MiniMax Token Plan 是唯一真正"全包"订阅**（LLM + Agent + 视觉 + TTS + 声音克隆 + 音乐 + 视频，跨模态共享积分）。
 
 ### 13.1 本项目最优推荐（替换 §2.2 / §3 选型）
@@ -595,7 +595,7 @@ UI 在启动时弹一个一次性选择，写入 `~\.joyai\privacy.json`：
 | 主对话 VLM | 本地 IQ4_NL | **保持本地** | 视频帧不上云 |
 | Hermes-agent | 200+ provider | **MiniMax Max/Ultra 替代** | 中文 SOTA + 全模态 |
 
-### 13.2 推荐档位（与 `docs/token-plan-comparison.md` §3 对齐）
+### 13.2 推荐档位（与 `doc/api/token-plan-comparison.md` §3 对齐）
 
 | 档 | 月费 | 适合 | 套餐 |
 | - | -: | - | - |
@@ -640,8 +640,8 @@ UI 在启动时弹一个一次性选择，写入 `~\.joyai\privacy.json`：
 
 ## 14. MiniMax 声音克隆限制（2026-07-08 补充）
 
-> 用户反馈之前没看到这块细节。详细规格见 `docs/token-plan-comparison.md §1.3`。
-> 工作流集成见 `doc/voice-clone.md §9`。
+> 用户反馈之前没看到这块细节。详细规格见 `doc/api/token-plan-comparison.md §1.3`。
+> 工作流集成见 `doc/subsystems/voice-clone.md §9`。
 
 ### 14.1 关键 4 数字
 
@@ -714,7 +714,7 @@ UI 在启动时弹一个一次性选择，写入 `~\.joyai\privacy.json`：
 
 适合：所有声音克隆场景（日常 + 角色 + gaming）
 
-详细 4 步工作流见 `doc/voice-clone.md §3`。
+详细 4 步工作流见 `doc/subsystems/voice-clone.md §3`。
 
 ### 14.7 云端配置与保活（2026-07-09）
 
@@ -766,7 +766,7 @@ SHERPA_ONNX_MODEL_DIR=...        # ASR 本地（不参与声音克隆）
 
 ## 15. ASR 选型最终修订（2026-07-08）
 
-> 详细产品设计见 `doc/subsystems/jarvis-mode.md`，技术实现见 `doc/asr-streaming.md`。
+> 详细产品设计见 `doc/subsystems/jarvis-mode.md`，技术实现见 `doc/subsystems/asr-streaming.md`。
 
 **与 §2 / §13 的差异**：
 

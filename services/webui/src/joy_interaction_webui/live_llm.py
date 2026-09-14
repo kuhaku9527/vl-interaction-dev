@@ -219,7 +219,7 @@ async def finish_llm_turn(
         # is spoken (foreground line empty).
         decision = "silence"
 
-    # Addressee-detection Phase 2 (spec draft-addressee-detection.md
+    # Addressee-detection Phase 2 (spec addressee-detection.md
     # §4.1/§4.2.4): decision="not-for-me" means the utterance was NOT
     # addressed to the AI (self-talk / replying to someone else / talking
     # to another person). Treat it as a non-target turn: no TTS, back to

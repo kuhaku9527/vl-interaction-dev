@@ -2,7 +2,7 @@
 
 Extracted from ``jarvis_mode.JarvisStateMachine._send_to_llm_streaming`` so
 the jarvis voice dialog and the future live dialog share one implementation
-(spec ``draft-live-interaction-layer.md`` §4.3). The extraction is a pure
+(spec ``live-interaction-layer.md`` §4.3). The extraction is a pure
 move/re-composition: jarvis behavior must be byte-for-byte identical.
 
 Responsibilities of :class:`StreamingTurnConsumer`:
@@ -101,7 +101,7 @@ class StreamingTurnConsumer:
         # Radio-silence wake (spec §5): called when webinfer's done frame
         # carries ``silence: {wake: True}`` — the live caller plays wake.wav.
         self.on_silence_wake = on_silence_wake
-        # Live visual path (spec draft-live-visual-cb.md §3 层 2): optional
+        # Live visual path (spec live-visual-cb.md §3 层 2): optional
         # ``[{image_b64, ts_ms}]`` frames carried on this round's request.
         # ``None`` (jarvis / text-only live) keeps the request body unchanged.
         self.frames = list(frames) if frames else None

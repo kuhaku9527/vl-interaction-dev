@@ -1,7 +1,7 @@
 # 服务真值 — Hermes（记忆后端 :8642）
 
 > 本文件记录 **Hermes（:8642 记忆/agent 网关）** 的已确定决策，覆盖 L2 `D-2026-07-23-048`。
-> 所有事实由主理人亲自从 git 提交 + 代码（`services/background-agent/hermes_api`、`scripts/start-hermes-gateway.ps1`）核实（2026-07-28 召回轮，不起子代理）。
+> 所有事实由主理人亲自从 git 提交 + 代码（`services/background-agent/hermes_api`、`services/background-agent/scripts/start-hermes-gateway.ps1`）核实（2026-07-28 召回轮，不起子代理）。
 
 ---
 

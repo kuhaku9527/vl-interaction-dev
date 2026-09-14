@@ -1,4 +1,4 @@
-"""QA 独立补充边界用例 — layer 1 live visual path (spec draft-live-visual-cb.md §3 层 1).
+"""QA 独立补充边界用例 — layer 1 live visual path (spec live-visual-cb.md §3 层 1).
 
 These tests pin additional boundary contracts NOT explicitly covered by the
 engineer's ``test_live_visual.py``:

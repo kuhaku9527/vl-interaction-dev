@@ -36,10 +36,10 @@ MiniMax 的 **订阅 Key** `sk-cp-*` 与 **按量付费 API Key** `sk-api-*` 是
 但本次对用户 Token Plan Key 的真实探针显示，`sk-cp-*` 可以认证 `POST /v1/get_voice` 与 `POST /v1/t2a_v2`。
 早前“`sk-cp-*` 不能调 get_voice”的判断已废弃。
 
-当前权威记录见 `doc/voice-clone.md` §15.9。
+当前权威记录见 `doc/subsystems/voice-clone.md` §15.9。
 
 ## 后果
 
 - `voice_clone_api.cloud_clone` 维持现状（`/v1/voice_clone` 同步 + `/v1/t2a_v2` SSE 流式）
 - 新增可选 start-joyai 预热逻辑（见 ADR 0004）
-- 文档 `doc/voice-clone.md` §12 已经是这个结论，不需要改写
+- 文档 `doc/subsystems/voice-clone.md` §12 已经是这个结论，不需要改写

@@ -184,7 +184,7 @@ def _probe_asr(asr_cfg):
 
     When ``JARVIS_ASR_PROVIDER=cloud`` the jarvis/live dialog ASR also runs
     against an upstream (``ASR_UPSTREAM_URL`` / the WebUI slot); that path is
-    probed explicitly (spec ``draft-asr-provider-unified.md`` §4) instead of
+    probed explicitly (spec ``asr-provider-unified.md`` §4) instead of
     the local-model branch below.
     """
     provider = os.environ.get("JARVIS_ASR_PROVIDER", "local").strip().lower()

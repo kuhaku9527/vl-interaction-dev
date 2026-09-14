@@ -1,6 +1,6 @@
 """Live proactive speak loop helpers (extracted from ``live_mode.LiveStateMachine``).
 
-Moved from ``live_mode.py`` (spec draft-live-visual-cb.md §2.4/§3 layer 2/3):
+Moved from ``live_mode.py`` (spec live-visual-cb.md §2.4/§3 layer 2/3):
 the env-gated proactive loop (``LIVE_PROACTIVE_ENABLED`` /
 ``LIVE_PROACTIVE_INTERVAL_S``), the non-streaming VLM visual round, and the
 runtime switch decision.  ``LiveStateMachine`` keeps thin facades

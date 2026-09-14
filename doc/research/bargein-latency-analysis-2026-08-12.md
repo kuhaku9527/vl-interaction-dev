@@ -19,7 +19,7 @@
 
 **根因**：jarvis 的 TTS 播放归属是浏览器（stream_tts=False 为防 WebRTC 重复播放），但**打断机制仍假设进程内 `_tts_task`**——两者错位。用户说话 → 无任务可暂停 → 旧语音持续播放 → 等新回复整个 LLM+TTS 周期（≈2s endpoint + 300-750ms 推理合成）后才停。**总打断响应延迟 ≈ 3s 级，远超块3 报告硬中断 <150ms 目标**。
 
-## 二、对照块3 报告（05_interruption_barge_in_mechanism.md）最佳实践
+## 二、对照块3 报告（`turn-controller-2026-08-11/05_interruption_barge_in_mechanism.md`）最佳实践
 
 | 报告原则 | 我们现状 | 差距 |
 |---|---|---|

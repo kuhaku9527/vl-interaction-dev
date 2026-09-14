@@ -107,7 +107,7 @@ async def live_status(request: web.Request) -> web.Response:
 async def live_enroll(request: web.Request) -> web.Response:
     """Addressee Detection Phase 1 enrollment (start / pcm / finish / cancel).
 
-    Contract (spec draft-addressee-detection.md §3.2):
+    Contract (spec addressee-detection.md §3.2):
       * ``{action: "start"}``            — enter enroll phase (mic buffers
         segments via the live WebRTC stream, no ASR/dialog);
       * ``{action: "pcm", audio_b64}``   — push one complete recorded utterance

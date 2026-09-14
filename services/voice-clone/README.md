@@ -3,7 +3,7 @@
 > **Current implementation (2026-07-12):** this service supports MiniMax Rapid Clone and `speech-2.8-hd` only on port `8985`. `TTS_PROVIDER` must be `minimax`; startup fails without `MINIMAX_API_KEY` and `MINIMAX_GROUP_ID`.
 > WebUI/Jarvis calls `POST /v1/synthesize` directly; ports `8991/8992` are not in the active path.
 > The CosyVoice launch scripts and stub synthesis branch have been deleted.
-> The CosyVoice material below is retained only as initial-design history. Do not use it to start the service; see [`../../doc/voice-clone.md`](../../doc/voice-clone.md) for the current contract.
+> The CosyVoice material below is retained only as initial-design history. Do not use it to start the service; see [`../../doc/subsystems/voice-clone.md`](../../doc/subsystems/voice-clone.md) for the current contract.
 
 ---
 
@@ -227,7 +227,7 @@ Environment variables (all optional, defaults shown):
 
 * **"CosyVoice keeps OOM-ing on my RTX 5060 Ti."** Make sure you are
   running PyTorch 2.7+ with CUDA 12.8 wheels. See
-  [`doc/lightweight-replacement.md`](../../doc/lightweight-replacement.md)
+  [`doc/research/lightweight-replacement.md`](../../doc/research/lightweight-replacement.md)
   for the exact `pip install` line and the
   [sm_120 issue #1815](https://github.com/FunAudioLLM/CosyVoice/issues/1815)
   workaround.

@@ -1667,7 +1667,7 @@ class JarvisStateMachine:
         Delegates the actual NDJSON stream consumption + SentenceBuffer
         flushing + per-sentence TTS wiring to the shared
         :class:`~.turn_streaming.StreamingTurnConsumer` (spec
-        ``draft-live-interaction-layer.md`` §4.3 — the future live dialog
+        ``live-interaction-layer.md`` §4.3 — the future live dialog
         reuses the same consumer). This method keeps the jarvis turn
         semantics: per-reply session id, sentence-epoch synthesis wiring,
         fail-open non-streaming retry, and ``_finish_llm_turn`` broadcast.

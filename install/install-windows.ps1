@@ -17,7 +17,7 @@
   by llama.cpp (see setup-llama-cpp.ps1) and the audio models are served by
   whisper.cpp / CosyVoice directly.
 
-  Reference: docs/lightweight-replacement.md
+  Reference: doc/research/lightweight-replacement.md
 #>
 
 [CmdletBinding()]

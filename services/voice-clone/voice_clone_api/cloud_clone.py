@@ -574,7 +574,7 @@ class MiniMaxClient:
         Token Plan subscription keys (``sk-cp-*``) and pay-as-you-go API
         keys (``sk-api-*``) are separate billing credentials, but both can
         authenticate here when the account/team has access. See
-        doc/voice-clone.md sec 15.4.
+        doc/subsystems/voice-clone.md sec 15.4.
         """
         client = await self._get_client()
         resp = await client.post("/v1/get_voice", json={"voice_type": "all"})

@@ -1,7 +1,7 @@
 """Addressee enrollment flow helpers (extracted from ``live_mode.LiveStateMachine``).
 
 Moved from ``live_mode.py``: the Addressee Detection Phase 1 enrollment
-surface (spec draft-addressee-detection.md §3) — detector availability,
+surface (spec addressee-detection.md §3) — detector availability,
 PCM segment validation, segment-capacity checks, and the VAD-segmented mic
 stream collection state machine.  ``LiveStateMachine`` keeps thin facades
 (``start_enroll`` / ``feed_enroll_pcm`` / ``finish_enroll`` /

@@ -90,7 +90,7 @@ class Settings:
         )
         self.request_timeout: float = float(env_value("VOICE_CLONE_TIMEOUT", default="120.0"))
         # TTS provider selection. As of 2026-07-12 only MiniMax is supported;
-        # CosyVoice3 has been removed from the project (see doc/voice-clone.md
+        # CosyVoice3 has been removed from the project (see doc/subsystems/voice-clone.md
         # section 2). The provider must be set explicitly to ``minimax`` and
         # credentials must be present, otherwise the API refuses to boot.
         provider = env_value("TTS_PROVIDER", default="minimax").lower()

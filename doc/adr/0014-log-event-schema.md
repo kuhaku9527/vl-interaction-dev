@@ -6,7 +6,7 @@
 
 ## 决策
 
-所有运行时事件（webui 请求、webinfer 路由、memory-store 读写、launcher 启停、drift_gate 校验、circuit breaker 状态变化等）必须用 **JSONL 事件流** 落到 `logs/events/<service>-<UTC-YYYY-MM-DD>.jsonl`，schema 见 spec。配套工具 `scripts/log_query.py` 做 `service / time / event-name` 过滤。
+所有运行时事件（webui 请求、webinfer 路由、memory-store 读写、launcher 启停、drift_gate 校验、circuit breaker 状态变化等）必须用 **JSONL 事件流** 落到 `logs/events/<service>-<UTC-YYYY-MM-DD>.jsonl`，schema 见 spec。配套工具 `scripts/log_query.py` 做 `service / time / event-name` 过滤。 <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
 
 四件必填字段：`ts` (ISO 8601 UTC) / `level` ∈ {debug,info,warn,error,critical} / `service` / `event` (kebab-case)。可选字段：`session_id` / `latency_ms` / `status` / `user` / `extra` (object)。**PII 红线**写在 spec S-1：不记 message body / API key / 文件内容 / IP。
 

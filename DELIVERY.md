@@ -2,7 +2,7 @@
 
 > **历史交付快照**：本文主体记录 2026-07-06 的初版 11 进程/CosyVoice 方案，不是当前启动规范。
 > **当前链路（2026-07-12）**：`7060` 本地社区量化 LLM/VLM + `8070` webinfer + `8099` WebUI + `8985` MiniMax TTS/声音克隆；KWS/ASR 在 WebUI 内本地运行。
-> 当前操作以 `doc/00-main-direction.md`、`doc/architecture-local.md`、`doc/subsystems/jarvis-mode.md` 和 `start-joyai.ps1` 为准。
+> 当前操作以 `doc/main/00-main-direction.md`、`doc/local/architecture-local.md`、`doc/subsystems/jarvis-mode.md` 和 `start-joyai.ps1` 为准。
 
 ---
 
@@ -15,7 +15,7 @@
 
 | # | 任务 | 状态 | 证据 |
 | - | - | - | - |
-| 1 | 调研社区 GGUF 主模型 | ✅ | `doc/lightweight-replacement.md` 详报 |
+| 1 | 调研社区 GGUF 主模型 | ✅ | `doc/research/lightweight-replacement.md` 详报 |
 | 2 | 调研其余模型替换 | ✅ | 同上（含启动命令） |
 | 3 | 调研声音克隆方案 | ✅ | 选 CosyVoice3-0.5B（首推） |
 | 4 | 调研 Hermes-agent 接入 | ✅ | `services/background-agent/hermes_api/` |
@@ -24,11 +24,11 @@
 | 7 | 声音克隆服务 | ✅ | `services/voice-clone/voice_clone_api/` (5 端点 + WS) + tts_adapter dispatch |
 | 8 | ASR / TTS 适配器微调 | ✅ | `tts_adapter.py` (428→564 行) + `asr_adapter.py` 注释 |
 | 9 | Windows 部署脚本 | ✅ | `install/*.ps1` (6 个) + `services/scripts/*.ps1` (3 个) |
-| 10 | PM 文档 | ✅ | `doc/pm-local.md` (13KB) |
-| 11 | 技术实现文档 | ✅ | `doc/tech-local.md` (20KB) |
-| 12 | 架构文档 | ✅ | `doc/architecture-local.md` (8KB) + 2 个 mermaid 图 |
-| 13 | 游戏中对话文档 | ✅ | `doc/gaming-mode.md` (6KB) |
-| 14 | 声音克隆文档 | ✅ | `doc/voice-clone.md` (5KB) |
+| 10 | PM 文档 | ✅ | `doc/local/pm-local.md` (13KB) |
+| 11 | 技术实现文档 | ✅ | `doc/local/tech-local.md` (20KB) |
+| 12 | 架构文档 | ✅ | `doc/local/architecture-local.md` (8KB) + 2 个 mermaid 图 |
+| 13 | 游戏中对话文档 | ✅ | `doc/subsystems/gaming-mode.md` (6KB) |
+| 14 | 声音克隆文档 | ✅ | `doc/subsystems/voice-clone.md` (5KB) |
 | 15 | 主 README 引导 | ✅ | `README.zh-CN.md` 末尾追加 Windows 部署入口 |
 
 ## 2. 关键文件清单
@@ -159,8 +159,8 @@ cd services
 | 轻量本地部署 | ✅ | 11.5GB 显存 / 零云依赖 |
 | 游戏中对话 | ✅ | `-Mode gaming` + voice-only 默认 |
 | 保留原本高效一体化结构 | ✅ | 单 `run-windows.ps1` 启全部，Ctrl+C 停全部 |
-| 改 PM 文档 | ✅ | `doc/pm-local.md` (13KB) |
-| 改技术文档 | ✅ | `doc/tech-local.md` (20KB) + 3 个配套 doc |
+| 改 PM 文档 | ✅ | `doc/local/pm-local.md` (13KB) |
+| 改技术文档 | ✅ | `doc/local/tech-local.md` (20KB) + 3 个配套 doc |
 
 ## 5. 已知风险与回退
 
@@ -193,15 +193,15 @@ cd services
 | 2026-07-10 | v1.4 | KWS v4 自训落地（t 唤醒词，FAR 2% / recall 49%）；jarvis 状态机代码集成 | Codex |
 | 2026-07-12 | v3.3 | **MiniMax Token Plan 接入（半落地）**：声音克隆走 speech-2.8-hd + voice_id minimax_man_33333 跑通（链路测试 wav 见 services/.logs/bt_persona_roundtrip.wav 类产物）；webinfer BT-7274 persona 视觉链路验证（llm_inference=948ms，prompt_tokens=511 含 character_profile）；jarvis_mode.py 结构性修复（class 范围被 0-indent helper 切断 → helper 模块级化 + 字段归位，rom_env AttributeError 消除）。**未消除**：
 un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 e2e 仍是 ⚠️ 状态 | Codex |
-| 2026-07-12 | v3.4 | **放弃 voice-ui 薄壳（错误方向）**；直接改 webui 索引：删除重复 `<html><head><body>` 块 + 重复 `llmReplySection` + 重复状态徽章（index.html 12,679 → 8,985 行）；新增 `POST /api/tts/synthesize` 代理 voice_clone_api 并把 PCM16 包成 WAV；曾新增 `id="llmTestSendBtn"` 文本测试按钮（v3.9 已删除并入纸飞机）+ `id="btTtsPlayer"` 自动播放 audio；WS `llm_reply` 触发 TTS 链路；17/17 测试绿；详见 `doc/subsystems/jarvis-mode.md` §14 / `doc/00-main-direction.md` §3 / §4.0 | Codex |
+| 2026-07-12 | v3.4 | **放弃 voice-ui 薄壳（错误方向）**；直接改 webui 索引：删除重复 `<html><head><body>` 块 + 重复 `llmReplySection` + 重复状态徽章（index.html 12,679 → 8,985 行）；新增 `POST /api/tts/synthesize` 代理 voice_clone_api 并把 PCM16 包成 WAV；曾新增 `id="llmTestSendBtn"` 文本测试按钮（v3.9 已删除并入纸飞机）+ `id="btTtsPlayer"` 自动播放 audio；WS `llm_reply` 触发 TTS 链路；17/17 测试绿；详见 `doc/subsystems/jarvis-mode.md` §14 / `doc/main/00-main-direction.md` §3 / §4.0 | Codex |
 ---
 
 | 2026-07-13 | v3.24 | Jarvis短期上下文、MiniMax-only与7060/8070/8099/8985统一启动链路 （受影响：`doc/subsystems/jarvis-mode.md`; `doc\architecture-local.md`; `doc\adr\0004-service-lifecycle.md`；改动文件：-） | Codex |
-| 2026-07-13 | v3.25 | **memory-store v0.1 skeleton（落地 v3.2 #3 P2 记忆持久化骨架）**：新增 `services/memory-store/`（SqliteBackend + FTS5 BM25、Psql/Obsidian 占位 `NotImplementedError`），端口 8996，端点 `/v1/blocks/push` `POST`、`/v1/blocks/recall` `POST`、`/health` `GET`、`/v1/backends` `GET`；schema 留 score / last_hit_at / hit_count 字段（runtime 默认，recency decay 不在 v0.1）；16/16 测试通过；不影响 `live_adapter.py`（ADR 0005 D 锁定 v0.1 范围）。**前端 vlm-history CSS 修复**：`services/webui/.../static/index.html` 1563 行附近覆盖 `.result-text.vlm-history-shell { min-height:0 }` + `:has(#vlmHistoryEmpty:not([style*='display: none']))` 240px empty-state 兜底 + `.vlm-history { max-height: min(60dvh, 560px) }`，解决空 vlm-history 残留 120px strip 与「对话可见但框不长大」。**生命周期扩**：`run-windows.ps1` 加 `$P.MemoryStore` + `Start-MemoryStore`（env opt-in `JOYAI_ENABLE_MEMORY_STORE=1` 默认 false，避免 v3.x 启动回归）；`stop-joyai.ps1` PortMap 加 8996。受影响：`doc/subsystems/jarvis-mode.md` §15、`doc/00-main-direction.md` §4 + §4.0、`doc/specs/memory-store-skeleton-spec.md` 落地、`doc/adr/0005-memory-store-start.md` 实施。改动文件：`services/memory-store/**`、`services/scripts/run-windows.ps1`、`stop-joyai.ps1`、`services/webui/.../static/index.html` | Codex |
+| 2026-07-13 | v3.25 | **memory-store v0.1 skeleton（落地 v3.2 #3 P2 记忆持久化骨架）**：新增 `services/memory-store/`（SqliteBackend + FTS5 BM25、Psql/Obsidian 占位 `NotImplementedError`），端口 8996，端点 `/v1/blocks/push` `POST`、`/v1/blocks/recall` `POST`、`/health` `GET`、`/v1/backends` `GET`；schema 留 score / last_hit_at / hit_count 字段（runtime 默认，recency decay 不在 v0.1）；16/16 测试通过；不影响 `live_adapter.py`（ADR 0005 D 锁定 v0.1 范围）。**前端 vlm-history CSS 修复**：`services/webui/.../static/index.html` 1563 行附近覆盖 `.result-text.vlm-history-shell { min-height:0 }` + `:has(#vlmHistoryEmpty:not([style*='display: none']))` 240px empty-state 兜底 + `.vlm-history { max-height: min(60dvh, 560px) }`，解决空 vlm-history 残留 120px strip 与「对话可见但框不长大」。**生命周期扩**：`run-windows.ps1` 加 `$P.MemoryStore` + `Start-MemoryStore`（env opt-in `JOYAI_ENABLE_MEMORY_STORE=1` 默认 false，避免 v3.x 启动回归）；`stop-joyai.ps1` PortMap 加 8996。受影响：`doc/subsystems/jarvis-mode.md` §15、`doc/main/00-main-direction.md` §4 + §4.0、`doc/specs/memory-store-skeleton-spec.md` 落地、`doc/adr/0005-memory-store-start.md` 实施。改动文件：`services/memory-store/**`、`services/scripts/run-windows.ps1`、`stop-joyai.ps1`、`services/webui/.../static/index.html` | Codex |
 
-| 2026-07-13 | v3.27 | **Screen Capture 接入 + hermes-agent 端到端**：(a) `static/screen_capture.js` 去 ES module 改全局 + ImageCapture fallback、`static/index.html` 加 Screen Capture tab + screenControls、`server.py` `websocket_handler` 加 `elif t == "frame"`（base64 → PIL → `vlm_service.process_frame` → `get_session_callback` 广播 vlm_response）；79/79 webui 测试通过、模拟帧 ~5.5s 拿到 llama-server 回复。(b) hermes-gateway(8642) + background-agent shim(8079) 接入：补 `$env:LOCALAPPDATA\hermes\bin\hermes.cmd` wrapper（venv python → `python -m hermes_cli.main`），`Start-Hermes` 用 `API_SERVER_HOST/PORT/KEY` env；`background-agent.env` + `scripts/run-windows.env` 同步 `HERMES_API_KEY`；gateway `/health` 200、shim `/health` 透出 `hermes_gateway:200`，smoke `/v1/solve` 返回中文"烟测通过。"(prompt_tokens=24157/5.9s)。受影响：`doc/00-main-direction.md` §4 + §4.0、`doc/screen-capture.md` §0+§11、`doc/hermes-integration.md` §0+§10；改动文件：`services/webui/src/joy_interaction_webui/static/{screen_capture.js,index.html}`、`services/webui/src/joy_interaction_webui/server.py`、`services/background-agent/background-agent.env`、`services/scripts/run-windows.env` | Codex |
+| 2026-07-13 | v3.27 | **Screen Capture 接入 + hermes-agent 端到端**：(a) `static/screen_capture.js` 去 ES module 改全局 + ImageCapture fallback、`static/index.html` 加 Screen Capture tab + screenControls、`server.py` `websocket_handler` 加 `elif t == "frame"`（base64 → PIL → `vlm_service.process_frame` → `get_session_callback` 广播 vlm_response）；79/79 webui 测试通过、模拟帧 ~5.5s 拿到 llama-server 回复。(b) hermes-gateway(8642) + background-agent shim(8079) 接入：补 `$env:LOCALAPPDATA\hermes\bin\hermes.cmd` wrapper（venv python → `python -m hermes_cli.main`），`Start-Hermes` 用 `API_SERVER_HOST/PORT/KEY` env；`background-agent.env` + `scripts/run-windows.env` 同步 `HERMES_API_KEY`；gateway `/health` 200、shim `/health` 透出 `hermes_gateway:200`，smoke `/v1/solve` 返回中文"烟测通过。"(prompt_tokens=24157/5.9s)。受影响：`doc/main/00-main-direction.md` §4 + §4.0、`doc/subsystems/screen-capture.md` §0+§11、`doc/subsystems/hermes-integration.md` §0+§10；改动文件：`services/webui/src/joy_interaction_webui/static/{screen_capture.js,index.html}`、`services/webui/src/joy_interaction_webui/server.py`、`services/background-agent/background-agent.env`、`services/scripts/run-windows.env` | Codex |
 
-| 2026-08-14 | v3.39 | background-agent 切 Codex 桥接（N1）+ call 模式不知道就委派（N2）+ 四态共情调优（AFK） （受影响：`doc/specs/draft-background-agent-codex-bridge.md,doc/specs/draft-call-mode-unknown-delegation.md,doc/specs/draft-live-empathy-tuning.md,doc/subsystems/hermes-integration.md,services/background-agent/README.md`；改动文件：-） | Codex |
+| 2026-08-14 | v3.39 | background-agent 切 Codex 桥接（N1）+ call 模式不知道就委派（N2）+ 四态共情调优（AFK） （受影响：`doc/specs/background-agent-codex-bridge.md,doc/specs/call-mode-unknown-delegation.md,doc/specs/draft-live-empathy-tuning.md,doc/subsystems/hermes-integration.md,services/background-agent/README.md`；改动文件：-） | Codex |
 ## 8. 复盘后补充（P1 / P2 决策项，2026-07-07）
 
 > 上一版交付清单（§1-§7）只覆盖了 P0 已实现功能。复盘发现 2 个 P1/P2 缺口必须在路线图里显式记录。
@@ -209,7 +209,7 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 ### 8.1 P1 — ASR 流式化（gaming 核心痛点）
 
 - **状态**：未实现，已设计
-- **设计文档**：`doc/asr-streaming.md`（11.3KB，含协议、迁移、性能对比）
+- **设计文档**：`doc/subsystems/asr-streaming.md`（11.3KB，含协议、迁移、性能对比）
 - **改动量**：~350 行 Python（`asr_adapter.py` + `streaming_transcriber.py`）+ 150 行 PowerShell（`setup-sherpa-onnx.ps1` + 编排器）
 - **用户决策项**：
   - [ ] 是否在 P4（gaming 跑通）之后立刻启动 P1？
@@ -219,7 +219,7 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 ### 8.2 P2 — 可插拔记忆库
 
 - **状态**：未实现，已设计
-- **设计文档**：`doc/memory-architecture.md`（7.8KB，含命名空间、API 契约、集成点）
+- **设计文档**：`doc/subsystems/memory-architecture.md`（7.8KB，含命名空间、API 契约、集成点）
 - **改动量**：~500 行 Python（新 `services/memory-store/`）+ 100 行 PowerShell
 - **用户决策项**：
   - [ ] 接受 SQLite + sqlite-vec 默认？还是直接上 Qdrant？
@@ -236,7 +236,7 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 | webui 改动 | 0 | 0 | 维持 |
 | 后端 agent 接口契约 | 100% 兼容 | 100% 兼容 | hermes_api/main.py `/v1/solve` 字段名/顺序/类型 byte-for-byte 一致 |
 
-详细证据见 `doc/tech-local.md` §12。
+详细证据见 `doc/local/tech-local.md` §12。
 
 ### 8.4 新增风险（已写入 pm-local.md §16）
 
@@ -270,7 +270,7 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 
 ## 10. API 化（v2.0 方向，2026-07-08）
 
-> 详细方案见 `doc/api-optimization.md`（19.3KB）+ `doc/tech-local.md §14` + `doc/pm-local.md §19`。
+> 详细方案见 `doc/api/api-optimization.md`（19.3KB）+ `doc/local/tech-local.md §14` + `doc/local/pm-local.md §19`。
 > 核心结论：**语音三件套 API 化（强烈推荐）、主对话 VLM 保持本地、其它按需**。
 
 ### 10.1 推荐档位（默认建议）
@@ -360,7 +360,7 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 ## 12. 套餐调研（2026-07-08 完成）
 
 > 详细报告：`doc/token-plan-comparison.md`（14.7KB）
-> 推荐整合：`doc/api-optimization.md §13` + `doc/pm-local.md §21`
+> 推荐整合：`doc/api/api-optimization.md §13` + `doc/local/pm-local.md §21`
 
 ### 12.1 调研结论
 
@@ -412,7 +412,7 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 ## 14. Jarvis 模式（v3.0 重大更新，2026-07-08）
 
 > 详细产品设计：`doc/subsystems/jarvis-mode.md`（26KB）
-> 完整变更：`doc/pm-local.md §23` + `doc/tech-local.md §16` + `doc/asr-streaming.md`（重写）
+> 完整变更：`doc/local/pm-local.md §23` + `doc/local/tech-local.md §16` + `doc/subsystems/asr-streaming.md`（重写）
 
 ### 14.1 核心变化
 
@@ -510,8 +510,8 @@ un-windows.env 凭证配置未沉淀 / v3.2 #2 收尾未做 / v3.2 #4 全链路 
 ## 16. 屏幕捕获 + Hermes 隔离（v3.1，2026-07-09）
 
 > 详细方案：
-> - `doc/screen-capture.md`（9.3KB，getDisplayMedia）
-> - `doc/hermes-integration.md`（10.5KB，严格隔离）
+> - `doc/subsystems/screen-capture.md`（9.3KB，getDisplayMedia）
+> - `doc/subsystems/hermes-integration.md`（10.5KB，严格隔离）
 
 ### 16.1 屏幕捕获（getDisplayMedia）
 
@@ -554,8 +554,8 @@ payload = {
 
 ### 16.3 实施工作量
 
-- `doc/screen-capture.md` 新建（9.3KB）
-- `doc/hermes-integration.md` 新建（10.5KB）
+- `doc/subsystems/screen-capture.md` 新建（9.3KB）
+- `doc/subsystems/hermes-integration.md` 新建（10.5KB）
 - 现有文档清理与整合：合并到 `doc/subsystems/jarvis-mode.md` / `tech-local.md` / `pm-local.md`
 
 ### 16.4 决策项（已拍板）

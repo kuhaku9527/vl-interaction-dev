@@ -24,7 +24,7 @@
   -HfToken <token>               (only needed for private models)
   -SkipMmproj                    (skip the in-place mmproj generation step)
 
-  Reference: docs/lightweight-replacement.md
+  Reference: doc/research/lightweight-replacement.md
 #>
 
 [CmdletBinding()]

@@ -1,6 +1,6 @@
 """QA 独立补充边界用例 — server.py WS ``frame`` → live session forwarding.
 
-Spec draft-live-visual-cb.md §2.4/§3 层 2: the existing WS ``frame`` message
+Spec live-visual-cb.md §2.4/§3 层 2: the existing WS ``frame`` message
 (1fps screen capture) must also route to the active live session's ring buffer
 IN PARALLEL with the pre-existing video pipeline (vlm_service) — the video
 pipeline is untouched.

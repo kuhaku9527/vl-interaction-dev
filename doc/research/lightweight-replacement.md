@@ -124,7 +124,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8065/v1/chat/completions
 > **gaming 模式**（P4 阶段）会暴露这个痛点：喊"左边有人"等 3-5s 才听到角色回应，体验崩。
 >
 > **P1 修复方案**：迁移到 **sherpa-onnx streaming-paraformer-bilingual-zh-en**（int8，100MB，CPU 跑）。
-> 详见 `doc/asr-streaming.md`（流式协议、迁移步骤、性能对比）。**无需修改 webui**——只改 `asr_adapter.py` 的 `transcriber` 实现。
+> 详见 `doc/subsystems/asr-streaming.md`（流式协议、迁移步骤、性能对比）。**无需修改 webui**——只改 `asr_adapter.py` 的 `transcriber` 实现。
 >
 > **过渡措施**（不重写）：gaming 模式默认 `do_partial_result=False`（即用现在的离线 whisper.cpp），
 > 接受 2-4s 延迟；等 P1 迁完再恢复流式。

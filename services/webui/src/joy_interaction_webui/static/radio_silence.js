@@ -1,7 +1,7 @@
 'use strict';
 
 // radio_silence.js — 无线电静默 (Radio Silence) 前端控制
-// Spec: doc/specs/draft-radio-silence.md (§3 设置项 / §4 组合矩阵 / §7 前端落点)
+// Spec: doc/specs/radio-silence.md (§3 设置项 / §4 组合矩阵 / §7 前端落点)
 //
 // IIFE namespace mounted on window.JoyRadioSilence (D-033 pattern, matches
 // config_services.js / status_poll.js). Pure static JS, no framework.

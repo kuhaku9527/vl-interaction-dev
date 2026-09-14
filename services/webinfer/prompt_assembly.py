@@ -37,7 +37,7 @@ from time_ranges import _format_batch_time_marker
 LOGGER = logging.getLogger("streaming_infer_adapter")
 
 #: Visual-observation segment appended to the composed live system prompt
-#: when a live round carries frames (spec ``draft-live-visual-cb.md`` §2.3).
+#: when a live round carries frames (spec ``live-visual-cb.md`` §2.3).
 #: The four-state ``LIVE_SYSTEM_PROMPT_EN`` stays untouched; this segment only
 #: teaches the model that the incoming image frames are the current visual
 #: context (the user's camera / screen) to ground the answer on.
@@ -125,7 +125,7 @@ def compose_live_visual_messages(
 ) -> list[dict[str, Any]]:
     """Assemble the OpenAI-style message list for a live visual round.
 
-    Live visual round (spec draft-live-visual-cb.md): the final user turn
+    Live visual round (spec live-visual-cb.md): the final user turn
     carries the current utterance + the image frames; history turns stay
     text-only (frames never enter persistent history).  ``frames`` is truthy
     only when the router validated a non-empty frame list, so the visual

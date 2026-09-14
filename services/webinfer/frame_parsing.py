@@ -2,7 +2,7 @@
 
 Extracted from ``infer_loop.py`` (batch-2 monolith decoupling, zero behaviour
 change). Owns the ``frames`` payload contract for ``POST /v1/text/chat`` with
-``interaction_mode="live"`` (spec draft-live-visual-cb.md §3 层 1) plus the
+``interaction_mode="live"`` (spec live-visual-cb.md §3 层 1) plus the
 image-reference resolution helpers used by the chat/completions video path
 (``_resolve_frame_ref`` / ``_save_base64_frame`` / ``_validate_local_image_path``)
 and the interaction-mode normalization helper.
@@ -33,7 +33,7 @@ LOGGER = logging.getLogger("streaming_infer_adapter")
 #                     its own turn flow).
 _VALID_INTERACTION_MODES = frozenset({"live", "call", "jarvis"})
 
-# --- live visual path (spec draft-live-visual-cb.md §3 层 1) ----------------
+# --- live visual path (spec live-visual-cb.md §3 层 1) ----------------
 # An optional top-level ``frames`` field on ``POST /v1/text/chat`` with
 # ``interaction_mode="live"`` routes the round through the multimodal path
 # (streaming for user rounds, non-streaming for proactive rounds). No

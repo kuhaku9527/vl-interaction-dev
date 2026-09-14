@@ -2,12 +2,12 @@
 
 - **状态**：Accepted
 - **日期**：2026-07-12
-- **作者**：Codex（基于调研 `doc/memory-store-research.md`）
+- **作者**：Codex（基于调研 `doc/research/memory-store-research.md`）
 
 ## 背景
 
-按 `doc/memory-architecture.md v3.1` 启动 `services/memory-store/`，落地 v0.1 骨架。
-调研产物 `doc/memory-store-research.md`（18KB）已经把现码 + 外部资料摸清，spec 已经覆盖大块（`doc/specs/memory-store-skeleton-spec.md`）；但调研过程中冒出 4 个**默认会跨越 spec 落地**的边界决策，需要 ADR 锁定。
+按 `doc/subsystems/memory-architecture.md v3.1` 启动 `services/memory-store/`，落地 v0.1 骨架。
+调研产物 `doc/research/memory-store-research.md`（18KB）已经把现码 + 外部资料摸清，spec 已经覆盖大块（`doc/specs/memory-store-skeleton-spec.md`）；但调研过程中冒出 4 个**默认会跨越 spec 落地**的边界决策，需要 ADR 锁定。
 
 ## 决策
 
@@ -78,7 +78,7 @@
 
 ## 参考
 
-- `doc/memory-store-research.md` 全文（18KB 调研产物）
-- `doc/memory-architecture.md` v3.1 全读
+- `doc/research/memory-store-research.md` 全文（18KB 调研产物）
+- `doc/subsystems/memory-architecture.md` v3.1 全读
 - `doc/specs/memory-store-skeleton-spec.md`（同次 commit）
 - `doc/adr/0004-service-lifecycle.md`（格式参照）

@@ -1,4 +1,4 @@
-"""N2 — call-mode unknown-reply auto-delegation (spec draft-call-mode-unknown-delegation.md).
+"""N2 — call-mode unknown-reply auto-delegation (spec call-mode-unknown-delegation.md).
 
 call mode uses NO_DECISION_SYSTEM_PROMPT which forbids </delegation>, so the
 model answers "不知道今天几号 / 无法回答" instead of delegating. This suite

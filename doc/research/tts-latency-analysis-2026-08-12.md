@@ -2,7 +2,7 @@
 
 > 日期: 2026-08-12
 > 触发: 用户实机——打断优化 P0 已生效（说话即停旧音频），但**新回复 TTS 慢**：打断后重新播报的延迟明显，需定位慢在哪一环
-> 方法: 只读代码走查 + 延迟量级估算；对照块3 报告（`final_report_unified_turn_controller.md`、`06_e2e_latency_engineering.md`）
+> 方法: 只读代码走查 + 延迟量级估算；对照块3 报告（`turn-controller-2026-08-11/final_report_unified_turn_controller.md`、`turn-controller-2026-08-11/06_e2e_latency_engineering.md`）
 > 结论先行: **全链路串行、无任何流式/并行**——LLM 完整生成 → TTS 单次全量合成 → 前端等完整 blob。三大串行等待叠加，打断后新回复 E2E ≈ **2.6s–3.5s+**。最大瓶颈是 **LLM 非流式全量等待**（300–1500ms），次之 **MiniMax 单次全量合成**（300–2000ms+），另有 2s 保守端点检测前置。
 
 ---
@@ -57,7 +57,7 @@ zero_shot_synthesize → POST /v1/t2a_v2 {"stream": false}  cloud_clone.py:394-4
   ≈ 2.6s – 3.5s+（不含 ASR 处理本身）
 ```
 
-对照业界：Salesforce 级联流水线流式并行 TTFA ≈ **755ms**（`06_e2e_latency_engineering.md` §6.4），我们当前差距约 **3–5 倍**。
+对照业界：Salesforce 级联流水线流式并行 TTFA ≈ **755ms**（`turn-controller-2026-08-11/06_e2e_latency_engineering.md` §6.4），我们当前差距约 **3–5 倍**。
 
 ---
 
@@ -94,7 +94,7 @@ zero_shot_synthesize → POST /v1/t2a_v2 {"stream": false}  cloud_clone.py:394-4
 - **做法**
   - `webinfer` `/v1/text/chat` 增加流式分支：`chat.completions.create(stream=True)`（`infer_loop.py:276`），SSE/WS 增量推 token。
   - **decision token 仍先出**（`</response>` 是首 token 之一）→ jarvis 先拿到"是否播报"判断，再对后续正文按句 flush。
-  - jarvis 端实现 Sentence Buffer（块3 §7.2 有现成原语，`final_report_unified_turn_controller.md` §6.3）：句边界（`.!?。！？`）触发 TTS，第一句播时 LLM 还在生成第二句。
+  - jarvis 端实现 Sentence Buffer（块3 §7.2 有现成原语，`turn-controller-2026-08-11/final_report_unified_turn_controller.md` §6.3）：句边界（`.!?。！？`）触发 TTS，第一句播时 LLM 还在生成第二句。
   - TTS 侧走方案 ③ 的流式合成（或后端 `_stream_tts` 逐句调用，`jarvis_mode.py:1811` 已有雏形）。
 - **改动面**：后端为主（webinfer 流式出口 + jarvis 句级编排）；前端可选（若逐句走 WS 到前端 `<audio>`，需 `playLlmReplyAudio` 支持分段队列）。
 - **风险**：中——decision token 流式解析需改 `_handle_text_payload`（`infer_loop.py:228-284`）与 jarvis 的 `_send_to_llm`（`jarvis_mode.py:1689` 的同步 await 结构）；句边界误判需排除 `Dr.`/`U.S.` 等（块3 §7.2 FALSE_POSITIVES）；历史记录仍等完整文本补齐。
@@ -140,7 +140,7 @@ zero_shot_synthesize → POST /v1/t2a_v2 {"stream": false}  cloud_clone.py:394-4
 
 **本链路优化是 Phase C 的"预实现"，live 直接受益、可整体复用：**
 
-1. **Sentence Buffer / 句级编排**（方案 ①）：是 Phase C 流式并行流水线（`final_report_unified_turn_controller.md` §6.3/§6.4）的**核心原语**。jarvis 侧先落地后，live adapter 直接复用同一 buffer 与 flush 逻辑。
+1. **Sentence Buffer / 句级编排**（方案 ①）：是 Phase C 流式并行流水线（`turn-controller-2026-08-11/final_report_unified_turn_controller.md` §6.3/§6.4）的**核心原语**。jarvis 侧先落地后，live adapter 直接复用同一 buffer 与 flush 逻辑。
 2. **webinfer 流式出口**（`/v1/text/chat` stream 分支）：Phase C 的 live LLM 流式调用与它同源（`_call_main_model` 加 `stream=True`），一次改造、两条链路共用。
 3. **MiniMax SSE 流式合成**（方案 ③）：live 的 TTS 必须流式（TTFA <300ms，`voice-clone.md:270`），本方案落地的 `streaming=true` 链路与 `_stream_tts` 消费方式，live 直接复用 :8985 既有能力。
 4. **打断竞态守卫**（`index.html` llmReplyEpoch）：已为分块/分段播放预留 epoch 机制，流式化后直接承接"流中打断"语义。

@@ -43,7 +43,7 @@ async def send_to_llm_streaming(
     actual NDJSON stream consumption + SentenceBuffer flushing + per-sentence
     TTS wiring is delegated to ``consumer_cls`` (the shared
     :class:`~.turn_streaming.StreamingTurnConsumer`, spec
-    ``draft-live-interaction-layer.md`` §4.3). This helper keeps the jarvis
+    ``live-interaction-layer.md`` §4.3). This helper keeps the jarvis
     turn semantics: per-reply session id, fail-open non-streaming retry, and
     ``on_finish_turn`` broadcast.
 

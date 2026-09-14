@@ -1,4 +1,4 @@
-"""Test list_voices endpoint repair (doc/voice-clone.md sec 15.5).
+"""Test list_voices endpoint repair (doc/subsystems/voice-clone.md sec 15.5).
 
 We mock httpx and check that:
   - HTTP verb is POST (not GET; the old /v1/voice/list GET endpoint 404s)

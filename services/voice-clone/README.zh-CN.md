@@ -2,8 +2,8 @@
 
 > **现行实现（2026-07-12）**：本服务只支持 MiniMax Rapid Clone + `speech-2.8-hd`，端口 `8985`。`TTS_PROVIDER` 只能为 `minimax`，缺少 `MINIMAX_API_KEY` 或 `MINIMAX_GROUP_ID` 时拒绝启动。
 > WebUI/Jarvis 直接调用 `POST /v1/synthesize`，不经过 `8991/8992`。
-> `scripts/start-cosyvoice.ps1`、旧 `scripts/run-windows.ps1`、stub 分支均已删除。
-> 下文 CosyVoice/8991/8992 内容是初版服务设计的历史说明，禁止按其启动；当前接口与操作以 [`../../doc/voice-clone.md`](../../doc/voice-clone.md) 为准。
+> `scripts/start-cosyvoice.ps1`、旧 `scripts/run-windows.ps1`、stub 分支均已删除。 <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
+> 下文 CosyVoice/8991/8992 内容是初版服务设计的历史说明，禁止按其启动；当前接口与操作以 [`../../doc/subsystems/voice-clone.md`](../../doc/subsystems/voice-clone.md) 为准。
 
 ---
 
@@ -212,7 +212,7 @@ server -> client: {"type": "done", "voice_id": "..."}
 
 - **CosyVoice 在 RTX 5060 Ti 上 OOM**：请确认你装的是 PyTorch 2.7+ 的
   cu128 wheel。参考
-  [`doc/lightweight-replacement.md`](../../doc/lightweight-replacement.md)
+  [`doc/research/lightweight-replacement.md`](../../doc/research/lightweight-replacement.md)
   的安装命令和
   [sm_120 issue #1815](https://github.com/FunAudioLLM/CosyVoice/issues/1815)
   解决方案。

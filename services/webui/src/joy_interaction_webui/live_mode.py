@@ -1,7 +1,7 @@
 """Live mode — 免唤醒词常驻监听 interactive layer (Phase C, C.A).
 
 ``LiveStateMachine`` is the independent live driver (spec
-``doc/specs/draft-live-interaction-layer.md`` §4.2). Unlike jarvis (KWS wake
+``doc/specs/live-interaction-layer.md`` §4.2). Unlike jarvis (KWS wake
 chain + exit words, ``JarvisStateMachine``), live has **no wake gate**: the
 user speaks and the agent answers. The shared core is reused, not forked:
 
@@ -128,7 +128,7 @@ _ADDRESSEE_MIN_SEGMENT_BYTES: int = 9600
 #: inside the ASR provider call sites, same as the pre-unification code).
 _ASR_SPEECH_PEAK_THRESHOLD: float = 0.01
 
-# --- live visual context + proactive speak (spec draft-live-visual-cb.md) ---
+# --- live visual context + proactive speak (spec live-visual-cb.md) ---
 # Env gates (all default OFF / conservative so default behavior is unchanged):
 #   * ``LIVE_FRAME_WINDOW``        (int,   default 6)  recent-frame ring size;
 #   * ``LIVE_PROACTIVE_ENABLED``   (bool,  default false) — proactive loop task;
@@ -240,7 +240,7 @@ class LiveStateMachine:
         self._background_service: object | None = None
 
         # v3.40: Addressee Detection Phase 1 (acoustic pre-filter, spec
-        # draft-addressee-detection.md). Env gate JARVIS_ADDRESSEE_DETECTOR_ENABLED
+        # addressee-detection.md). Env gate JARVIS_ADDRESSEE_DETECTOR_ENABLED
         # defaults OFF -> no detector, zero behavior change. When ON, lazily
         # build the CAM++ AddresseeDetector; load failure logs + keeps None
         # (fail-open: all audio passes through unchanged).
@@ -286,7 +286,7 @@ class LiveStateMachine:
         self._addressee_in_seg: bool = False
         self._addressee_seg_buffer: bytearray = bytearray()
 
-        # Live visual context (spec draft-live-visual-cb.md §2.2): recent-frame
+        # Live visual context (spec live-visual-cb.md §2.2): recent-frame
         # ring buffer. Frames feed ONLY the current round — they never enter
         # conversation history (spec §2.6). Env resolution moved to
         # ``live_frames.frame_window_from_env``.
@@ -302,7 +302,7 @@ class LiveStateMachine:
         self._proactive_interval_s: float = proactive_interval_from_env()
         self._proactive_task: asyncio.Task | None = None
 
-        # Radio silence (spec draft-radio-silence.md §4/§5): the live session
+        # Radio silence (spec radio-silence.md §4/§5): the live session
         # mirrors the webinfer-owned suppressed state + the silence KWS switch
         # (updated by silence_proxy via set_silence_state, and by the session's
         # own kws_event wake). While suppressed + kws_enabled, mic audio is
@@ -478,7 +478,7 @@ class LiveStateMachine:
         return True
 
     # ------------------------------------------------------------------
-    # Live visual context (spec draft-live-visual-cb.md §2.2)
+    # Live visual context (spec live-visual-cb.md §2.2)
     # ------------------------------------------------------------------
 
     def handle_frame(self, image_b64: str, ts_ms: float) -> None:
@@ -503,7 +503,7 @@ class LiveStateMachine:
 
         webinfer's live visual path (layer 1) expects ``frames`` as a list of
         ``{"image_b64": str, "ts_ms": int|float}`` objects (spec
-        draft-live-visual-cb.md §2.1/§3). The ring buffer stores tuples for
+        live-visual-cb.md §2.1/§3). The ring buffer stores tuples for
         cheap deque rotation; the conversion happens only at the send seam.
         Delegates to ``live_frames.frames_payload``.
         """
@@ -1190,7 +1190,7 @@ class LiveStateMachine:
         )
 
     # ------------------------------------------------------------------
-    # Proactive speak (spec draft-live-visual-cb.md §2.4)
+    # Proactive speak (spec live-visual-cb.md §2.4)
     # ------------------------------------------------------------------
 
     async def _proactive_loop(self) -> None:
@@ -1304,7 +1304,7 @@ class LiveStateMachine:
         return wrap_pcm16_wav(pcm, sample_rate=sample_rate)
 
     # ------------------------------------------------------------------
-    # Radio silence (spec draft-radio-silence.md §4/§5)
+    # Radio silence (spec radio-silence.md §4/§5)
     # ------------------------------------------------------------------
 
     def set_silence_state(self, suppressed: bool, kws_enabled: bool) -> None:

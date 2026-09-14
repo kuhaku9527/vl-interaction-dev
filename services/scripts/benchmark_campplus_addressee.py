@@ -1,6 +1,6 @@
 """CAM++ speaker embedding benchmark for Addressee Detection Phase 1.
 
-Measures (spec draft-addressee-detection.md §3.3):
+Measures (spec addressee-detection.md §3.3):
   1. 2s segment embedding extraction latency (ms) — verify 300-400ms claim
   2. rough CPU cost (wall-clock RTF per second of audio)
   3. same-person vs different-person cosine score distribution (区分度)

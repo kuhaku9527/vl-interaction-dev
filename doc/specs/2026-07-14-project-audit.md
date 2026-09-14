@@ -1,5 +1,7 @@
 # 项目审查（2026-07-14，HEAD = 021f429）
 
+> ⚠️ **历史快照（2026-07-14）**：本文基线 commit `021f429` 经 2026-09-14 核查**已不在本仓库对象库中**（filter-repo 改写前的历史），无法 `git show` 复核；文中"当前"字样均指 2026-07-14 当时。当前项目方向见 `doc/main/00-main-direction.md`。
+>
 > **目的**：基于 `021f429` 真实代码事实（不引用旧文档提取）梳理当前实现流程图，给整体 + 各模块流程图，回答用户原始疑问"两条 LLM 路径"，并列出与之前版本的差异 + 已知风险。
 > **读者**：所有要改 / 排错 / 调流程的开发者；产品同步信息。
 > **基线**：所有图基于 `services/` 实际可执行代码 + `services/scripts/run-windows.ps1` 的 default 启动计划 + 4 个新 commit（`fb279e9` Phase 2A / `e4a0666` eventloop fix / `1e28f47` Phase 2B summarizer hot-swap / `021f429` Phase 2C test refresh）。

@@ -64,7 +64,7 @@ _SERVICES_CONFIG_DEFAULTS: dict = {
         "api_key": "",
     },
     # 2026-08-17: 无线电静默 (Radio Silence) 设置槽位 (spec
-    # draft-radio-silence.md §3)。webui 持久化这 5 项设置到 services.json;
+    # radio-silence.md §3)。webui 持久化这 5 项设置到 services.json;
     # webinfer 拥有 live `suppressed` 状态位与 T1/T2 超时计时器。重启默认回
     # live 常驻--suppressed 位不持久化 (防"忘了开静默变哑巴", spec §2)。
     # 字段类型映射见 _SILENCE_FIELDS (merge + validate 共用)。默认值与

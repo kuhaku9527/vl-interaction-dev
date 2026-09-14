@@ -1,6 +1,6 @@
 """Live visual frame buffering (extracted from ``live_mode.LiveStateMachine``).
 
-Moved from ``live_mode.py`` (spec draft-live-visual-cb.md §2.2): the
+Moved from ``live_mode.py`` (spec live-visual-cb.md §2.2): the
 recent-frame ring buffer (``LIVE_FRAME_WINDOW``, default 6) fed by
 ``handle_frame(image_b64, ts_ms)`` plus the webinfer wire-format conversion
 ``frames_payload``.  ``LiveStateMachine`` keeps thin facades
@@ -62,7 +62,7 @@ def frames_payload(frames: Iterable[tuple[str, float]]) -> list[dict]:
 
     webinfer's live visual path (layer 1) expects ``frames`` as a list of
     ``{"image_b64": str, "ts_ms": int|float}`` objects (spec
-    draft-live-visual-cb.md §2.1/§3).  Moved verbatim from
+    live-visual-cb.md §2.1/§3).  Moved verbatim from
     ``LiveStateMachine._frames_payload``.
     """
     return [{"image_b64": b64, "ts_ms": ts} for b64, ts in frames]

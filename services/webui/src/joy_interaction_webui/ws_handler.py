@@ -141,7 +141,7 @@ async def websocket_handler(request):
                         if not isinstance(payload, str) or not payload:
                             logger.warning("frame: empty data")
                         else:
-                            # Live visual path (spec draft-live-visual-cb.md
+                            # Live visual path (spec live-visual-cb.md
                             # §2.4): when a live session is active, forward the
                             # raw frame to its ring buffer in parallel with the
                             # video pipeline below (independent paths).

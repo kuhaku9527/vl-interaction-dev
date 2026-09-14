@@ -1,7 +1,7 @@
 # 真机验收计划 — 2026-08-14（全链路）
 
 > 目的：明天真机集中验收，覆盖前面讨论的**全部待真机项**，每轮留痕可追溯。
-> 前置阅读：`doc/acceptance/live-ca-acceptance-2026-08-12.md`（三决策诱发方法）+ `doc/specs/draft-background-agent-codex-bridge.md`（Codex 桥接）
+> 前置阅读：`doc/acceptance/live-ca-acceptance-2026-08-12.md`（三决策诱发方法）+ `doc/specs/background-agent-codex-bridge.md`（Codex 桥接）
 > 测试人：＿＿＿＿＿＿　日期：2026-08-14　环境：＿＿＿＿＿＿（麦型号：＿＿＿＿＿＿）
 > 被测栈：生产 llama.cpp(7060) + webinfer(8070) + webui(8099) + background-agent(8079, **默认 codex**) + memory-store(8997) + relay(57321)
 
@@ -103,7 +103,7 @@
 
 ## §8 验收后动作（测试完执行）
 
-1. **Codex 桥接**：C1-C6 全过 → spec 草稿转正式（`doc/specs/draft-background-agent-codex-bridge.md` → 正式）+ `hermes-integration.md` 补 Codex 章节
-2. **ASR cloud**：A1-A4 语义差异确认可接受 → spec 定稿（`draft-asr-provider-unified.md`）
+1. **Codex 桥接**：C1-C6 全过 → spec 草稿转正式（`doc/specs/background-agent-codex-bridge.md` → 正式）+ `hermes-integration.md` 补 Codex 章节
+2. **ASR cloud**：A1-A4 语义差异确认可接受 → spec 定稿（`asr-provider-unified.md`）
 3. **委派触发**：C6 若模型频繁"不知道"不委派 → 记录为**新立项**（call 模式轻量委派检测，见路线图立项 #2）
 4. 记录本表到 `.workbuddy/memory/2026-08-14.md`

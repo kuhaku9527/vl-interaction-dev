@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unified ASR provider abstraction (local streaming / cloud batch).
 
-Spec ``doc/specs/draft-asr-provider-unified.md`` §2. jarvis/live dialog ASR
+Spec ``doc/specs/asr-provider-unified.md`` §2. jarvis/live dialog ASR
 selects a provider via ``JARVIS_ASR_PROVIDER=local|cloud`` (default ``local``
 — the existing sherpa streaming path, byte-for-byte unchanged).
 

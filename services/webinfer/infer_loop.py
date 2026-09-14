@@ -193,7 +193,7 @@ class InferLoopMixin:
         client, model_name = self._resolve_backend(requested_model)
         state = self.get_session(session_id)
         t_start = time.perf_counter()
-        # Live visual path (spec draft-live-visual-cb.md): an optional
+        # Live visual path (spec live-visual-cb.md): an optional
         # top-level ``frames`` field on a live round routes through the
         # multimodal path — streaming (user rounds) or non-streaming
         # (proactive rounds) by the payload's existing ``stream`` flag.
@@ -332,7 +332,7 @@ class InferLoopMixin:
             await self._memory_recall(state, last_user_text)
         except Exception as exc:
             LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
-        # Radio-silence (spec draft-radio-silence.md): the text path is the
+        # Radio-silence (spec radio-silence.md): the text path is the
         # production live round path (/v1/text/chat with frames), so command /
         # name detection + T1/T2 evaluation + the suppression gate live here
         # too. Live-only: call/jarvis are untouched (D-001 isolation).
@@ -355,7 +355,7 @@ class InferLoopMixin:
         # Resolve any caller-supplied system message into a flat list.
         caller_messages = [dict(m) for m in api_messages if m.get("role") != "system"]
         if frames:
-            # Live visual round (spec draft-live-visual-cb.md): the final user
+            # Live visual round (spec live-visual-cb.md): the final user
             # turn carries the current utterance + the image frames; history
             # turns stay text-only (frames never enter persistent history).
             # max_pixels is forwarded so the frames honour the global image
@@ -560,7 +560,7 @@ class InferLoopMixin:
             await self._memory_recall(state, last_user_text)
         except Exception as exc:
             LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
-        # Radio-silence (spec draft-radio-silence.md): same live-only gate as
+        # Radio-silence (spec radio-silence.md): same live-only gate as
         # the non-streaming text path — command/name detection first, then
         # T1/T2, then the suppression gate (D-001 isolation for call/jarvis).
         self._silence_process_transcript(last_user_text, interaction_mode)
@@ -579,7 +579,7 @@ class InferLoopMixin:
 
         caller_messages = [dict(m) for m in api_messages if m.get("role") != "system"]
         if frames:
-            # Live visual round (spec draft-live-visual-cb.md): the final user
+            # Live visual round (spec live-visual-cb.md): the final user
             # turn carries the current utterance + the image frames; history
             # turns stay text-only (frames never enter persistent history).
             # max_pixels is forwarded so the frames honour the global image
@@ -1043,7 +1043,7 @@ class InferLoopMixin:
                 await self._memory_recall(state, last_user_text)
             except Exception as exc:
                 LOGGER.warning("memory_recall failed for %s: %s", state.session_id, exc)
-        # Radio-silence (spec draft-radio-silence.md): process the ASR
+        # Radio-silence (spec radio-silence.md): process the ASR
         # transcript for enter/wake commands, evaluate the T1/T2 timers, then
         # gate the round. Command detection runs BEFORE the suppression check
         # so an entering ("无线电静默") or waking (name) round takes effect
@@ -1240,7 +1240,7 @@ class InferLoopMixin:
         # Pure data assembly lives in chat_payload (batch-2 split, zero behaviour change).
         result["streamingharness"]["summarizer_timing"] = build_summarizer_timing(state)
         result["streamingharness"]["memory"] = build_memory_payload(state)
-        # Radio-silence round metadata (spec draft-radio-silence.md): the
+        # Radio-silence round metadata (spec radio-silence.md): the
         # suppressed flag lets the webui reflect the 静默 badge per round; the
         # hint / wake flags ride the same response so webui can play the
         # pre-recorded "仍在静默中" hint or the wake.wav ("我在铁驭").

@@ -44,7 +44,7 @@ AI 生成代码的通病：
 
 ### 3.3 模块 log 基础设施补齐（约法三章生效的前提）
 - `services/` 当前**零日志基础设施落地**（grep `get_logger|module_logger|setup_logging|structlog` 全无命中），只有 `决策/服务-日志.md` 规划。
-- 按 D-060~062 补齐：logger 接入（各服务 emit JSONL）+ `scripts/log_query.py` 实现。
+- 按 D-060~062 补齐：logger 接入（各服务 emit JSONL）+ `scripts/log_query.py` 实现（⚠️ 2026-09-14 核查：该脚本仍未落盘，见 `doc/README.md` 已知文档债 #7）。<!-- known-absent -->
 - 这本身就是最高优先的旧活儿（`doc/old-work-takeover-todo.md` ① `feat-q2-emit` = ADR-0014 接线进 webinfer/memory-store/webui）。
 
 ### 3.4 增新 / 优化必须删旧

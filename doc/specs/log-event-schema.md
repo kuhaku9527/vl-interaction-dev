@@ -23,7 +23,7 @@
 
 ## Solution
 
-引入 **JSONL 事件流**（`events/<service>-<UTC-ISO>.jsonl`），schema 见下。同时附一个 `scripts/log_query.py` 做 grep/jq 的封装。
+引入 **JSONL 事件流**（`events/<service>-<UTC-ISO>.jsonl`），schema 见下。同时附一个 `scripts/log_query.py` 做 grep/jq 的封装。 <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
 
 ### S-1 JSONL 事件 schema
 
@@ -82,7 +82,7 @@ PII 严守：webui 的 `chat_request` 事件 extra 字段**最多**含 `{message
 
 ## User Stories
 
-1. As a Pilot, 报告"昨天 14:32 chat 挂"，operator `python scripts/log_query.py --service webui --since "yesterday 14:30" --until "yesterday 14:35"` 一行拿到所有该时段的 webui 事件（含 wiki_recall_fail 如果有）
+1. As a Pilot, 报告"昨天 14:32 chat 挂"，operator `python scripts/log_query.py --service webui --since "yesterday 14:30" --until "yesterday 14:35"` 一行拿到所有该时段的 webui 事件（含 wiki_recall_fail 如果有） <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
 2. As a developer, 排查"为什么 circuit breaker 跳了"，`--event circuit_breaker_open --since 1h` 拉出所有触发记录及 adjacent 服务事件
 3. As a SRE, 跑"上周 P95 latency"报表，`--service webui --event chat_request` 拿所有时长后自己算（query 工具不内置统计，但过滤够用）
 4. As a compliance officer, 审查"我们有没有记用户消息内容"，grep extra.message_text 应该是空（schema 层保证）
@@ -131,7 +131,7 @@ PII 严守：webui 的 `chat_request` 事件 extra 字段**最多**含 `{message
 - 决策：`决策/服务-日志.md` D-2026-08-01-060 (schema 锁定) / D-061 (PII 红线)
 - ADR：`doc/adr/0014-log-event-schema.md`
 - 现有日志：Commit A (`logs/drift-gate-history/`) / Commit B (`logs/launcher-<ts>.log`) / Commit C (`logs/vlm-probes/`) / Commit D (`logs/webui-access-*.log`) — 这些是 4 个 Q1 补漏；本 spec 是**把它们统一到 JSONL 事件流**的下一阶段
-- 工具：`scripts/log_query.py`（TBD，按本 spec 实现）
+- 工具：`scripts/log_query.py`（TBD，按本 spec 实现） <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
 
 ## Migration Plan (Q1 → Q2 路径)
 

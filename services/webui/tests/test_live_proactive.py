@@ -1,4 +1,4 @@
-"""Live visual context + proactive speak tests (spec draft-live-visual-cb.md §3 层 2).
+"""Live visual context + proactive speak tests (spec live-visual-cb.md §3 层 2).
 
 Layer 2 adds to ``LiveStateMachine``:
 

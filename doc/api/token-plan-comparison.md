@@ -2,7 +2,7 @@
 
 > 调研日期：2026-07-08
 > 目标：找到"订阅最少、能力最全"的组合，覆盖 LLM + Agent + 多模态（视觉/语音/声音克隆/音乐/视频）
-> 配套文档：`doc/api-optimization.md`（本地 vs 云）+ `doc/tech-local.md §14`（技术实现）
+> 配套文档：`doc/api/api-optimization.md`（本地 vs 云）+ `doc/local/tech-local.md §14`（技术实现）
 
 ---
 
@@ -344,9 +344,9 @@ voice_id = r.json()["voice_id"]   # 拿到的 voice_id 用于后续合成
 
 ---
 
-## 5. 与 `doc/api-optimization.md` 选型对齐
+## 5. 与 `doc/api/api-optimization.md` 选型对齐
 
-把 `doc/api-optimization.md` §2.2 的"阿里云一句话流式" 改为按本调研的实际最优：
+把 `doc/api/api-optimization.md` §2.2 的"阿里云一句话流式" 改为按本调研的实际最优：
 
 | 模块 | 原推荐 | 新推荐 | 理由 |
 | - | - | - | - |

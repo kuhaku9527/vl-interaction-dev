@@ -36,7 +36,7 @@
 
 > 详细产品设计：`doc/subsystems/jarvis-mode.md`（26KB）
 
-> 技术实现：`doc/asr-streaming.md`
+> 技术实现：`doc/subsystems/asr-streaming.md`
 
 > 改动代码：
 
@@ -86,7 +86,7 @@
 
 
 
-详见 `doc/asr-streaming.md §3.4`。
+详见 `doc/subsystems/asr-streaming.md §3.4`。
 
 
 
@@ -410,9 +410,9 @@ sequenceDiagram
 
 
 
-- `doc/memory-architecture.md`（v3.1 完整设计）
+- `doc/subsystems/memory-architecture.md`（v3.1 完整设计）
 
-- `doc/pm-local.md` §25（P2 决策落地）
+- `doc/local/pm-local.md` §25（P2 决策落地）
 
 - `doc/subsystems/jarvis-mode.md`（状态机，记忆层下游）
 
@@ -442,7 +442,7 @@ sequenceDiagram
 
 
 
-> 详细方案见 `doc/screen-capture.md`（9.3KB）
+> 详细方案见 `doc/subsystems/screen-capture.md`（9.3KB）
 
 
 
@@ -508,7 +508,7 @@ webui 端 WebRTC 链路完全复用——`video_frame` 类型消息走现有 vlm
 
 
 
-> 详细方案见 `doc/hermes-integration.md`（10.5KB）
+> 详细方案见 `doc/subsystems/hermes-integration.md`（10.5KB）
 
 
 
@@ -632,7 +632,7 @@ async def solve(req: SolveRequest) -> SolveResponse:
 
 
 
-> 详细方案见 `doc/api-optimization.md`（19.3KB，含协议、成本、3 档策略、隐私分级）。
+> 详细方案见 `doc/api/api-optimization.md`（19.3KB，含协议、成本、3 档策略、隐私分级）。
 
 > 触发：本地 16GB 显存吃紧到 40MB 余量，gaming 模式体验被 ASR/TTS 延迟拖垮。
 
@@ -816,9 +816,9 @@ async def solve(req: SolveRequest) -> SolveResponse:
 
 
 
-> 详细对比见 `docs/token-plan-comparison.md`（14.7KB，8 家厂商 + 5 套推荐组合）。
+> 详细对比见 `doc/api/token-plan-comparison.md`（14.7KB，8 家厂商 + 5 套推荐组合）。
 
-> 配套技术实现：`doc/api-optimization.md §13` + `doc/tech-local.md §14`。
+> 配套技术实现：`doc/api/api-optimization.md §13` + `doc/local/tech-local.md §14`。
 
 
 
@@ -946,7 +946,7 @@ async def solve(req: SolveRequest) -> SolveResponse:
 
 
 
-> 用户反馈之前没看到声音克隆细节。详细见 `docs/token-plan-comparison.md §1.3` + `doc/voice-clone.md §9`。
+> 用户反馈之前没看到声音克隆细节。详细见 `doc/api/token-plan-comparison.md §1.3` + `doc/subsystems/voice-clone.md §9`。
 
 
 
@@ -1040,9 +1040,9 @@ async def solve(req: SolveRequest) -> SolveResponse:
 
 > 详细产品设计：`doc/subsystems/jarvis-mode.md`（26KB）
 
-> 技术实现：`doc/asr-streaming.md`
+> 技术实现：`doc/subsystems/asr-streaming.md`
 
-> 使用指南：`doc/gaming-mode.md`（已升级为 Jarvis 模式）
+> 使用指南：`doc/subsystems/gaming-mode.md`（已升级为 Jarvis 模式）
 
 
 
@@ -1206,11 +1206,11 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 
 
 
-- `doc/asr-streaming.md`（与 jarvis-mode 协同）
+- `doc/subsystems/asr-streaming.md`（与 jarvis-mode 协同）
 
-- `doc/gaming-mode.md`（升级为 Jarvis 模式）
+- `doc/subsystems/gaming-mode.md`（升级为 Jarvis 模式）
 
-- `doc/api-optimization.md §15`（ASR 选型修订）
+- `doc/api/api-optimization.md §15`（ASR 选型修订）
 
 
 
@@ -1334,9 +1334,9 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 
 
 
-- `doc/memory-architecture.md`（v3.1 完整设计）
+- `doc/subsystems/memory-architecture.md`（v3.1 完整设计）
 
-- `doc/tech-local.md` §18（P2 技术实现）
+- `doc/local/tech-local.md` §18（P2 技术实现）
 
 - `services/background-agent/hermes_api/main.py`（psql 复用点）
 
@@ -1386,9 +1386,9 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 
 >
 
-> - `doc/screen-capture.md`（9.3KB）
+> - `doc/subsystems/screen-capture.md`（9.3KB）
 
-> - `doc/hermes-integration.md`（10.5KB）
+> - `doc/subsystems/hermes-integration.md`（10.5KB）
 
 
 
@@ -1524,9 +1524,9 @@ KWS_LISTENING → WAKE_DETECTED → DIALOG_ACTIVE ⇄ TTS_PAUSED
 
 
 
-> 本节为 2026-07-08 补充。详细对比见 `docs/token-plan-comparison.md §1.3`。
+> 本节为 2026-07-08 补充。详细对比见 `doc/api/token-plan-comparison.md §1.3`。
 
-> 选型逻辑见 `doc/api-optimization.md §13` + `doc/pm-local.md §21.4`。
+> 选型逻辑见 `doc/api/api-optimization.md §13` + `doc/local/pm-local.md §21.4`。
 
 
 

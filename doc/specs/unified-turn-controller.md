@@ -105,7 +105,7 @@
 
 ## §6 关联
 
-- 块3 深潜：`final_report_unified_turn_controller.md` + 13 附件（工作区根）
+- 块3 深潜：`doc/research/turn-controller-2026-08-11/`（终稿 `final_report_unified_turn_controller.md` + 6 份支撑，共 7 份）
 - 块3 交叉验证：`doc/research/block3-cross-validation-2026-08-12.md`
 - 决策 token 规范：`决策/交互模式与决策token规范.md`（D-2026-08-03-001/002）
 - 语音栈现状：`决策/服务-语音栈.md`

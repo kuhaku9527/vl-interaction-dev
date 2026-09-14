@@ -1,4 +1,4 @@
-"""QA 独立补充边界用例 — layer 2 proactive/frame-buffer (spec draft-live-visual-cb.md §3 层 2).
+"""QA 独立补充边界用例 — layer 2 proactive/frame-buffer (spec live-visual-cb.md §3 层 2).
 
 These tests pin boundary contracts NOT explicitly covered by the engineer's
 ``test_live_proactive.py``:

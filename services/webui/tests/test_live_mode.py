@@ -1,6 +1,6 @@
 """Live mode (Phase C C.A) tests — LiveStateMachine + /api/live/* endpoints.
 
-Covers the spec ``draft-live-interaction-layer.md`` §4 C.A acceptance:
+Covers the spec ``live-interaction-layer.md`` §4 C.A acceptance:
 
   * resident listening (no wake word -> direct LISTENING);
   * speak -> VAD/ASR -> commit -> LLM(interaction_mode="live") -> sentence TTS;

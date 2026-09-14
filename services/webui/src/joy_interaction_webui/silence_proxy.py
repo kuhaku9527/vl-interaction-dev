@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Radio-silence proxy (webui -> webinfer /v1/live/silence).
 
-The radio-silence feature (``doc/specs/draft-radio-silence.md``) splits
+The radio-silence feature (``doc/specs/radio-silence.md``) splits
 ownership across services:
 
 - **webui** persists the silence *settings* (``config/services.json``

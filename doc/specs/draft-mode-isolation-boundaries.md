@@ -1,6 +1,6 @@
 # Spec（草稿）— 三模式隔离决策边界澄清（后端语义 vs 前端交互）
 
-> 状态：**草稿** — 澄清性文档（task #8），基于 2026-08-14 代码实证。
+> 状态：**草稿**（**保留原因**：澄清性/说明性文档，非实施合同——其结论已并入 `决策/交互模式与决策token规范.md`，本身无需"转正"。内容经核与代码一致）
 > 关联：`doc/specs/addressee-detection.md`（四态）、`doc/subsystems/jarvis-mode.md`（13 态）、`doc/specs/draft-live-empathy-tuning.md`（共情调优）、`services/webinfer/frame_parsing.py:34`、`services/webui/.../static/live_ui.js:659`
 > 背景：早前用户反馈"live/jarvis 双开造成奇怪现象"（2026-08-12 真机）——本文件钉死三模式的隔离边界，回答"哪些该在后端区分、哪些该在前端限制"。
 
@@ -44,7 +44,7 @@
 | **"这个模式用几态决策"** | **后端语义**（interaction_mode 路由 prompt） | webinfer `_resolve_base_system_prompt` 三路路由 |
 | **"addressee 判定适用谁"** | **后端**（仅 live 四态教学；jarvis 不学 not-for-me） | prompt 常量 + 测试锁定 jarvis 零改动 |
 | **"call 模式不许出 decision token"** | **后端**（NO_DECISION_SYSTEM_PROMPT 明确禁止） | issues #44/#45 教训固化 |
-| **委派触发（N2）** | **后端**（call 模式"不知道"检测在 `_send_to_llm_non_streaming`） | `draft-call-mode-unknown-delegation.md` |
+| **委派触发（N2）** | **后端**（call 模式"不知道"检测在 `_send_to_llm_non_streaming`） | `call-mode-unknown-delegation.md` |
 
 ## 5. 为什么这样分（设计理由）
 

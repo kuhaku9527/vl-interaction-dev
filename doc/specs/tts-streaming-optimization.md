@@ -66,4 +66,4 @@
 - 分析：`doc/research/tts-latency-analysis-2026-08-12.md`
 - SentenceBuffer 原型：`services/webui/src/joy_interaction_webui/turn_controller.py`
 - 打断 P0：`fix(webui): barge-in P0`（前端 epoch 守卫复用）
-- 块3：`final_report_unified_turn_controller.md` §6（Sentence Buffer 1500→755ms）
+- 块3：`doc/research/turn-controller-2026-08-11/final_report_unified_turn_controller.md` §6（Sentence Buffer 1500→755ms）

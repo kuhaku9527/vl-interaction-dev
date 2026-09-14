@@ -69,9 +69,9 @@ related:
 - `.settings-btn` 块（约 line 187-197）
 
 **截图**：
-- `.pids/after_overlap_fix_step2.png`
-- `.pids/after_overlap_fix_step2.jpeg`
-- `.pids/after_overlap_fix_step3.jpeg`
+- `doc/subsystems/assets/after_overlap_fix_step2.png`
+- `doc/subsystems/assets/after_overlap_fix_step2.jpeg`
+- `doc/subsystems/assets/after_overlap_fix_step3.jpeg`
 
 ## 2. 主题与色板
 
@@ -142,8 +142,8 @@ BT-7274 因为看不到画面只能说"全黑"/"无可见目标"。v3.35 升级�
 
 ### 4.1 引用 v3.33 改动的其他文档
 
-- `doc/screen-capture.md` §3.5（本任务的完整设计与决策记录）
-- `doc/00-main-direction.md` §4 v3.33 变更条目
+- `doc/subsystems/screen-capture.md` §3.5（本任务的完整设计与决策记录）
+- `doc/main/00-main-direction.md` §4 v3.33 变更条目
 
 ---
 

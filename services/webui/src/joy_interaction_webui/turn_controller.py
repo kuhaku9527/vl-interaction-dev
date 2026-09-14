@@ -1,7 +1,7 @@
 """Unified Turn Controller — sandbox prototype (pure logic, no I/O).
 
 This module is a *prototype validation* of the unified turn-taking core
-described in ``doc/specs/draft-unified-turn-controller.md`` (spec draft v2)
+described in ``doc/specs/unified-turn-controller.md`` (spec draft v2)
 and cross-validated in ``doc/research/block3-cross-validation-2026-08-12.md``.
 
 Scope
@@ -816,7 +816,7 @@ class TurnController:
     def on_agent_turn_started(self) -> None:
         """Agent-initiated turn (proactive speak): LISTENING → THINKING.
 
-        Proactive rounds (spec draft-live-visual-cb.md §2.4) have no user
+        Proactive rounds (spec live-visual-cb.md §2.4) have no user
         speech, so the usual LISTENING → USER_SPEAKING → PROCESSING entry does
         not apply. This additive event drives the controller straight to
         THINKING so the following ``on_tts_started`` puts the agent into

@@ -3,7 +3,7 @@
 """QA boundary tests for the unified ASR provider (independent regression).
 
 These are NEW cases written by QA (not the engineer) attacking the edges of
-``draft-asr-provider-unified.md``:
+``asr-provider-unified.md``:
 
 * CloudBatchProvider failure modes: upstream 5xx / non-JSON body / timeout
   all surface as an explicit ``CloudASRError`` (D-080), never silent;

@@ -175,7 +175,7 @@ class LiveSession:
     def handle_frame(self, image_b64: str, ts_ms: float) -> None:
         """Delegate a screen/camera frame to the live state machine's ring buffer.
 
-        Live visual path (spec draft-live-visual-cb.md §2.2): the WS ``frame``
+        Live visual path (spec live-visual-cb.md §2.2): the WS ``frame``
         message routes through the session (mirroring the enroll passthrough
         pattern) into ``LiveStateMachine.handle_frame``.
         """

@@ -1,6 +1,6 @@
 """AddresseeDetector (Phase 1) unit tests — mock sherpa-onnx Speaker API.
 
-Covers the spec ``draft-addressee-detection.md`` §3.1 contract:
+Covers the spec ``addressee-detection.md`` §3.1 contract:
 
   * extract too-short -> None (caller fail-open);
   * enroll success (2-3 usable segments) / failure (<2 usable);

@@ -10,7 +10,7 @@
 ## 0. 与 doc/subsystems/jarvis-mode.md 的分工
 
 - **`doc/subsystems/jarvis-mode.md`**：产品形态、状态机、唤醒词、EXIT_WORDS、事件响应
-- **`doc/asr-streaming.md`**（本文）：技术实现层——KWS 引擎选型、流式 ASR 调参、API 桥接、性能调优
+- **`doc/subsystems/asr-streaming.md`**（本文）：技术实现层——KWS 引擎选型、流式 ASR 调参、API 桥接、性能调优
 
 ---
 

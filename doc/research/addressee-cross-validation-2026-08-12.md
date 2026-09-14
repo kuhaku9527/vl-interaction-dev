@@ -82,7 +82,7 @@
 
 ## 八、关联
 
-- 调研交付：final_report_addressee_detection.md（工作区根，12 份）
+- 调研交付：`addressee-detection-2026-08-12/final_report_addressee_detection.md`（终稿 + 4 份支撑）
 - 断言清单：.workbuddy/tmp/addressee-assertions.md（140 条）
 - 现有架构：live_mode.py（feed_audio 链路）、turn_controller.py（13 态）、turn_streaming.py（decision 消费）、ADR0006（单入口）
 - 部署真值：run-windows.ps1:372（-ngl 999 GPU）

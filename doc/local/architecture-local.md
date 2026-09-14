@@ -1,10 +1,14 @@
-> **现行运行拓扑（2026-07-12）**：`7060` 社区量化 JoyAI llama-server + `8070` webinfer + `8099` WebUI + `8985` MiniMax voice-clone/TTS。
-> WebUI 的视频/VLM 请求经过 webinfer；Jarvis 文本/语音对话为降低延迟直接调用同一个 7060。KWS/ASR 在 WebUI 进程内使用 sherpa-onnx。
+> 🚫 **已过时：本文不是现行拓扑。** 现行运行拓扑请看 **[`../runtime-topology.md`](../runtime-topology.md)**。
+>
+> ~~**现行运行拓扑（2026-07-12）**~~（**该自称已作废**）：`7060` 社区量化 JoyAI llama-server + `8070` webinfer + `8099` WebUI + `8985` MiniMax voice-clone/TTS。
+> ~~Jarvis 文本/语音对话为降低延迟直接调用同一个 7060~~（**已被 ADR-0006 取代**：所有 LLM 调用必须经 webinfer :8070）。
 > 下文 11 进程、CosyVoice `8991`、TTS adapter `8992`、whisper `8993`、ASR adapter `8994` 是早期本地化方案的历史设计，不是当前启动计划。
 > 当前唯一启动入口：`start-joyai.ps1 -Mode default`；停止：`stop-joyai.ps1`。
+>
+> ⚠️ 2026-09-14 核查：本文 §1 拓扑图与 §3 进程表**仍原样保留 11 进程 + 8991/8992**，与第 3 行的免责声明自相矛盾。阅读时请只采信本警示块，正文一律视为历史设计。
 # 本地化架构（Windows + RTX 5060 Ti 16GB）
 
-> 配套：`doc/tech-local.md`（细节）、`doc/pm-local.md`（产品）、`doc/lightweight-replacement.md`（选型证据）
+> 配套：`doc/local/tech-local.md`（细节）、`doc/local/pm-local.md`（产品）、`doc/research/lightweight-replacement.md`（选型证据）
 
 ---
 

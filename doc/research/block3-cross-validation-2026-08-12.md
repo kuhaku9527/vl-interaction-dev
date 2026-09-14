@@ -3,7 +3,7 @@
 > 日期: 2026-08-12
 > 方法: 块3 深度研究（13 附件）→ 子代理提取 110 条断言（`.workbuddy/tmp/block3-assertions.md`）→ 对照本地代码核验（jarvis_mode.py / smart_turn_adapter.py / vad_bypass.py / response_format.py）
 > 原则: 项目文档仅供查看、结论独立论证；服务端对"我们的现状"的假设须以本地代码为真
-> 状态: Draft（供用户探讨；采纳项将修订 `draft-unified-turn-controller.md`）
+> 状态: Draft（供用户探讨；采纳项将修订 `unified-turn-controller.md`）
 
 ---
 
