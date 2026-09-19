@@ -283,8 +283,80 @@ function toggleFullscreen() {
 
 ## 八、遗留
 
-- **`.fullscreen-vlm-overlay` 与 `#videoOverlay` 的重叠策略未定**：
-  后者受设置页 `#overlayPosition`（None/顶部/底部）控制，全屏时若 ≠ none，
-  两者会显示同一内容。本轮未动（避免超出授权范围），建议后续二选一。
-- **移动端 ≤768px 全屏未验**（本轮仅测 1600×900）。
+- ~~**`.fullscreen-vlm-overlay` 与 `#videoOverlay` 的重叠策略未定**~~ →
+  ✅ **已定性并修复**，见 §九（此前"会显示同一内容"是读码推测，实测已修正）
+- ~~**移动端 ≤768px 全屏未验**~~ → ✅ **已补验**（`scripts/check-mobile-fullscreen.mjs`，
+  4 档视口 **32/32** 通过），并借此发现并修掉 360px 常规态输入框仅 64px 的问题。
+
+## 九、★ 「overlay 与字幕重叠」的准确定性（实测修正，用户拍板 A + B）
+
+此前记为「职责重叠 / 会显示同一内容」——**那是读码推测，不准确**。
+用真实交互流程实测后修正如下。
+复现脚本：`scripts/inspect-overlay-overlap.mjs`、`inspect-subtitle-semantics.mjs`、
+`check-overlay-ab.mjs`。
+
+### 9.1 设置页那一项到底控制什么（用户质疑「是不是重复造轮子」）
+
+设置 → 外观 的 `#overlayPosition` **不是「字幕开关」**，而是
+**「VLM 输出放哪」的二选一**（`app_main.js:821 applyOverlayPosition`）：
+
+| 取值 | `#videoOverlay`（画面叠字） | `#resultText`（聊天框） |
+|---|---|---|
+| `none`（默认） | 隐藏 | **可见** |
+| `top` | **可见**（y≈77） | **隐藏** |
+| `bottom` | **可见**（y≈700） | **隐藏** |
+
+```js
+if (position !== 'none') {
+    videoOverlay.classList.add('show', position);
+    resultText.style.display = 'none';   // ★ 互斥：把聊天框整个藏掉
+} else { resultText.style.display = 'flex'; }
+```
+
+**结论：不是重复造轮子，是命名欺骗。** 旧文案
+「VLM Output on Camera View / 在视频画面上直接叠加文字」只描述了"叠字"这一半，
+**隐去了"聊天框被隐藏"这一半**。
+
+### 9.2 三个显示面的真实分工
+
+| 显示面 | 控制者 | 内容 |
+|---|---|---|
+| `#resultText` 聊天框 | **同一个** `overlayPosition` | 完整历史（多轮 prompt+response） |
+| `#videoOverlay` 画面叠字 | **同一个** `overlayPosition` | 单条最新输出，贴画面 |
+| `#fullscreenVlmOverlay` 全屏字幕 | **全屏专属，不受设置影响** | 只显示 AI 回复 |
+
+### 9.3 实测到的真实撞车（两种，**都不是**"浮层互相重叠"）
+
+实测三个取值下两浮层**几何上都不重叠**；真问题是：
+
+1. **`top` 时内容重复**：顶部叠字条 + 底部字幕框**同时显示同一轮推理** → 屏幕上出现两遍
+2. **`bottom` 时文字被遮挡**：叠字条（`y=844,h=56`）与输入栏（`y=806,h=74`）
+   **纵向叠 36px** → 文字被输入栏压住并截断（`overlay-bottom-bottom.png` 可见）
+
+**这也解释了为什么默认值是 `none`** —— 默认下不撞车，故问题长期未被发现。
+
+### 9.4 修复（A + B）
+
+- **A**：全屏时禁用画面叠字，**全屏字幕为唯一显示面**。
+  用 **CSS 单点收口**（`.video-card.fullscreen .video-overlay{display:none!important}`）
+  —— 因为 `applyOverlayPosition` 与 `ws_dispatcher` **两处都写这个 class**，
+  CSS 收口比改两处 JS 更不易漏、也不会各自漂移。**常态行为完全不变。**
+- **B**：设置项**改名**以匹配真实语义：
+  - 标签：`VLM Output on Camera View` → **`VLM output location`（VLM 输出位置）**
+  - 说明：→「显示在画面上时；聊天框会被隐藏」（明示互斥）
+  - 选项：`None / At the top / At the bottom` → **`In the chat panel / On the video (top) / On the video (bottom)`**
+
+**验收**：`scripts/check-overlay-ab.mjs` → **18/18**
+（常规态行为不变、全屏叠字禁用、无内容重复、字幕不被输入栏遮挡、四条文案断言）
+
+### 9.5 顺带修掉的两个 i18n 匹配陷阱（实测踩到）
+
+1. **含括号的文案不能以 `\b` 收尾** —— `/\bOn the video \(top\)\b/` **永不匹配**：
+   `)` 与串尾都是非词字符，二者之间不存在词边界。→ 这些词条省略尾部 `\b`。
+2. **文案里不能用英文逗号** —— 表中 `/,/ → '，'` 是**全局**规则，会先把 `,`
+   换成全角「，」，导致整串词条再也匹配不上（实测：说明文案汉化失败）。
+   → 说明文案改用**分号**收束。
+
+> 判别口诀：**改 i18n 词条前，先跑一遍 `localizeUiString(新串)` 看它是否真命中** ——
+> 词条"看起来对"不等于正则真能匹配。
 

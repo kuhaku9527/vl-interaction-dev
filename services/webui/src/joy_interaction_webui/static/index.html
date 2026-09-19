@@ -449,15 +449,23 @@ limitations under the License.
                             </select>
                         </div>
 
+                        <!-- 2026-09-19（用户拍板 B）：本项**改名**以匹配真实语义。
+                             实测语义：它不是"字幕开关"，而是「VLM 输出放哪」的二选一
+                             —— applyOverlayPosition() 在 position≠none 时显示画面叠字
+                             **并同时把聊天框整个隐藏**（resultText.style.display='none'）；
+                             position=none 时才显示聊天框。两者互斥，不能同时。
+                             旧文案「VLM Output on Camera View / 在视频画面上直接叠加文字」
+                             只描述了"叠字"这一半，隐去了"聊天框被藏起来"这一半 → 命名欺骗。
+                             新文案把两端都说清：聊天框 ↔ 画面上/下。 -->
                         <div class="settings-item">
                             <div>
-                                <div class="settings-item-label" data-i18n>VLM Output on Camera View</div>
-                                <div class="settings-item-description" data-i18n>Show text overlay directly on video feed</div>
+                                <div class="settings-item-label" data-i18n>VLM output location</div>
+                                <div class="settings-item-description" data-i18n>On the video feed; the chat panel is hidden</div>
                             </div>
                             <select id="overlayPosition" class="settings-select">
-                                <option value="none" data-i18n>None</option>
-                                <option value="top" data-i18n>At the top</option>
-                                <option value="bottom" data-i18n>At the bottom</option>
+                                <option value="none" data-i18n>In the chat panel</option>
+                                <option value="top" data-i18n>On the video (top)</option>
+                                <option value="bottom" data-i18n>On the video (bottom)</option>
                             </select>
                         </div>
                     </div>

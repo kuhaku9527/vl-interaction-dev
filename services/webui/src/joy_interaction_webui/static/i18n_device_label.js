@@ -242,7 +242,20 @@
     [/\bProxy port\b/i, '代理端口'],
     [/\boptional\b/i, '可选'],
     [/\bChoose which element appears at the top\b/i, '选择置顶显示的元素'],
+    // 2026-09-19（B）：原「VLM Output on Camera View」改名 —— 它实际控制的是
+    // "VLM 输出去哪（聊天框 ↔ 画面上/下）"，旧名只说了"叠字"这一半，属命名欺骗。
+    // 旧词条保留（以防别处仍引用），新增五条对应新文案。
+    // ⚠️ 两个实测踩到的匹配陷阱：
+    //   ① 含括号的文案**不能以 \b 收尾** —— `\bOn the video \(top\)\b` 永不匹配，
+    //      因为 `)` 与串尾都是非词字符，二者之间不存在词边界。故这些词条省略尾部 \b。
+    //   ② 文案里**不要用英文逗号** —— 表中 `/,/ → '，'` 是全局规则，会先把 ","
+    //      换成全角"，"，导致整串词条再也匹配不上。故说明文案改用分号收束。
     [/\bShow text overlay directly on video feed\b/i, '在视频画面上直接叠加文字'],
+    [/\bVLM output location\b/i, 'VLM 输出位置'],
+    [/\bOn the video feed; the chat panel is hidden/i, '显示在画面上时；聊天框会被隐藏'],
+    [/\bIn the chat panel\b/i, '显示在聊天框'],
+    [/On the video \(top\)/i, '显示在画面上方'],
+    [/On the video \(bottom\)/i, '显示在画面下方'],
     [/\bBorder glow on new VLM response\b/i, '新 VLM 回复时边框发光'],
     [/\bGradually fade response after 2 seconds\b/i, '2 秒后逐渐淡出回复'],
     [/\bColor-coded icons and input focus glows\b/i, '彩色图标与输入框聚焦发光'],
