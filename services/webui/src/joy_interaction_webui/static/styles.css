@@ -5801,4 +5801,26 @@ body.light-theme .video-card.fullscreen .fullscreen-prompt-overlay .chat-prompt-
     }
 }
 
+/* --- 28) 云端/本地滑块不动 —— 用户反馈「好像没有实现动态效果」---------
+   2026-09-19 实测复现：summary 行的指示块在 cloud/local/cloud 三态下
+   **恒为 translateX(52px)**（indX=56），即"点了没反应"。
+
+   根因：两条**同特异性** (0,3,0) 规则互相打架，后写的胜出：
+     styles.css:3125  .service-row[data-mode="local"] .svc-seg-indicator{translateX(100%)}
+     styles.css:4755  .svc-seg-btn.on ~ .svc-seg-indicator{translateX(100%)}
+   而 4755 的条件是「**第一个**按钮带 .on」—— HTML 里 cloud 按钮**初始就带 .on**
+   （`class="svc-seg-btn on" data-mode="cloud"`）→ 它恒为真 → 滑块**永远钉在右边**；
+   切到 local 时两条规则都指向右 → 两态同位置，视觉上等于没有滑块。
+
+   修法：以**行模式**（`data-mode`）为唯一真值源（它由 config_services.js 写入、
+   与真实状态一致），用两条同特异性 (0,3,0) 规则**在文件更后处**覆盖那条错误规则。
+   注意：不要用 `:where()` 去压特异性 —— 它是 (0,0,0)，反而**输给** 4755，
+   属"看着对、其实无效"的死规则（此处刻意不写）。 */
+.service-row[data-mode="local"] .svc-seg-indicator {
+    transform: translateX(100%);
+}
+.service-row:not([data-mode="local"]) .svc-seg-indicator {
+    transform: none;
+}
+
 /* === END webui-css-patch === */
