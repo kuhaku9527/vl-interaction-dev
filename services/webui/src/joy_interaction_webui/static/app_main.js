@@ -529,7 +529,7 @@
         // Services panel (v3.38): load / save / probe 6 API slots (LLM / Summary / TTS / ASR / Agent / Embedding)
         // (function bodies extracted to config_services.js → window.JoyConfig)
         (function () {
-            const { readForm, writeForm, load, probe, save, wireSummaryProvider, wireSegProvider, wireServiceRowCollapse, wireModelFetch, testSlot } = window.JoyConfig;
+            const { readForm, writeForm, load, probe, save, wireSummaryProvider, wireSegProvider, wireServiceRowCollapse, wireModelFetch, testSlot, wireTtsControls } = window.JoyConfig;
             const saveBtn = document.getElementById("svcSaveBtn");
             const probeBtn = document.getElementById("svcProbeBtn");
             // N9: 各槽位「Test」按钮（表单当前值 → POST /api/services/test）。
@@ -552,6 +552,9 @@
             if (wireServiceRowCollapse) wireServiceRowCollapse();
             // 2026-09-18：模型字段的「获取模型」按钮（上游 /models 探测）
             if (wireModelFetch) wireModelFetch();
+            // 2026-09-19（用户拍板）：TTS 卡片的 provider / 音色 / 语速 / 音调 / 试听。
+            // 首上免费方案（Edge TTS，无需 Key）便于测试；大厂 API 后续按需接入。
+            if (wireTtsControls) wireTtsControls();
             load();
         })();
 

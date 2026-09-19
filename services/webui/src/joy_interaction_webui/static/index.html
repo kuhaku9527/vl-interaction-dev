@@ -904,11 +904,63 @@ limitations under the License.
                             <span class="provider-msg" id="svc-tts-provider-msg" role="status" aria-live="polite"></span>
                         </div>
                         <div class="local-hint" data-i18n>Local Jarvis TTS · no API key</div>
-                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
+
+                        <!-- 2026-09-19（用户拍板）：TTS 卡片补齐 —— ①API Key ②Model
+                             ③音色/语速/音调 + 试听。
+                             ① 属纯遗漏修复：connections_store.py:54 的白名单本就允许
+                                api_key/model/provider，其余 4 个槽位都有，唯独 TTS 漏了。
+                             ② 免费优先：Edge TTS 无需 Key，便于先把链路跑通方便测试；
+                                大厂 API 待后续按需接入（届时改为 schema 驱动动态表单）。
+                             ③ 表单固定、不做动态渲染 —— 用户明确「免费的好像就那一两家，
+                                方便我们测试」，故 provider 用下拉固定两项。
+                             ④ data-tts-needs-key：仅 MiniMax 需要 Key/Model，Edge 下整组隐藏 ——
+                                这是"厂商能力差异"的第一个落地：**按需显示，不留空控件**。 -->
+                        <div class="form-group">
+                            <label data-i18n>Provider</label>
+                            <select id="svc-tts-provider" title="语音合成后端：Edge 免费无需 Key；MiniMax 需 Key">
+                                <option value="edge">Edge TTS（免费，无需 Key）</option>
+                                <option value="minimax">MiniMax（云端，需 Key）</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" data-tts-needs-key hidden><label data-i18n>API Key</label><input type="password" id="svc-tts-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
+                        <div class="form-group" data-tts-needs-key hidden><label data-i18n>Model</label><input type="text" id="svc-tts-model" placeholder="speech-2.8-hd"></div>
+
+                        <!-- API Base URL 也归入「需 Key」组：Edge 是内置免费通道，
+                             不走自建地址（8985 是 MiniMax/voice-clone 的本地端点），
+                             选 Edge 时整组隐藏 —— 与本卡「不留无关控件」的原则一致。 -->
+                        <div class="form-group" data-tts-needs-key hidden>
+                            <label data-i18n>API Base URL</label>
+                            <input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize">
+                        </div>
+
+                        <div class="form-group">
+                            <label data-i18n>音色 Voice</label>
+                            <select id="svc-tts-voice" title="音色由 provider 决定；Edge 提供免费中文音色"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label data-i18n>语速 Rate</label>
+                            <div class="tts-slider-row">
+                                <input type="range" id="svc-tts-rate" min="-100" max="200" step="5" value="0" aria-label="语速">
+                                <span class="tts-slider-val" id="svc-tts-rate-val">+0%</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label data-i18n>音调 Pitch</label>
+                            <div class="tts-slider-row">
+                                <input type="range" id="svc-tts-pitch" min="-100" max="100" step="5" value="0" aria-label="音调">
+                                <span class="tts-slider-val" id="svc-tts-pitch-val">+0Hz</span>
+                            </div>
+                        </div>
+
                         <div class="action-row">
                             <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label" data-i18n>Test</span></button>
+                            <button class="icon-btn" id="svc-tts-preview-btn" type="button" title="用当前音色/语速/音调试听一句" data-i18n-title="用当前音色/语速/音调试听一句"><i data-lucide="play"></i><span data-i18n>试听</span></button>
                             <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
+                        <audio id="ttsPreviewPlayer" preload="none" playsinline></audio>
                     </div>
                 </div>
             </div>

@@ -47,6 +47,9 @@ dependencies = [
     "psutil>=5.9.8",
     "onnxruntime>=1.16.0",
     "transformers>=4.40.0",
+    # 2026-09-19（D-2026-09-19-002）：Edge TTS —— 免费、无需 Key 的语音合成通道，
+    # 供无 MiniMax Key 时跑通 TTS 链路 / 免费音色 / 试听使用。见 tts_edge.py。
+    "edge-tts>=7.2.0",
 ]
 
 [project.optional-dependencies]

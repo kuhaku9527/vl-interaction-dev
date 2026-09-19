@@ -915,3 +915,34 @@ body.light-theme .video-card.fullscreen .fullscreen-prompt-overlay .chat-prompt-
     transform: none;
 }
 
+
+/* --- 29) TTS 卡片：provider / 音色 / 语速 / 音调 / 试听（2026-09-19 用户拍板）
+   表单刻意保持**固定**（用户：「免费的好像就那一两家，方便我们测试」），
+   未引入 schema 动态渲染 —— 那要等接入 ≥3 家大厂、参数差异真正成为负担时再做。
+   「厂商差异」的当前落地：provider 切换时按后端 /api/tts/voices 的
+   providers[].needs_api_key / needs_model 显隐那两组字段（data-tts-needs-key），
+   Edge 下不显示 Key/Model —— 不留空控件。 */
+.tts-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tts-slider-row input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 20px;
+    accent-color: var(--brand);
+    cursor: pointer;
+}
+.tts-slider-val {
+    flex: 0 0 auto;
+    min-width: 52px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+/* 试听播放器不占位（无控件 UI，纯播放通道） */
+#ttsPreviewPlayer { display: none; }
+/* Key/Model 组在 Edge provider 下隐藏（由 JS 设 hidden，这里兜底防闪烁） */
+.service-row[data-service="tts"] [data-tts-needs-key][hidden] { display: none !important; }

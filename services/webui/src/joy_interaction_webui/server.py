@@ -712,6 +712,15 @@ def main():
     app.router.add_get("/api/tts/health", tts_health)
     app.router.add_post("/api/llm/message", llm_message)
     app.router.add_post("/api/tts/synthesize", _tts_synthesize_handler)
+    # 2026-09-19（用户拍板）：Edge TTS（免费、无需 Key）—— 独立端点，不改既有
+    # MiniMax 合成路径。GET /api/tts/voices 提供音色列表 + provider 能力描述，
+    # POST /api/tts/edge 返回 MP3。见 tts_edge.py 顶部的设计边界说明。
+    try:
+        from .tts_edge import register_tts_edge_routes as _reg_tts_edge
+
+        _reg_tts_edge(app)
+    except Exception as _exc:  # 不让免费测试通道的失败影响主服务启动
+        logger.warning("Edge TTS routes not registered: %s", _exc)
     # Issue #43: persist browser screen-frame send→render latency samples
     # (POSTed from the SPA) to the server-side JSONL ring file.
     app.router.add_post("/api/screen-latency", _screen_latency_handler)

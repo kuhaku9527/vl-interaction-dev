@@ -658,6 +658,169 @@
         });
     }
 
+    // ========================================================================
+    // 2026-09-19（用户拍板）：TTS 卡片补齐 —— provider / 音色 / 语速 / 音调 / 试听
+    //
+    // 为什么单独一段：TTS 是唯一「音色/语速/音调」这类**内容参数**有意义的槽位，
+    // 其余槽位只有「地址/Key/模型」。用户要求先上免费方案（Edge TTS，无需 Key）
+    // 方便测试，大厂 API 后续按需接入。
+    //
+    // 「厂商可调项不统一」的落地方式（本段是**第一个**具体实现，暂用固定表单）：
+    //   provider 切换时按能力表显隐控件 —— Edge 不显示 Key/Model，MiniMax 显示。
+    //   等接入 ≥3 家大厂时再升级为后端 schema 驱动（tts_edge.py 的 /api/tts/voices
+    //   已返回 providers[].supports，就是那条演进路径的数据基础）。
+    // ========================================================================
+    // ⚠️ 2026-09-19 实测踩坑：本文件在 <head>（index.html:92）加载，
+    //   而 TTS 卡片在 index.html:930+ 才出现 —— 顶层 `getElementById` 此刻**全为 null**，
+    //   于是 wireTtsControls() 静默什么都不做（无报错，最难查）。
+    //   故一律**延迟取值**（在函数内 getElementById），不要在 IIFE 顶层缓存。
+    const $ = function (id) { return document.getElementById(id); };
+    //: 后端 /api/tts/voices 的返回缓存（providers 能力 + 各 provider 音色）
+    let _ttsCatalog = null;
+
+    function _ttsStatus(msg, isError) {
+        const el = $('svc-tts-test-status');
+        if (!el) return;
+        el.textContent = msg || '';
+        el.style.color = isError ? 'var(--warning-color)' : '';
+    }
+
+    /** 按 provider 能力显隐控件（厂商差异的落地：不留空控件，不显示无关项）。 */
+    function applyTtsProviderUi() {
+        const providerSel = $('svc-tts-provider');
+        const voiceSel = $('svc-tts-voice');
+        if (!providerSel) return;
+        const pid = providerSel.value;
+        const caps = ((_ttsCatalog && _ttsCatalog.providers) || []).find(function (p) {
+            return p.id === pid;
+        }) || { needs_api_key: pid === 'minimax', needs_model: pid === 'minimax', available: true, note: '' };
+        // Key / Model / Base 三组按能力整组显隐。
+        // ★ 三组共用 data-tts-needs-key 标记，靠**内部 id** 区分是哪一组 ——
+        //   不能只判断"有没有 api-key"，否则 Model/Base 组会被误判（实测踩过）。
+        document.querySelectorAll('.service-row[data-service="tts"] [data-tts-needs-key]')
+            .forEach(function (group) {
+                let show;
+                if (group.querySelector('#svc-tts-api-key')) show = !!caps.needs_api_key;
+                else if (group.querySelector('#svc-tts-model')) show = !!caps.needs_model;
+                else if (group.querySelector('#svc-tts-api-base')) show = !!caps.needs_api_base;
+                else show = true; // 未知组不隐藏，避免误伤
+                group.hidden = !show;
+            });
+        // 音色下拉：换成该 provider 自己的音色集
+        const voices = ((_ttsCatalog && _ttsCatalog.voices) || {})[pid] || [];
+        if (voiceSel) {
+            while (voiceSel.firstChild) voiceSel.removeChild(voiceSel.firstChild);
+            if (voices.length) {
+                voices.forEach(function (v) {
+                    const opt = document.createElement('option');
+                    opt.value = v.id;
+                    opt.textContent = v.label || v.id;
+                    voiceSel.appendChild(opt);
+                });
+                if (pid === 'edge' && _ttsCatalog.default_voice) voiceSel.value = _ttsCatalog.default_voice;
+            } else {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = pid === 'minimax' ? '（MiniMax 音色由 voice_id 决定）' : '（暂无音色列表）';
+                voiceSel.appendChild(opt);
+            }
+        }
+        if (caps.available === false) _ttsStatus(caps.note || '该 provider 当前不可用', true);
+        else _ttsStatus('');
+    }
+
+    async function loadTtsCatalog() {
+        if (_ttsCatalog) return _ttsCatalog;
+        try {
+            const r = await fetch('/api/tts/voices');
+            _ttsCatalog = await r.json();
+        } catch (_e) {
+            _ttsCatalog = { providers: [], voices: {}, default_voice: '' };
+        }
+        return _ttsCatalog;
+    }
+
+    /** 试听：用当前音色/语速/音调合成一句（Edge 免费，无需 Key）。 */
+    async function previewTts() {
+        const btn = $('svc-tts-preview-btn');
+        if (!btn) return;
+        const providerSel = $('svc-tts-provider');
+        const voiceSel = $('svc-tts-voice');
+        const rateEl = $('svc-tts-rate');
+        const pitchEl = $('svc-tts-pitch');
+        const player = $('ttsPreviewPlayer');
+        const pid = providerSel ? providerSel.value : 'edge';
+        if (pid !== 'edge') {
+            _ttsStatus('试听目前仅支持 Edge（免费）；MiniMax 请用「Test」', true);
+            return;
+        }
+        const orig = btn.querySelector('span');
+        const origText = orig ? orig.textContent : '';
+        btn.disabled = true;
+        if (orig) orig.textContent = '合成中…';
+        _ttsStatus('正在合成…');
+        try {
+            const r = await fetch('/api/tts/edge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: '你好，我是 BT-7274，这是当前音色的试听效果。',
+                    voice: voiceSel ? voiceSel.value : '',
+                    rate: rateEl ? Number(rateEl.value) : 0,
+                    pitch: pitchEl ? Number(pitchEl.value) : 0,
+                }),
+            });
+            if (!r.ok) {
+                const d = await r.json().catch(function () { return null; });
+                _ttsStatus('合成失败：' + ((d && (d.reason || d.error)) || ('HTTP ' + r.status)), true);
+                return;
+            }
+            const blob = await r.blob();
+            if (player) {
+                player.src = URL.createObjectURL(blob);
+                await player.play().catch(function () { /* 自动播放被拦，用户可手动播 */ });
+            }
+            _ttsStatus('试听完成（' + Math.round(blob.size / 1024) + ' KB）');
+        } catch (e) {
+            _ttsStatus('请求失败：' + (e && e.message ? e.message : String(e)), true);
+        } finally {
+            btn.disabled = false;
+            if (orig) orig.textContent = origText || '试听';
+        }
+    }
+
+    function wireTtsControls() {
+        const providerSel = $('svc-tts-provider');
+        const rateEl = $('svc-tts-rate');
+        const rateVal = $('svc-tts-rate-val');
+        const pitchEl = $('svc-tts-pitch');
+        const pitchVal = $('svc-tts-pitch-val');
+        const previewBtn = $('svc-tts-preview-btn');
+        if (providerSel) {
+            providerSel.addEventListener('change', function () {
+                loadTtsCatalog().then(applyTtsProviderUi).catch(function () {});
+            });
+        }
+        if (rateEl && rateVal) {
+            const sync = function () {
+                const n = Number(rateEl.value);
+                rateVal.textContent = (n >= 0 ? '+' : '-') + Math.abs(n) + '%';
+            };
+            rateEl.addEventListener('input', sync); sync();
+        }
+        if (pitchEl && pitchVal) {
+            const sync = function () {
+                const n = Number(pitchEl.value);
+                // ★ 单位是 Hz（Edge 的 pitch 不用百分比，实测传 +0% 会被拒）
+                pitchVal.textContent = (n >= 0 ? '+' : '-') + Math.abs(n) + 'Hz';
+            };
+            pitchEl.addEventListener('input', sync); sync();
+        }
+        if (previewBtn) previewBtn.addEventListener('click', previewTts);
+        // 首次进入：拉音色目录并按 provider 应用显隐
+        loadTtsCatalog().then(applyTtsProviderUi).catch(function () {});
+    }
+
     // 2026-09-18（用户要求 B）：service-row 展开/折叠。
     // LLM 与 Summary 默认展开；ASR / Agent / Embedding 默认折叠（HTML 已带 .collapsed）。
     // 折叠态只保留 header + badge —— badge 是唯一始终有信息量的元素，不展开也能看健康度。
@@ -698,5 +861,7 @@
         _putConnections,
         testSlot,
         testSummary,
+        wireTtsControls,
+        previewTts,
     };
 })();
