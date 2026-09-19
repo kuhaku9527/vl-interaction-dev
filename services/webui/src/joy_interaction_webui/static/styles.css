@@ -5874,4 +5874,42 @@ body.light-theme .video-card.fullscreen .fullscreen-prompt-overlay .chat-prompt-
     display: none !important;
 }
 
+/* --- 31) 输入框滚动条：彻底隐藏原生样式（2026-09-19 用户反馈）
+   现象（用户原话）：「这个条原来是对话框的滑动条。它的颜色设计得有问题：
+   因为聊天框背景是灰色的，背景是黑色/白色，一旦滑动条出现，它又变成白底了/黑底，
+   搞得像是缺了一块一样。」
+
+   实测根因 —— **两套主题 token 并存，滚动条用错了那一套**：
+     styles.css:3355-3371 的全局滚动条用【旧 token】：--bg-secondary / --bg-tertiary
+     而输入框区域用【重设计 token】：--bg-input = #161618(深) / rgb(236,236,238)(浅)
+   两套不互通 → 实测：深色 track #121010 vs 输入框 rgb(22,22,24)；
+   **浅色 track 仍是 #121010（近黑）**，因为 --bg-secondary 在新主题块里未被覆盖。
+   浅色下"缺一块"最刺眼，就是这个原因。
+
+   ★ 但仅"把 track 改成同色"只解决一半 —— 隔离对照测试
+   （scripts/test-scrollbar-isolate.mjs，5 个变体）证明：
+   **上下三角箭头在 Chrome 152 下无法用 CSS 消除** ——
+   `::-webkit-scrollbar-button{display:none}` 的计算值确实是 none，却仍被绘制
+   （属 overlay scrollbar 的原生装饰）。同色 track + 去不掉的箭头 = 观感仍"缺一块"。
+
+   最终方案：**彻底隐藏原生滚动条**（现代聊天输入框的通行做法，ChatGPT/Claude 同）。
+   - 输入框本就是多行自适应（max-height:120px），超限时**滚轮仍可滚动**，功能不减
+   - 原生滚动条一去掉，"缺一块"的视觉断裂从根上消失，也无需再调 track/thumb 配色
+   - 聊天历史区一并处理（同类可滚动区域，避免两处观感不一致）
+
+   范围限定：仅输入框与聊天历史区，不动全局滚动条（其它区域沿用旧样式）。 */
+.chat-prompt-input,
+.vlm-history,
+.result-text-content {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* 旧 Edge/IE */
+}
+.chat-prompt-input::-webkit-scrollbar,
+.vlm-history::-webkit-scrollbar,
+.result-text-content::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
 /* === END webui-css-patch === */
