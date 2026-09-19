@@ -50,6 +50,33 @@ node scripts/idesign-wire.mjs --dry-run       # 预览（不写盘、不清理�
 
 产物：`design/<sessionId>/{index.html, design-tokens.css, manifest.json}`
 
+## 3.1 ⚠️ 同步是**手动步骤**，改完源文件必须重跑（2026-09-19 实测教训）
+
+**事故**：我改完 `static/styles.css`（全屏按钮配色 + 输入栏响应式）后**忘了同步**，
+用户打开 Studio 看到的仍是旧版，反馈"你修改了吗？我怎么没看到呢？……在 iDesign 的
+渲染里面还是没看到你的修改呀"。核实：镜像停在 **16:53**，源文件已到 **20:49**。
+
+**根因**：`idesign-wire.mjs` **不是** git hook，`.githooks/pre-commit` 里也没有挂它
+（已实测确认）。所以**没有任何机制保证镜像与源一致** —— 全靠人记得跑。
+
+**纪律**：
+
+1. **改完 `static/` 下任何文件（尤其 `styles.css` / `index.html` / `*.js`），
+   收尾前必须跑一次 `node scripts/idesign-wire.mjs`。** 它属于"改完即同步"的固定动作。
+2. **验收不能只跑源目录。** 此前所有 check 脚本都 serve `services/webui/.../static/`，
+   而 Studio 渲染的是 **`design/<session>/index.html`（内联后的单文件）**。
+   两者不同步时，**验收全绿但用户看到的是旧版**。
+   → 新增 `scripts/check-idesign-mirror.mjs`：**直接渲染镜像**并复验关键修复，
+   建议在涉及视觉改动的收尾一并跑（实测 6/6 通过才算"用户能看到"）。
+3. **快速自检**：比对时间戳与关键特征
+   ```bash
+   D=$(ls -d design/session-* | head -1)
+   date -r "$D/index.html"        # 应晚于源文件 mtime
+   grep -c "max-width: 520px" "$D/index.html"    # 抽查最新补丁特征
+   ```
+4. **这是同类问题第二次**：第一次是 DSH fork 导致 Studio 画布空白（对策=脚本自动指向
+   当前会话）。共同教训：**Studio 是一个"快照消费者"，任何源改动都要显式推送过去。**
+
 ### ⚠️ 为什么要「自动读当前会话」+「清理旧目录」
 
 **根因（2026-09-18 实测查清，推翻了此前「用户开了新对话」的错误判断）：**
