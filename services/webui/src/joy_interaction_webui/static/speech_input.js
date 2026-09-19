@@ -142,6 +142,9 @@
             setBtLatencyText(btLlmLatencyValue, llmText);
             setBtLatencyText(btTtsLatencyValue, ttsText);
             setBtLatencyText(btE2eLatencyValue, e2eText);
+            // 顶栏胶囊只镜像 E2E（端到端是最常盯的指标）；数据源仍是 btLatency，
+            // 不新增状态，浮层与胶囊永远同源。e2ePillValue 在 index.html 中声明。
+            setBtLatencyText(e2ePillValue, e2eText);
         }
 
         function resetBtTurnLatency() {

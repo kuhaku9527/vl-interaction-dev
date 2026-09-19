@@ -535,6 +535,10 @@ INDEX_HTML = REPO / "services" / "webui" / "src" / "joy_interaction_webui" / "st
 # files (same dependency order as the <script src> tags). Assertions run against
 # the combined sources so moved code keeps its contract with unchanged semantics.
 _SPLIT_JS = (
+    "app_boot.js",
+    "app_main.js",
+    "sidebar_toggle.js",
+    "incremental_wiring.js",
     "vlm_history.js",
     "llm_reply_ui.js",
     "ws_dispatcher.js",

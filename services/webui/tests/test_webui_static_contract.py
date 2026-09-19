@@ -17,6 +17,10 @@ STYLES_CSS = WEBUI_ROOT / "src" / "joy_interaction_webui" / "static" / "styles.c
 # index.html). Contract assertions run against the combined sources so the
 # moved code is still checked with unchanged semantics.
 SPLIT_JS = (
+    "app_boot.js",
+    "app_main.js",
+    "sidebar_toggle.js",
+    "incremental_wiring.js",
     "vlm_history.js",
     "llm_reply_ui.js",
     "ws_dispatcher.js",

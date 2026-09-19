@@ -50,10 +50,10 @@
 
             currentPrompt.style.display = 'none';
             currentPrompt.textContent = '';
-            metricsInline.style.display = 'flex';
-            latencyValue.textContent = '0';
-            avgLatencyValue.textContent = '0';
-            countValue.textContent = '0';
+            if (metricsInline) metricsInline.style.display = 'flex';
+            if (latencyValue) latencyValue.textContent = '0';
+            if (avgLatencyValue) avgLatencyValue.textContent = '0';
+            if (countValue) countValue.textContent = '0';
 
             const requestPayloadDebug = document.getElementById('requestPayloadDebug');
             const requestPayloadContent = document.getElementById('requestPayloadContent');

@@ -341,6 +341,10 @@ INDEX_HTML = REPO / "services" / "webui" / "src" / "joy_interaction_webui" / "st
 # the static-contract assertions pointing at the moved code with unchanged
 # semantics.
 _SPLIT_JS = (
+    "app_boot.js",
+    "app_main.js",
+    "sidebar_toggle.js",
+    "incremental_wiring.js",
     "vlm_history.js",
     "llm_reply_ui.js",
     "ws_dispatcher.js",

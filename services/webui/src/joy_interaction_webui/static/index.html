@@ -94,36 +94,7 @@ limitations under the License.
     <script src="./wiki_frontend.js"></script>
     <script src="./joy_ws.js"></script>
     <script src="./i18n_device_label.js"></script>
-    <script>
-        document.title = 'JoyAI VL Live';
-
-        // Resilience: lucide is loaded from a CDN. If the CDN is blocked/slow
-        // (offline, firewall, flaky network), `lucide` is undefined and every
-        // `lucide.createIcons()` call would throw, aborting the inline script
-        // mid-bootstrap (theme, settings modal, WS, live-mode handlers...).
-        // Stub it to a no-op so the app degrades gracefully (icons missing)
-        // instead of hard-crashing. Real env with the CDN up is unaffected.
-        if (typeof lucide === 'undefined') {
-            window.lucide = { createIcons: function () {} };
-        }
-
-        // Initialize Lucide icons immediately when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                lucide.createIcons();
-                // Localize static markup (issue #47): Chinese resolved from
-                // window.JoyI18n.UI_STRING_MAP, never hardcoded in HTML.
-                if (window.JoyI18n && typeof window.JoyI18n.applyUiI18n === 'function') {
-                    window.JoyI18n.applyUiI18n(document);
-                }
-            });
-        } else {
-            lucide.createIcons();
-            if (window.JoyI18n && typeof window.JoyI18n.applyUiI18n === 'function') {
-                window.JoyI18n.applyUiI18n(document);
-            }
-        }
-    </script>
+    <script src="./app_boot.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -132,20 +103,16 @@ limitations under the License.
             <button class="sidebar-toggle-btn" id="sidebarToggle" type="button" aria-label="Toggle settings sidebar" aria-controls="sidebarPanels" aria-expanded="false">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
-            <div class="logo" id="jdLogo" role="button" tabindex="0" aria-label="Refresh page">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-hidden="true">
-                    <rect width="128" height="128" rx="28" fill="#c81e2a"/>
-                    <path fill="#fff" d="M25 34h24v38c0 15-9 24-24 24-7 0-13-2-18-5l7-16c3 2 6 3 9 3 5 0 8-3 8-9V52h-6z"/>
-                    <path fill="#fff" d="M60 34h25c22 0 36 12 36 31s-14 31-36 31H60zm24 44c11 0 18-5 18-13s-7-13-18-13h-5v26z"/>
-                </svg>
-            </div>
-            <div class="title-section">
-                <h1>JoyAI VL</h1>
-                <div class="subtitle" data-i18n>本地 · 开源 Apache 2.0</div>
-            </div>
+            <!-- .title-section（JoyAI VL + 本地·开源 Apache 2.0）已删除
+                 （2026-09-18，用户要求）。无 JS 引用。 -->
+            <!-- 2026-09-19：移除 live chip 上硬编码的 class="active"。
+                 它原本让红框恒亮（没有任何 JS 切换 .active，仅 status_poll.js 写
+                 data-state）→ 成了常态装饰而非"使用中"提醒。用户要求红框只在
+                 真正使用时出现。现由 setModeChipState() 按真实状态切换 .active；
+                 初始 data-state="off" 表示"尚未确认在跑"，与中性边框一致。 -->
             <div class="quick-tabs">
-                <button class="chip mode-chip active" data-mode="live" type="button"><span class="cdot"></span>live</button>
-                <button class="chip mode-chip" data-mode="kws" type="button"><span class="cdot"></span>kws</button>
+                <button class="chip mode-chip" data-mode="live" data-state="off" type="button"><span class="cdot off"></span>live</button>
+                <button class="chip mode-chip" data-mode="kws" data-state="off" type="button"><span class="cdot off"></span>kws</button>
             </div>
             <div class="health-wrap">
                 <div class="health-pill" id="healthPill" title="Service health · click for details">
@@ -155,13 +122,16 @@ limitations under the License.
                 </div>
                 <div class="health-menu" id="healthMenu">
                 <h4>Service Health</h4>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Main LLM</span><span class="svc-state" id="hm-main_llm">--</span></div>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Summarizer</span><span class="svc-state" id="hm-summarizer">--</span></div>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Embedding</span><span class="svc-state" id="hm-embedding">--</span></div>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Memory Store</span><span class="svc-state" id="hm-memory_store">--</span></div>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>TTS</span><span class="svc-state" id="hm-tts">--</span></div>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>ASR</span><span class="svc-state" id="hm-asr">--</span></div>
-                <div class="svc"><span class="svc-name"><span class="sdot" style="background:var(--ok)"></span>Agent</span><span class="svc-state" id="hm-agent">--</span></div>
+                <!-- 2026-09-18：sdot 原先内联硬编码 background:var(--ok)（恒为绿灯），
+                     现改为由 JS（wiki_frontend.js setStatusDot）按真实探测结果着色，
+                     每项带 hm-dot-<id> 供着色，与 hm-<id> 文本同源。 -->
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-main_llm"></span>Main LLM</span><span class="svc-state" id="hm-main_llm">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-summarizer"></span>Summarizer</span><span class="svc-state" id="hm-summarizer">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-embedding"></span>Embedding</span><span class="svc-state" id="hm-embedding">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-memory_store"></span>Memory Store</span><span class="svc-state" id="hm-memory_store">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-tts"></span>TTS</span><span class="svc-state" id="hm-tts">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-asr"></span>ASR</span><span class="svc-state" id="hm-asr">--</span></div>
+                <div class="svc"><span class="svc-name"><span class="sdot" id="hm-dot-agent"></span>Agent</span><span class="svc-state" id="hm-agent">--</span></div>
             </div>
             </div>
         </div>
@@ -176,6 +146,38 @@ limitations under the License.
             <span class="status-badge llm-unknown" id="wikiBadge" title="[Local Wiki] 召回健康状态" role="status" aria-live="polite">知识库 ?</span>
             <span class="status-badge silence-off" id="silenceStatus" title="无线电静默状态（占位，完整弹窗后续）" role="status" aria-live="polite">静默关</span>
 
+            <div class="latency-wrap">
+                <button class="latency-pill" id="latencyPill" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="latencyMenu" title="链路指标 · 点击展开" data-i18n-title="Chain metrics · click to expand">
+                    <i data-lucide="activity" aria-hidden="true"></i>
+                    <span class="latency-pill-label" data-i18n>E2E</span>
+                    <strong id="e2ePillValue">--</strong>
+                    <i data-lucide="chevron-down" aria-hidden="true"></i>
+                </button>
+                <div class="latency-menu" id="latencyMenu" role="group" aria-label="BT chain latency">
+                    <div class="latency-group">
+                        <div class="latency-group-title" data-i18n>采集</div>
+                        <div class="bt-latency-chip">MIC <strong id="btMicLevelValue">--</strong></div>
+                        <div class="bt-latency-chip" title="BT listening input device" data-i18n-title="BT listening input device">INPUT <strong id="btMicDeviceValue">--</strong></div>
+                        <div class="bt-latency-chip" title="监听链路麦克风增益 (Web Audio GainNode)，数值高 = KWS 输入能量强，但太大会削顶">GAIN <select id="btMicGainSelect" style="background:transparent;border:0;color:inherit;font-weight:600;cursor:pointer;font-size:inherit">
+                                <option value="1.0">1.0x</option>
+                                <option value="1.5" selected>1.5x</option>
+                                <option value="2.0">2.0x</option>
+                                <option value="2.5">2.5x</option>
+                                <option value="3.0">3.0x</option>
+                            </select></div>
+                    </div>
+                    <div class="latency-group">
+                        <div class="latency-group-title" data-i18n>链路</div>
+                        <div class="bt-latency-chip">ASR <strong id="btAsrLatencyValue">--</strong></div>
+                        <div class="bt-latency-chip">LLM <strong id="btLlmLatencyValue">--</strong></div>
+                        <div class="bt-latency-chip">TTS <strong id="btTtsLatencyValue">--</strong></div>
+                    </div>
+                    <div class="latency-group">
+                        <div class="latency-group-title" data-i18n>端到端</div>
+                        <div class="bt-latency-chip">E2E <strong id="btE2eLatencyValue">--</strong></div>
+                    </div>
+                </div>
+            </div>
             <button class="settings-btn" id="settingsBtn" title="Settings" aria-label="Settings">
                 <i data-lucide="settings"></i>
             </button>
@@ -193,42 +195,43 @@ limitations under the License.
         <div class="settings-dialog">
             <div class="settings-header">
                 <div class="settings-title">
-                    <i data-lucide="settings"></i> Settings
+                    <i data-lucide="settings"></i> 设置
                 </div>
-                <button class="settings-close" id="settingsClose" aria-label="Close settings">×</button>
+                <button class="settings-close" id="settingsClose" title="关闭设置（Esc）" data-i18n-title="关闭设置（Esc）" aria-label="Close settings">×</button>
 
             </div>
             <nav class="modal-nav" id="modalNav">
-                <h3>Settings</h3>
-                <button class="nav-item active" data-panel="services" type="button"><i data-lucide="cpu"></i> 模型 Model</button>
-                <button class="nav-item" data-panel="voice" type="button"><i data-lucide="volume-2"></i> 语音 Voice</button>
-                <button class="nav-item" data-panel="input" type="button"><i data-lucide="webcam"></i> 输入 Input</button>
-                <button class="nav-item" data-panel="memory" type="button"><i data-lucide="database"></i> 记忆 Memory</button>
-                <button class="nav-item" data-panel="wiki" type="button"><i data-lucide="book-open"></i> 知识库 Wiki</button>
-                <button class="nav-item" data-panel="api" type="button"><i data-lucide="activity"></i> 接口状态 API</button>
-                <button class="nav-item" data-panel="appearance" type="button"><i data-lucide="layout"></i> 外观 Appearance</button>
-                <button class="nav-item" data-panel="advanced" type="button"><i data-lucide="layers"></i> 高级 Advanced</button>
-                <button class="nav-item" data-panel="about" type="button"><i data-lucide="info"></i> 关于 About</button>
+                <h3>设置</h3>
+                <button class="nav-item active" data-panel="services" type="button" title="配置 LLM / 摘要 / ASR / Agent / 嵌入 等后端，云端或本地可热切换" data-i18n-title="配置 LLM / 摘要 / ASR / Agent / 嵌入 等后端，云端或本地可热切换"><i data-lucide="cpu"></i> 模型</button>
+                <button class="nav-item" data-panel="agent" type="button" title="后台委派求解器：选 codex 或 hermes 处理复杂任务" data-i18n-title="后台委派求解器：选 codex 或 hermes 处理复杂任务"><i data-lucide="bot"></i> 委派</button>
+                <button class="nav-item" data-panel="voice" type="button" title="语音合成（TTS）后端与音色相关设置" data-i18n-title="语音合成（TTS）后端与音色相关设置"><i data-lucide="volume-2"></i> 语音</button>
+                <!-- 「输入 Input」导航项已删除（2026-09-18，用户要求）：其面板是空壳，功能与输入栏的视频按钮重复 -->
+                <button class="nav-item" data-panel="memory" type="button" title="记忆存储的嵌入与向量服务设置" data-i18n-title="记忆存储的嵌入与向量服务设置"><i data-lucide="database"></i> 记忆</button>
+                <button class="nav-item" data-panel="wiki" type="button" title="本地知识库语料：导入、同步、删除命名空间" data-i18n-title="本地知识库语料：导入、同步、删除命名空间"><i data-lucide="book-open"></i> 知识库</button>
+                <button class="nav-item" data-panel="appearance" type="button" title="界面布局、视觉效果、配色、WebRTC 与音频输出" data-i18n-title="界面布局、视觉效果、配色、WebRTC 与音频输出"><i data-lucide="layout"></i> 外观</button>
+                <button class="nav-item" data-panel="advanced" type="button" title="高级：无线电静默、Live 常驻模式与唤醒兜底" data-i18n-title="高级：无线电静默、Live 常驻模式与唤醒兜底"><i data-lucide="layers"></i> 高级</button>
+                <button class="nav-item" data-panel="about" type="button" title="版本、开源许可与仓库链接" data-i18n-title="版本、开源许可与仓库链接"><i data-lucide="info"></i> 关于</button>
                 <div class="nav-foot"><span class="ver">JoyAI VL · v6-lite.22</span></div>
             </nav>
         <div class="settings-body">
-            <!-- [Local Wiki] F2: API Status panel (top of settings, ADR-0012 §5) -->
-            <div class="settings-section" id="apiStatusSection" style="grid-column: 1 / -1;">
-                <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>API Status</div>
-                <div class="api-status-grid" id="apiStatusGrid">
-                    <div class="api-status-item"><span class="status-dot" id="status-main_llm"></span><span class="api-status-name" data-i18n>Main LLM</span><span class="api-status-meta" id="meta-main_llm">--</span></div>
-                    <div class="api-status-item"><span class="status-dot" id="status-summarizer"></span><span class="api-status-name" data-i18n>Summarizer</span><span class="api-status-meta" id="meta-summarizer">--</span></div>
-                    <div class="api-status-item"><span class="status-dot" id="status-embedding"></span><span class="api-status-name" data-i18n>Embedding</span><span class="api-status-meta" id="meta-embedding">--</span></div>
-                    <div class="api-status-item"><span class="status-dot" id="status-memory_store"></span><span class="api-status-name" data-i18n>Memory Store</span><span class="api-status-meta" id="meta-memory_store">--</span></div>
-                    <div class="api-status-item"><span class="status-dot" id="status-tts"></span><span class="api-status-name">TTS</span><span class="api-status-meta" id="meta-tts">--</span></div>
-                </div>
-                <button class="icon-btn" id="apiStatusRefresh" type="button" aria-label="Refresh API status"><i data-lucide="refresh-cw"></i> Refresh</button>
-            </div>
+            <!-- API Status 面板已删除（2026-09-18，用户明确要求）：
+                 其 5 项服务与顶栏 healthPill 下拉（#healthMenu）重复，用户选择保留顶栏胶囊。
+                 数据管道仍可用：loadHealth()（wiki_frontend.js）现直接写顶栏 hm-*。 -->
 
-            <!-- Radio Silence (radio-silence.md §3/§7): 静默设置面板。
+            <!-- 高级面板包裹层（2026-09-19）。
+                 为什么需要：PANEL_ROOTS.advanced 原指向 #radioSilenceSection，
+                 而 Live / Wake 两张卡是它的**兄弟**节点 —— showSettingsPanel 只对
+                 PANEL_ROOTS 的根元素切 .cat-hidden，兄弟不受控
+                 （切到「外观」时这两张卡仍然可见，实测复现）。
+                 现按本仓库既有模式改成 display:contents 包裹层（同 #appearanceSection）：
+                 子元素在布局上等同 .settings-body 直接子元素，卡片样式不变形；
+                 而 .cat-hidden 的 display:none !important 能盖住 inline 的 contents。 -->
+            <div id="advancedPanel" style="display:contents">
+<!-- Radio Silence (radio-silence.md §3/§7): 静默设置面板。
                  存在但隐身：不推理不播报，只留唤醒通道。全部设置项带说明文字。 -->
-            <div class="settings-section full-width collapsed" id="radioSilenceSection">
-                <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">无线电静默</div>
+            <!-- 2026-09-18：移除 collapsed —— 该面板只有一个卡片，收纳无意义（用户要求直接展示）。 -->
+            <div class="settings-section full-width" id="radioSilenceSection">
+                <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" title="存在但隐身：不推理不播报，只保留 KWS / 组合键 / 语音唤醒通道" data-i18n-title="存在但隐身：不推理不播报，只保留 KWS / 组合键 / 语音唤醒通道">无线电静默</div>
                 <div class="input-hint" style="margin-bottom: 4px;">存在但隐身：不推理不播报，视觉继续，只留唤醒通道（KWS / 组合键 / 语音）。</div>
 
                 <div class="settings-item">
@@ -291,17 +294,149 @@ limitations under the License.
                     </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
-                    <button class="icon-btn" id="silenceSaveBtn" type="button" aria-label="保存无线电静默设置"><i data-lucide="save"></i> Save</button>
+                <div class="action-row">
+                    <button class="icon-btn" id="silenceSaveBtn" title="保存静默设置并立即对运行中会话生效" data-i18n-title="保存静默设置并立即对运行中会话生效" type="button" aria-label="保存无线电静默设置"><i data-lucide="save"></i> Save</button>
                     <span class="input-hint" style="margin: 0;">保存后应用到运行中的会话，无需重启；静默不跨重启，重启回 live 常驻</span>
                 </div>
             </div>
+
+<!-- Live 常驻模式（2026-09-19 用户拍板：不是「外观」功能，归入「高级」）。
+                         这些控件原先在 .prompt-editor-inline 内靠作用域 CSS 隐藏，从未在设置页建过
+                         等价入口 → 功能不可达；且全屏时 #promptEditor 被搬走，隐藏契约失效、控件集体复活。
+                         现已真删出输入栏、落到设置页。契约：id 与 JS 绑定一律不变。
+                         注：「实时」按钮不在本卡 —— 用户要求它回到聊天输入栏，方便直接开启。 -->
+                    <div class="settings-section collapsed" id="liveModeSection">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="Jarvis 唤醒词监听、声纹注册、画面来源与主动搭话" data-i18n-title="Jarvis 唤醒词监听、声纹注册、画面来源与主动搭话">Live 常驻模式</div>
+
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label" data-i18n>Jarvis 唤醒词监听</div>
+                                <div class="settings-item-description" data-i18n>监听唤醒词 “bt” 触发对话；与聊天栏的「实时」互斥（二选一）</div>
+                            </div>
+                            <div class="live-mode-seg" id="liveModeSeg">
+                                <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
+                                    <i data-lucide="radio"></i>
+                                    <span class="listen-label">Jarvis 唤醒</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label" data-i18n>注册声音</div>
+                                <div class="settings-item-description" data-i18n>声纹注册（Addressee 过滤）：只响应你的声音</div>
+                            </div>
+                            <div class="live-mode-stack" id="liveEnrollRow">
+                                <button class="chat-prompt-action live-enroll" id="liveEnrollBtn" title="注册你的声音（Addressee 过滤：只响应你）" type="button" aria-label="注册声音" disabled>
+                                    <i data-lucide="user-check"></i>
+                                    <span class="live-enroll-label">注册声音</span>
+                                </button>
+                                <span class="live-enroll-hint" id="liveEnrollHint" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label" data-i18n>开画面</div>
+                                <div class="settings-item-description" data-i18n>把屏幕或摄像头画面以 1fps 推送给模型</div>
+                            </div>
+                            <div class="live-mode-stack" id="liveVideoRow">
+                                <button class="chat-prompt-action live-video" id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled>
+                                    <i data-lucide="video"></i>
+                                    <span class="live-video-label">开画面</span>
+                                </button>
+                                <select class="live-video-source" id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled>
+                                    <option value="screen" data-i18n>屏幕</option>
+                                    <option value="camera" data-i18n>摄像头</option>
+                                </select>
+                                <span class="live-video-hint" id="liveVideoHint" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label" data-i18n>主动搭话</div>
+                                <div class="settings-item-description" data-i18n>无用户语音时周期性看画面，有值得说的就开口</div>
+                                <div class="settings-item-description" id="liveProactiveHint" role="status" aria-live="polite" style="margin-top: 4px;"></div>
+                            </div>
+                            <label class="toggle-switch" title="主动搭话：无用户语音时周期性看画面，有值得说的就开口">
+                                <input type="checkbox" id="liveProactiveToggle" aria-label="主动搭话" disabled>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="settings-item">
+                            <div>
+                                <div class="settings-item-label" data-i18n>快速预设</div>
+                                <div class="settings-item-description" data-i18n>常用提示词，点选即填入输入框</div>
+                            </div>
+                            <div class="live-mode-stack">
+                                <button class="chat-prompt-action" id="promptPresetBtn" title="快速预设" type="button" aria-label="快速预设">
+                                    <i data-lucide="sparkles"></i>
+                                </button>
+                                <div class="prompt-preset-inline" id="promptPresetMenu">
+                                    <button class="prompt-preset-option" type="button" data-label="请实时解说我的表情和动作" data-prompt="请实时解说我的表情和动作">
+                                        <span class="prompt-preset-copy">
+                                            <span class="zh">请实时解说我的表情和动作</span>
+                                            <span class="en">Describe my facial expressions and movements in real time</span>
+                                        </span>
+                                        <span class="check">✓</span>
+                                    </button>
+                                    <button class="prompt-preset-option" type="button" data-label="结合画面内容，生成一张水彩风格的图像" data-prompt="结合画面内容，生成一张水彩风格的图像">
+                                        <span class="prompt-preset-copy">
+                                            <span class="zh">结合画面内容，生成一张水彩风格的图像</span>
+                                            <span class="en">Generate a watercolor-style image based on the scene</span>
+                                        </span>
+                                        <span class="check">✓</span>
+                                    </button>
+                                    <button class="prompt-preset-option" type="button" data-label="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我" data-prompt="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我">
+                                        <span class="prompt-preset-copy">
+                                            <span class="zh">现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我</span>
+                                            <span class="en">Let's play a rapid-fire Q&amp;A game for 30 seconds; answer quickly and remind me when it ends</span>
+                                        </span>
+                                        <span class="check">✓</span>
+                                    </button>
+                                    <button class="prompt-preset-option" type="button" data-label="每当一个瓶子出现时，介绍它的样子" data-prompt="每当一个瓶子出现时，介绍它的样子">
+                                        <span class="prompt-preset-copy">
+                                            <span class="zh">每当一个瓶子出现时，介绍它的样子</span>
+                                            <span class="en">Whenever a bottle appears, describe what it looks like</span>
+                                        </span>
+                                        <span class="check">✓</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+<!-- Wake / ASR（2026-09-19 用户拍板：不是「外观」功能，归入「高级」）。
+     注意命名：本卡**不是**唤醒词配置。唤醒词在后端写死为 "bt"
+     （jarvis_config.py:162 wake_word / services/asr/jarvis/kws.py:29），
+     且 KWS 是自训模型（sherpa-onnx v4），换词需重新训练 —— 这是历史取舍。
+     本卡只做一件事：KWS 漏检时用本地 paraformer ASR 兜底唤醒。 -->
+                    <div class="settings-section collapsed" id="wakeAsrSection">
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" title="KWS 漏检时由本地 paraformer ASR 兜底唤醒" data-i18n-title="KWS 漏检时由本地 paraformer ASR 兜底唤醒">Wake / ASR</div>
+
+                        <div class="settings-item">
+                            <div style="flex: 1; min-width: 0;">
+                                <div class="settings-item-label">ASR辅助唤醒</div>
+                                <div class="settings-item-description">当关键词检测（KWS）漏掉 “bt” 时，由本地 paraformer ASR 兜底识别并触发唤醒。</div>
+                                <div class="settings-item-description" style="margin-top: 4px;">
+                                    由本地 paraformer 提供：<span id="asrModelName">—</span>
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="asrPromotionToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+            </div><!-- /#advancedPanel -->
 
             <!-- Column 1: Layout & Visual Effects -->
                 <div id="appearanceSection" style="display:contents">
                 <div>
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Layout</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="调整主区域上下顺序，以及 VLM 输出是否叠加在画面上" data-i18n-title="调整主区域上下顺序，以及 VLM 输出是否叠加在画面上">Layout</div>
 
                         <div class="settings-item">
                             <div>
@@ -327,13 +462,15 @@ limitations under the License.
                         </div>
                     </div>
 
+                    
+
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Visual Effects</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="新回复到达时的动画表现（弹入 / 辉光 / 淡出）" data-i18n-title="新回复到达时的动画表现（弹入 / 辉光 / 淡出）">Visual Effects</div>
 
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Pop-in Animation</div>
-                                <div class="settings-item-description">Scale animation when new VLM response arrives</div>
+                                <div class="settings-item-description" data-i18n>Scale animation when new VLM response arrives</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="popInToggle" checked>
@@ -368,7 +505,7 @@ limitations under the License.
                 <!-- Column 2: Input Colors & WebRTC -->
                 <div>
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Visual Style</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="彩色图标与输入框聚焦发光" data-i18n-title="彩色图标与输入框聚焦发光">Visual Style</div>
 
                         <div class="settings-item">
                             <div>
@@ -383,19 +520,19 @@ limitations under the License.
                     </div>
 
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">WebRTC</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" title="丢帧策略：延迟超过阈值即丢弃旧帧（0 = 不干预）" data-i18n-title="丢帧策略：延迟超过阈值即丢弃旧帧（0 = 不干预）">WebRTC</div>
 
                         <div class="settings-item">
                             <div style="flex: 1; min-width: 0;">
                                 <div class="settings-item-label">Max Video Latency (seconds)</div>
-                                <div class="settings-item-description">Drop old frames if delay exceeds this (0 = no intervention)</div>
+                                <div class="settings-item-description" data-i18n>Drop old frames if delay exceeds this (0 = no intervention)</div>
                             </div>
                             <input type="number" id="maxLatency" value="0" min="0" max="10.0" step="0.1" style="width: 80px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                         </div>
                     </div>
 
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Audio Output</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="是否为每条可见回复播放 TTS 语音" data-i18n-title="是否为每条可见回复播放 TTS 语音">Audio Output</div>
 
                         <div class="settings-item">
                             <div>
@@ -409,32 +546,15 @@ limitations under the License.
                         </div>
                     </div>
 
-                    <!-- [ASR promotion] ASR辅助唤醒 toggle (joyai-asr-promotion-ui) -->
-                    <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')">Wake / ASR</div>
-
-                        <div class="settings-item">
-                            <div style="flex: 1; min-width: 0;">
-                                <div class="settings-item-label">ASR辅助唤醒</div>
-                                <div class="settings-item-description">当关键词检测（KWS）漏掉 “bt” 时，由本地 paraformer ASR 兜底识别并触发唤醒。</div>
-                                <div class="settings-item-description" style="margin-top: 4px;">
-                                    由本地 paraformer 提供：<span id="asrModelName">—</span>
-                                </div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="asrPromotionToggle">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
+                    
 
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Background Model</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="后台委派求解器的开关、帧倍率与帧缓存上限" data-i18n-title="后台委派求解器的开关、帧倍率与帧缓存上限">Background Model</div>
 
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Enable delegation solver</div>
-                                <div class="settings-item-description">Run Qwen3.5-122B-A10B-FP8 for delegated questions, visual reasoning, and chart tasks in the background</div>
+                                <div class="settings-item-description" data-i18n>Run Qwen3.5-122B-A10B-FP8 for delegated questions, visual reasoning, and chart tasks in the background</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="backgroundEnabledToggle" checked>
@@ -445,7 +565,7 @@ limitations under the License.
                         <div class="settings-item">
                             <div style="flex: 1; min-width: 0;">
                                 <div class="settings-item-label" data-i18n>Frame multiplier</div>
-                                <div class="settings-item-description">Background frames per second relative to foreground streaming FPS</div>
+                                <div class="settings-item-description" data-i18n>Background frames per second relative to foreground streaming FPS</div>
                             </div>
                             <input type="number" id="backgroundFrameMultiplier" value="2" min="1" max="10" step="1" style="width: 80px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                         </div>
@@ -453,19 +573,19 @@ limitations under the License.
                         <div class="settings-item">
                             <div style="flex: 1; min-width: 0;">
                                 <div class="settings-item-label" data-i18n>Max background frames</div>
-                                <div class="settings-item-description">Recent background frame cache cap; default and maximum are 100</div>
+                                <div class="settings-item-description" data-i18n>Recent background frame cache cap; default and maximum are 100</div>
                             </div>
                             <input type="number" id="backgroundMaxFrames" value="100" min="1" max="100" step="1" style="width: 80px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                         </div>
                     </div>
 
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Debug</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="在页面上暴露请求/响应 JSON 与记忆状态" data-i18n-title="在页面上暴露请求/响应 JSON 与记忆状态">Debug</div>
 
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Show request payload</div>
-                                <div class="settings-item-description">Include request JSON (image + prompt) under the prompt area; collapsed by default</div>
+                                <div class="settings-item-description" data-i18n>Include request JSON (image + prompt) under the prompt area; collapsed by default</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="debugShowRequestPayload">
@@ -476,7 +596,7 @@ limitations under the License.
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Show response payload</div>
-                                <div class="settings-item-description">Include API response JSON under the VLM output; collapsed by default</div>
+                                <div class="settings-item-description" data-i18n>Include API response JSON under the VLM output; collapsed by default</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="debugShowResponsePayload">
@@ -487,7 +607,7 @@ limitations under the License.
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Show memory state</div>
-                                <div class="settings-item-description">Display mid-term and long-term memory content below VLM output</div>
+                                <div class="settings-item-description" data-i18n>Display mid-term and long-term memory content below VLM output</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="debugShowMemoryState">
@@ -498,11 +618,11 @@ limitations under the License.
 
                     <!-- [Local Wiki] F1: Network Proxy block (ADR-0012 §4, config-only for v1) -->
                     <div class="settings-section collapsed">
-                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n>Network Proxy</div>
+                        <div class="settings-section-title" onclick="this.parentElement.classList.toggle('collapsed')" data-i18n title="预留项，v1 流量仍直连（ADR-0012 §4）" data-i18n-title="预留项，v1 流量仍直连（ADR-0012 §4）">Network Proxy</div>
                         <div class="settings-item">
                             <div>
                                 <div class="settings-item-label" data-i18n>Enable proxy</div>
-                                <div class="settings-item-description">Reserve only; v1 traffic stays direct (ADR-0012 §4)</div>
+                                <div class="settings-item-description" data-i18n>Reserve only; v1 traffic stays direct (ADR-0012 §4)</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="proxyEnabledToggle">
@@ -521,9 +641,9 @@ limitations under the License.
                             </div>
                             <input type="number" id="proxyPort" value="7890" min="1" max="65535" step="1" style="width: 80px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
                         </div>
-                        <div style="display: flex; gap: 8px; margin-top: 8px;">
-                            <button class="icon-btn" id="proxyTestBtn" type="button" aria-label="Test connection"><i data-lucide="plug-zap"></i> Test</button>
-                            <button class="icon-btn" id="proxySaveBtn" type="button" aria-label="Save network settings"><i data-lucide="save"></i> Save</button>
+                        <div class="action-row">
+                            <button class="icon-btn" id="proxyTestBtn" type="button" aria-label="Test connection"><i data-lucide="plug-zap"></i> <span data-i18n>Test</span></button>
+                            <button class="icon-btn" id="proxySaveBtn" type="button" aria-label="Save network settings"><i data-lucide="save"></i> <span data-i18n>Save</span></button>
                         </div>
                         <div id="proxyStatus" class="input-hint" style="margin-top: 8px;"></div>
                     </div>
@@ -532,156 +652,213 @@ limitations under the License.
             <!-- Services (4 API selectors, v3.38) -->
             <div class="panel settings-root-panel" id="servicesPanel">
                 <div class="panel-header settings-root-header">
-                    <div class="panel-title">
+                    <div class="panel-title" title="LLM / 摘要 / ASR / Agent / 嵌入 等后端的连接参数" data-i18n-title="LLM / 摘要 / ASR / Agent / 嵌入 等后端的连接参数">
                         <span class="panel-icon"><i data-lucide="plug"></i></span>
-                        <span class="panel-title-text" data-i18n>模型 Model</span>
+                        <span class="panel-title-text" data-i18n>Model</span>
                     </div>
                 </div>
                 <div class="panel-content settings-root-content" id="servicesConfig">
-                    <div class="input-hint" style="margin-bottom: 12px;">Six pluggable backends. Save applies at runtime; no service restart.</div>
-                    <div class="service-row" data-service="llm" data-mode="cloud">
+                    <div class="input-hint" style="margin-bottom: 12px;" data-i18n>Five pluggable backends. Save applies at runtime; no service restart.</div>
+                    <!-- 2026-09-18（用户要求 A1）：主模型只保留「本地」模式。
+                         原因：视频分析用的主模型（JoyAI-VL-8B / llama-server）没有可用的
+                         云端等价物，对 LLM 槽位显示云端/本地切换会误导用户。
+                         故移除 .svc-seg，并把 data-mode 固定为 local。
+                         其余槽位（summary/asr/agent/embedding/tts）保留切换。 -->
+                    <div class="service-row" data-service="llm" data-mode="local">
                         <div class="service-row-header"><i data-lucide="brain"></i><span>LLM</span><span class="service-badge" id="badge-llm">--</span></div>
-                        <div class="svc-seg" data-slot="llm" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
-                            <span class="svc-seg-indicator"></span>
-                        </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-llm-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-llm-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-llm-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                        <!-- 2026-09-18（方案 X + 默认收起）：原「名称 + 加号 + 下拉」三件套
+                             被用户判定为不直观（"保存按钮在哪我都不知道"），此处替换为
+                             连接列表：默认收起，展开后每项一行（应用 / 删除）。
+                             点名不用原生 prompt（ADR-0020 §二.2 禁止交互路径依赖原生对话框）。 -->
+                        <div class="conn-mgr">
+                            <div class="conn-mgr-head">
+                                <button class="conn-toggle" id="svc-llm-conn-toggle" type="button" aria-expanded="false" aria-controls="svc-llm-conn-list">
+                                    <i data-lucide="link"></i>
+                                    <span>已保存的连接</span>
+                                    <span class="conn-count" id="svc-llm-conn-count">0</span>
+                                    <i data-lucide="chevron-down" class="conn-caret"></i>
+                                </button>
+                                <button class="icon-btn conn-save-btn" id="svc-llm-conn-save" type="button" title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接" data-i18n-title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接">
+                                    <i data-lucide="plus"></i><span>保存当前为连接</span>
+                                </button>
                             </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-llm-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-llm-provider-msg" role="status" aria-live="polite"></span>
+                            <div class="conn-list" id="svc-llm-conn-list" hidden></div>
+                            <div class="conn-name-row" id="svc-llm-conn-name-row" hidden>
+                                <input type="text" id="svc-llm-conn-name" placeholder="给这个连接起个名字（如：openrouter 生产）">
+                                <button class="icon-btn" id="svc-llm-conn-confirm" type="button"><i data-lucide="check"></i><span>确定</span></button>
+                                <button class="icon-btn" id="svc-llm-conn-cancel" type="button"><span>取消</span></button>
                             </div>
+                            <span class="provider-msg" id="svc-llm-provider-msg" role="status" aria-live="polite"></span>
                         </div>
                         <div class="local-hint" data-i18n>Local default endpoint · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-llm-api-base" placeholder="http://127.0.0.1:8070/v1"></div>
                         <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-llm-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
-                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-llm-model" placeholder="joyai-vl-interaction-preview"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-llm-test-btn" type="button" title="Test LLM connection" aria-label="Test LLM connection"><i data-lucide="plug-zap"></i><span id="svc-llm-test-label">Test</span></button>
+                        <div class="form-group"><label data-i18n>Model</label><div class="model-field"><input type="text" id="svc-llm-model" placeholder="joyai-vl-interaction-preview" list="svc-llm-model-options" data-model-input><datalist id="svc-llm-model-options"></datalist><button class="icon-btn model-fetch-btn" id="svc-llm-model-fetch" type="button" title="从上游获取可用模型列表" data-i18n-title="从上游获取可用模型列表" data-model-fetch="llm"><i data-lucide="download"></i><span data-i18n>获取模型</span></button></div></div>
+                        <div class="action-row">
+                            <button class="icon-btn" id="svc-llm-test-btn" type="button" title="测试主模型连通性" data-i18n-title="测试主模型连通性"><i data-lucide="plug-zap"></i><span id="svc-llm-test-label" data-i18n>Test</span></button>
                             <span id="svc-llm-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
                     <div class="service-row" data-service="summary" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="file-text"></i><span data-i18n>Summary</span><span class="service-badge" id="badge-summary">--</span></div>
                         <div class="svc-seg" data-slot="summary" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true" data-i18n>Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false" data-i18n>Local</button>
                             <span class="svc-seg-indicator"></span>
                         </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-summary-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-summary-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-summary-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                        <!-- 2026-09-18（方案 X + 默认收起）：原「名称 + 加号 + 下拉」三件套
+                             被用户判定为不直观（"保存按钮在哪我都不知道"），此处替换为
+                             连接列表：默认收起，展开后每项一行（应用 / 删除）。
+                             点名不用原生 prompt（ADR-0020 §二.2 禁止交互路径依赖原生对话框）。 -->
+                        <div class="conn-mgr">
+                            <div class="conn-mgr-head">
+                                <button class="conn-toggle" id="svc-summary-conn-toggle" type="button" aria-expanded="false" aria-controls="svc-summary-conn-list">
+                                    <i data-lucide="link"></i>
+                                    <span>已保存的连接</span>
+                                    <span class="conn-count" id="svc-summary-conn-count">0</span>
+                                    <i data-lucide="chevron-down" class="conn-caret"></i>
+                                </button>
+                                <button class="icon-btn conn-save-btn" id="svc-summary-conn-save" type="button" title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接" data-i18n-title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接">
+                                    <i data-lucide="plus"></i><span>保存当前为连接</span>
+                                </button>
                             </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-summary-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-summary-provider-msg" role="status" aria-live="polite"></span>
+                            <div class="conn-list" id="svc-summary-conn-list" hidden></div>
+                            <div class="conn-name-row" id="svc-summary-conn-name-row" hidden>
+                                <input type="text" id="svc-summary-conn-name" placeholder="给这个连接起个名字（如：openrouter 生产）">
+                                <button class="icon-btn" id="svc-summary-conn-confirm" type="button"><i data-lucide="check"></i><span>确定</span></button>
+                                <button class="icon-btn" id="svc-summary-conn-cancel" type="button"><span>取消</span></button>
                             </div>
+                            <span class="provider-msg" id="svc-summary-provider-msg" role="status" aria-live="polite"></span>
                         </div>
-                        <div class="local-hint" data-i18n>Local default endpoint · no API key</div>
-                        <div class="form-group" hidden><label data-i18n>Provider</label><select id="svc-summary-provider"><option value="openrouter">openrouter</option><option value="minimax">minimax</option></select></div>
+                        <div class="local-hint" data-i18n data-i18n>Local default endpoint · no API key</div>
+                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-summary-provider"><option value="openrouter">openrouter</option><option value="minimax">minimax</option></select></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-summary-api-base" placeholder="https://openrouter.ai/api/v1"></div>
                         <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-summary-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
-                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-summary-model" placeholder="google/gemma-4-26b-a4b-it:free"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-summary-test-btn" type="button" title="Test Summary connection" aria-label="Test Summary connection"><i data-lucide="plug-zap"></i><span id="svc-summary-test-label">Test</span></button>
+                        <div class="form-group"><label data-i18n>Model</label><div class="model-field"><input type="text" id="svc-summary-model" placeholder="google/gemma-4-26b-a4b-it:free" list="svc-summary-model-options" data-model-input><datalist id="svc-summary-model-options"></datalist><button class="icon-btn model-fetch-btn" id="svc-summary-model-fetch" type="button" title="从上游获取可用模型列表" data-i18n-title="从上游获取可用模型列表" data-model-fetch="summary"><i data-lucide="download"></i><span data-i18n>获取模型</span></button></div></div>
+                        <div class="action-row">
+                            <button class="icon-btn" id="svc-summary-test-btn" type="button" title="Test Summary connection" aria-label="Test Summary connection"><i data-lucide="plug-zap"></i><span id="svc-summary-test-label" data-i18n>Test</span></button>
                             <span id="svc-summary-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
-                    <div class="service-row" data-service="asr" data-mode="cloud">
+                    <div class="service-row collapsed" data-service="asr" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="mic"></i><span>ASR</span><span class="service-badge" id="badge-asr">--</span></div>
                         <div class="svc-seg" data-slot="asr" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true" data-i18n>Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false" data-i18n>Local</button>
                             <span class="svc-seg-indicator"></span>
                         </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-asr-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-asr-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-asr-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                        <!-- 2026-09-18（方案 X + 默认收起）：原「名称 + 加号 + 下拉」三件套
+                             被用户判定为不直观（"保存按钮在哪我都不知道"），此处替换为
+                             连接列表：默认收起，展开后每项一行（应用 / 删除）。
+                             点名不用原生 prompt（ADR-0020 §二.2 禁止交互路径依赖原生对话框）。 -->
+                        <div class="conn-mgr">
+                            <div class="conn-mgr-head">
+                                <button class="conn-toggle" id="svc-asr-conn-toggle" type="button" aria-expanded="false" aria-controls="svc-asr-conn-list">
+                                    <i data-lucide="link"></i>
+                                    <span>已保存的连接</span>
+                                    <span class="conn-count" id="svc-asr-conn-count">0</span>
+                                    <i data-lucide="chevron-down" class="conn-caret"></i>
+                                </button>
+                                <button class="icon-btn conn-save-btn" id="svc-asr-conn-save" type="button" title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接" data-i18n-title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接">
+                                    <i data-lucide="plus"></i><span>保存当前为连接</span>
+                                </button>
                             </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-asr-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-asr-provider-msg" role="status" aria-live="polite"></span>
+                            <div class="conn-list" id="svc-asr-conn-list" hidden></div>
+                            <div class="conn-name-row" id="svc-asr-conn-name-row" hidden>
+                                <input type="text" id="svc-asr-conn-name" placeholder="给这个连接起个名字（如：openrouter 生产）">
+                                <button class="icon-btn" id="svc-asr-conn-confirm" type="button"><i data-lucide="check"></i><span>确定</span></button>
+                                <button class="icon-btn" id="svc-asr-conn-cancel" type="button"><span>取消</span></button>
                             </div>
+                            <span class="provider-msg" id="svc-asr-provider-msg" role="status" aria-live="polite"></span>
                         </div>
                         <div class="local-hint" data-i18n>Local Whisper / FunASR · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-asr-api-base" placeholder="https://api.siliconflow.cn/v1/audio/transcriptions"></div>
-                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-asr-model" placeholder="ggml-large-v3-turbo"></div>
+                        <div class="form-group"><label data-i18n>Model</label><div class="model-field"><input type="text" id="svc-asr-model" placeholder="ggml-large-v3-turbo" list="svc-asr-model-options" data-model-input><datalist id="svc-asr-model-options"></datalist><button class="icon-btn model-fetch-btn" id="svc-asr-model-fetch" type="button" title="从上游获取可用模型列表" data-i18n-title="从上游获取可用模型列表" data-model-fetch="asr"><i data-lucide="download"></i><span data-i18n>获取模型</span></button></div></div>
                         <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-asr-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-asr-test-btn" type="button" title="Test ASR connection" aria-label="Test ASR connection"><i data-lucide="plug-zap"></i><span id="svc-asr-test-label">Test</span></button>
+                        <div class="action-row">
+                            <button class="icon-btn" id="svc-asr-test-btn" type="button" title="Test ASR connection" aria-label="Test ASR connection"><i data-lucide="plug-zap"></i><span id="svc-asr-test-label" data-i18n>Test</span></button>
                             <span id="svc-asr-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
                     <!-- N7.1: agent / embedding provider slots (hot-switch via
                          /api/bg-agent/provider/route + memory-store /v1/settings/embedding). -->
-                    <div class="service-row" data-service="agent" data-mode="cloud">
-                        <div class="service-row-header"><i data-lucide="bot"></i><span>Agent</span><span class="service-badge" id="badge-agent">--</span></div>
-                        <div class="svc-seg" data-slot="agent" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
-                            <span class="svc-seg-indicator"></span>
-                        </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-agent-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-agent-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-agent-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
-                            </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-agent-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-agent-provider-msg" role="status" aria-live="polite"></span>
-                            </div>
-                        </div>
-                        <div class="local-hint" data-i18n>Local agent · no API key</div>
-                        <div class="form-group" hidden><label data-i18n>Provider</label><select id="svc-agent-provider"><option value="codex">codex</option><option value="hermes">hermes</option></select></div>
-                        <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-agent-api-base" placeholder="optional (remote agent)"></div>
-                        <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-agent-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-agent-test-btn" type="button" title="Test Agent connection" aria-label="Test Agent connection"><i data-lucide="plug-zap"></i><span id="svc-agent-test-label">Test</span></button>
-                            <span id="svc-agent-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
-                        </div>
-                    </div>
-                    <div class="service-row" data-service="embedding" data-mode="cloud">
+                    <div class="service-row collapsed" data-service="embedding" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="layers"></i><span>Embedding</span><span class="service-badge" id="badge-embedding">--</span></div>
                         <div class="svc-seg" data-slot="embedding" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true" data-i18n>Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false" data-i18n>Local</button>
                             <span class="svc-seg-indicator"></span>
                         </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-embedding-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-embedding-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-embedding-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                        <!-- 2026-09-18（方案 X + 默认收起）：原「名称 + 加号 + 下拉」三件套
+                             被用户判定为不直观（"保存按钮在哪我都不知道"），此处替换为
+                             连接列表：默认收起，展开后每项一行（应用 / 删除）。
+                             点名不用原生 prompt（ADR-0020 §二.2 禁止交互路径依赖原生对话框）。 -->
+                        <div class="conn-mgr">
+                            <div class="conn-mgr-head">
+                                <button class="conn-toggle" id="svc-embedding-conn-toggle" type="button" aria-expanded="false" aria-controls="svc-embedding-conn-list">
+                                    <i data-lucide="link"></i>
+                                    <span>已保存的连接</span>
+                                    <span class="conn-count" id="svc-embedding-conn-count">0</span>
+                                    <i data-lucide="chevron-down" class="conn-caret"></i>
+                                </button>
+                                <button class="icon-btn conn-save-btn" id="svc-embedding-conn-save" type="button" title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接" data-i18n-title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接">
+                                    <i data-lucide="plus"></i><span>保存当前为连接</span>
+                                </button>
                             </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-embedding-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-embedding-provider-msg" role="status" aria-live="polite"></span>
+                            <div class="conn-list" id="svc-embedding-conn-list" hidden></div>
+                            <div class="conn-name-row" id="svc-embedding-conn-name-row" hidden>
+                                <input type="text" id="svc-embedding-conn-name" placeholder="给这个连接起个名字（如：openrouter 生产）">
+                                <button class="icon-btn" id="svc-embedding-conn-confirm" type="button"><i data-lucide="check"></i><span>确定</span></button>
+                                <button class="icon-btn" id="svc-embedding-conn-cancel" type="button"><span>取消</span></button>
                             </div>
+                            <span class="provider-msg" id="svc-embedding-provider-msg" role="status" aria-live="polite"></span>
                         </div>
                         <div class="local-hint" data-i18n>Local bge-m3 · no API key</div>
-                        <div class="form-group" hidden><label data-i18n>Provider</label><select id="svc-embedding-provider"><option value="siliconflow">siliconflow</option><option value="local">local</option><option value="nvidia">nvidia</option></select></div>
+                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-embedding-provider"><option value="siliconflow">siliconflow</option><option value="local">local</option><option value="nvidia">nvidia</option></select></div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-embedding-api-base" placeholder="optional"></div>
-                        <div class="form-group"><label data-i18n>Model</label><input type="text" id="svc-embedding-model" placeholder="BAAI/bge-m3"></div>
+                        <div class="form-group"><label data-i18n>Model</label><div class="model-field"><input type="text" id="svc-embedding-model" placeholder="BAAI/bge-m3" list="svc-embedding-model-options" data-model-input><datalist id="svc-embedding-model-options"></datalist><button class="icon-btn model-fetch-btn" id="svc-embedding-model-fetch" type="button" title="从上游获取可用模型列表" data-i18n-title="从上游获取可用模型列表" data-model-fetch="embedding"><i data-lucide="download"></i><span data-i18n>获取模型</span></button></div></div>
                         <div class="form-group" data-local-hide><label data-i18n>API Key</label><input type="password" id="svc-embedding-api-key" placeholder="optional" data-i18n-placeholder="optional"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-embedding-test-btn" type="button" title="Test Embedding connection" aria-label="Test Embedding connection"><i data-lucide="plug-zap"></i><span id="svc-embedding-test-label">Test</span></button>
+                        <div class="action-row">
+                            <button class="icon-btn" id="svc-embedding-test-btn" type="button" title="Test Embedding connection" aria-label="Test Embedding connection"><i data-lucide="plug-zap"></i><span id="svc-embedding-test-label" data-i18n>Test</span></button>
                             <span id="svc-embedding-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+
+                    <div class="action-row">
                         <button class="icon-btn" id="svcSaveBtn" title="Save all service configs and probe" aria-label="Save all service configs and probe"><i data-lucide="save"></i> Save</button>
                         <button class="icon-btn" id="svcProbeBtn" title="Re-probe all services" aria-label="Re-probe all services"><i data-lucide="activity"></i> Probe</button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- 2026-09-18（用户要求）：Agent 从「模型」大类分离为独立面板。
+                 原因见 services_config.py:53-56 —— agent 是后台委派求解器（codex/hermes），
+                 不是模型推理服务，放进「模型」会误导用户去填模型地址/密钥。 -->
+            <div class="panel settings-root-panel" id="agentPanel">
+                <div class="panel-header settings-root-header">
+                    <div class="panel-title" title="后台委派求解器：外接 Hermes / Codex 的 gateway 服务处理复杂任务" data-i18n-title="后台委派求解器：外接 Hermes / Codex 的 gateway 服务处理复杂任务">
+                        <span class="panel-icon"><i data-lucide="bot"></i></span>
+                        <span class="panel-title-text">委派</span>
+                    </div>
+                </div>
+                <div class="panel-content settings-root-content" id="agentConfig">
+                    <div class="input-hint" style="margin-bottom: 12px;">复杂任务（代码执行、工具调用）交给外部 Agent 应用处理，主对话不受其影响。Agent 应用需先由其 gateway 暴露 HTTP 服务。</div>
+                    <div class="service-row" data-service="agent" data-mode="cloud">
+                        <div class="service-row-header"><i data-lucide="bot"></i><span>委派求解器</span><span class="service-badge" id="badge-agent">--</span></div>
+                        <!-- Agent 不是模型：它是后台委派后端（外接 codex / hermes），
+                             经 background-agent POST /v1/provider/route 热切，不走模型推理协议。
+                             故此处只保留「选哪个 provider」这一真值源，
+                             以及可选的远程 agent 地址（后端字段确实存在）。
+                             详见 services_config.py:53-56 与 _PROVIDER_CHOICES:106-110。 -->
+                        <div class="form-group"><label data-i18n>Provider</label><select id="svc-agent-provider"><option value="codex">codex</option><option value="hermes">hermes</option></select></div>
+                        <div class="form-group"><label>后端服务地址 <span class="opt-tag">可选</span></label><input type="text" id="svc-agent-api-base" placeholder="http://127.0.0.1:8079"></div>
+                        <div class="input-hint">Agent 应用（Hermes / Codex）各自经其 gateway 暴露 HTTP 服务；此处填该 gateway 地址，测试按钮会探测其 <code>/health</code> 是否可达。本机默认 <code>127.0.0.1:8079</code>，留空即用默认。</div>
+                        <div class="action-row">
+                            <button class="icon-btn" id="svc-agent-test-btn" type="button" title="探测 Agent gateway 的 /health 是否可达" data-i18n-title="探测 Agent gateway 的 /health 是否可达"><i data-lucide="plug-zap"></i><span id="svc-agent-test-label" data-i18n>Test</span></button>
+                            <span id="svc-agent-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -689,34 +866,47 @@ limitations under the License.
             <!-- Voice panel: TTS only (moved out of servicesPanel so the settings nav can show it independently) -->
             <div class="panel settings-root-panel" id="voicePanel">
                 <div class="panel-header settings-root-header">
-                    <div class="panel-title">
+                    <div class="panel-title" title="TTS 后端与音色设置" data-i18n-title="TTS 后端与音色设置">
                         <span class="panel-icon"><i data-lucide="volume-2"></i></span>
-                        <span class="panel-title-text" data-i18n>语音 Voice</span>
+                        <span class="panel-title-text">语音</span>
                     </div>
                 </div>
                 <div class="panel-content settings-root-content" id="ttsSectionCard">
                     <div class="service-row" data-service="tts" data-mode="cloud">
                         <div class="service-row-header"><i data-lucide="volume-2"></i><span>TTS</span><span class="service-badge" id="badge-tts">--</span></div>
                         <div class="svc-seg" data-slot="tts" role="tablist" aria-label="Local or cloud">
-                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true">Cloud</button>
-                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false">Local</button>
+                            <button type="button" class="svc-seg-btn on" data-mode="cloud" role="tab" aria-selected="true" data-i18n>Cloud</button>
+                            <button type="button" class="svc-seg-btn" data-mode="local" role="tab" aria-selected="false" data-i18n>Local</button>
                             <span class="svc-seg-indicator"></span>
                         </div>
-                        <div class="provider-mgr">
-                            <div class="provider-mgr-row">
-                                <input id="svc-tts-provider-name" placeholder="Preset name" data-i18n-placeholder="Preset name">
-                                <button class="provider-add" id="svc-tts-provider-add" type="button" title="Save this set" aria-label="Save this set">+</button>
-                                <select class="provider-pick" id="svc-tts-provider-pick" aria-label="Saved presets"><option value="">— saved presets —</option></select>
+                        <!-- 2026-09-18（方案 X + 默认收起）：原「名称 + 加号 + 下拉」三件套
+                             被用户判定为不直观（"保存按钮在哪我都不知道"），此处替换为
+                             连接列表：默认收起，展开后每项一行（应用 / 删除）。
+                             点名不用原生 prompt（ADR-0020 §二.2 禁止交互路径依赖原生对话框）。 -->
+                        <div class="conn-mgr">
+                            <div class="conn-mgr-head">
+                                <button class="conn-toggle" id="svc-tts-conn-toggle" type="button" aria-expanded="false" aria-controls="svc-tts-conn-list">
+                                    <i data-lucide="link"></i>
+                                    <span>已保存的连接</span>
+                                    <span class="conn-count" id="svc-tts-conn-count">0</span>
+                                    <i data-lucide="chevron-down" class="conn-caret"></i>
+                                </button>
+                                <button class="icon-btn conn-save-btn" id="svc-tts-conn-save" type="button" title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接" data-i18n-title="把当前填写的地址 / 密钥 / 模型保存为一个命名连接">
+                                    <i data-lucide="plus"></i><span>保存当前为连接</span>
+                                </button>
                             </div>
-                            <div class="provider-actions">
-                                <button class="provider-del" id="svc-tts-provider-del" type="button">Delete</button>
-                                <span class="provider-msg" id="svc-tts-provider-msg" role="status" aria-live="polite"></span>
+                            <div class="conn-list" id="svc-tts-conn-list" hidden></div>
+                            <div class="conn-name-row" id="svc-tts-conn-name-row" hidden>
+                                <input type="text" id="svc-tts-conn-name" placeholder="给这个连接起个名字（如：openrouter 生产）">
+                                <button class="icon-btn" id="svc-tts-conn-confirm" type="button"><i data-lucide="check"></i><span>确定</span></button>
+                                <button class="icon-btn" id="svc-tts-conn-cancel" type="button"><span>取消</span></button>
                             </div>
+                            <span class="provider-msg" id="svc-tts-provider-msg" role="status" aria-live="polite"></span>
                         </div>
                         <div class="local-hint" data-i18n>Local Jarvis TTS · no API key</div>
                         <div class="form-group"><label data-i18n>API Base URL</label><input type="text" id="svc-tts-api-base" placeholder="http://127.0.0.1:8985/v1/synthesize"></div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
-                            <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label">Test</span></button>
+                        <div class="action-row">
+                            <button class="icon-btn" id="svc-tts-test-btn" type="button" title="Test TTS connection" aria-label="Test TTS connection"><i data-lucide="plug-zap"></i><span id="svc-tts-test-label" data-i18n>Test</span></button>
                             <span id="svc-tts-test-status" class="input-hint" style="margin: 0;" role="status" aria-live="polite"></span>
                         </div>
                     </div>
@@ -729,44 +919,41 @@ limitations under the License.
                  GET response by joy_ws.js (window.JoyWs.loadMemoryStoreSettings). -->
             <div class="panel settings-root-panel" id="memoryPanel">
                 <div class="panel-header settings-root-header">
-                    <div class="panel-title">
+                    <div class="panel-title" title="记忆存储的嵌入与向量服务" data-i18n-title="记忆存储的嵌入与向量服务">
                         <span class="panel-icon"><i data-lucide="database"></i></span>
-                        <span class="panel-title-text" data-i18n>记忆 Memory</span>
+                        <span class="panel-title-text">记忆</span>
                     </div>
                 </div>
                 <div class="panel-content settings-root-content" id="memoryStoreSub">
                     <div class="memory-store-sub">
                         <div class="service-row-header" style="margin-top:0;"><i data-lucide="database"></i><span data-i18n>Memory Store</span></div>
-                        <div class="input-hint" style="margin:6px 0 10px;">Embedding / vector provider settings. Saved to the memory-store network config.</div>
+                        <div class="input-hint" style="margin:6px 0 10px;" data-i18n>Embedding / vector provider settings. Saved to the memory-store network config.</div>
                         <div id="memoryStoreForm"><!-- dynamically rendered by joy_ws.js --></div>
                         <div id="memoryStoreError" role="alert" aria-live="assertive" style="display:none; color: var(--error-color, #e5484d); white-space: pre-wrap; margin-top: 8px; font-size: 13px;"></div>
                         <div id="memoryStoreOk" role="status" aria-live="polite" style="display:none; color: var(--ok-color, #3fb950); margin-top: 8px; font-size: 13px;"></div>
-                        <div style="display: flex; gap: 8px; margin-top: 10px;">
-                            <button class="icon-btn" id="memoryStoreSaveBtn" type="button" aria-label="Save Memory Store settings"><i data-lucide="save"></i> Save Memory Store</button>
+                        <div class="action-row">
+                            <button class="icon-btn" id="memoryStoreSaveBtn" title="保存并写入 memory-store 网络配置" data-i18n-title="保存并写入 memory-store 网络配置" type="button" aria-label="Save Memory Store settings"><i data-lucide="save"></i> <span data-i18n>Save Memory Store</span></button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- v6-lite.22 — 输入 section：与「模型」section 平级，承载 camBtn/liveVideoBtn 等已迁移的视频控件
-                 内容来自 captureOverlay（同 source of truth），但 popover 入口 camBtn 已被 v6-lite.22 隐藏，
-                 这里给用户一个稳定的设置面板入口。 -->
-            <div class="settings-section" id="capSettingCard" style="grid-column: 1 / -1;">
-                <div class="settings-section-title" data-i18n>Input / Video Source</div>
-                <div class="input-hint" style="margin: 6px 0 10px;">Pick a video source for live analysis. Same controls as the in-app capture popover; this panel is the stable entry point.</div>
-                <div id="capSettingCardBody"><!-- popover 控件由 wiki 团队落地的 capture_webcam/rtsp/screen 复用，结构同 captureOverlay --></div>
-            </div>
+            <!-- 2026-09-18：「输入 Input」设置面板已删除（用户要求 C2）。
+                 原因：该面板（#capSettingCard）内容为空壳 —— #capSettingCardBody
+                 只有一句占位注释，实际控件从未落地；且其功能与聊天输入栏内
+                 已有的「视频」按钮（#camBtn → #captureOverlay）重复。
+                 同步删除了左侧导航项（data-panel="input"）与 PANEL_ROOTS.input 映射。 -->
 
             <!-- [Local Wiki] F4: Knowledge Base panel (ADR-0012 §7.3) -->
             <div class="panel settings-root-panel" id="wikiPanel">
                 <div class="panel-header settings-root-header">
-                    <div class="panel-title">
+                    <div class="panel-title" title="本地知识库语料的导入与同步" data-i18n-title="本地知识库语料的导入与同步">
                         <span class="panel-icon"><i data-lucide="book-open"></i></span>
-                        <span class="panel-title-text" data-i18n>知识库 Wiki</span>
+                        <span class="panel-title-text">知识库</span>
                     </div>
                 </div>
                 <div class="panel-content settings-root-content" id="knowledgeBase">
-                    <div class="input-hint" style="margin-bottom: 8px;">Local wiki corpora (per game). Sync a <code>wiki/&lt;game&gt;</code> folder into a vector namespace.</div>
+                    <div class="input-hint" style="margin-bottom: 8px;" data-i18n>Local wiki corpora (per game). Sync a <code>wiki/&lt;game&gt;</code> folder into a vector namespace.</div>
                     <div id="namespaceList" class="namespace-list"></div>
                     <div id="namespaceEmpty" class="input-hint" style="display: none;" data-i18n>No knowledge bases yet.</div>
 
@@ -779,14 +966,14 @@ limitations under the License.
                             <label data-i18n>Paste wiki markdown</label>
                             <textarea id="wikiPaste" rows="4" placeholder="Paste攻略 markdown here..."></textarea>
                         </div>
-                        <button class="icon-btn" id="wikiPasteBtn" type="button" aria-label="Ingest pasted markdown"><i data-lucide="upload"></i> Ingest</button>
+                        <div class="action-row"><button class="icon-btn" id="wikiPasteBtn" title="将粘贴的 Markdown 导入为向量命名空间" data-i18n-title="将粘贴的 Markdown 导入为向量命名空间" type="button" aria-label="Ingest pasted markdown"><i data-lucide="upload"></i> <span data-i18n>Ingest</span></button></div>
                     </div>
 
                     <div class="form-group" style="margin-top: 12px;">
-                        <label>Sync folder path (wiki/&lt;game&gt;)</label>
+                        <label data-i18n>Sync folder path (wiki/&lt;game&gt;)</label>
                         <input type="text" id="wikiSyncPath" placeholder="/path/to/wiki/elden-ring">
-                        <div style="display: flex; gap: 8px; margin-top: 8px;">
-                            <button class="icon-btn" id="wikiSyncBtn" type="button" aria-label="Sync folder"><i data-lucide="refresh-cw"></i> Sync</button>
+                        <div class="action-row">
+                            <button class="icon-btn" id="wikiSyncBtn" title="同步 wiki/&lt;游戏&gt; 目录到向量库" data-i18n-title="同步 wiki/&lt;游戏&gt; 目录到向量库" type="button" aria-label="Sync folder"><i data-lucide="refresh-cw"></i> <span data-i18n>Sync</span></button>
                             <label style="display: flex; align-items: center; gap: 4px;">
                                 <input type="checkbox" id="wikiDropFirst"> <span class="input-hint" style="margin: 0;" data-i18n>Drop first</span>
                             </label>
@@ -797,10 +984,12 @@ limitations under the License.
             </div>
             <!-- v6-lite.22 — 关于：版本、链接、授权（about footer 锚点对应 nav-item "关于 About"） -->
             <div class="settings-section" id="aboutFooter" style="grid-column: 1 / -1;">
-                <div class="settings-section-title" data-i18n>About</div>
+                <div class="settings-section-title" data-i18n title="版本与开源许可" data-i18n-title="版本与开源许可">About</div>
                 <div class="input-hint" style="margin: 6px 0 10px;">
-                    JoyAI VL Interaction · v6-lite.22<br>
-                    MIT-licensed open source. See <a href="https://github.com/" target="_blank" rel="noopener" style="color:var(--brand-bright);">repository</a> for issues, roadmap, and changelog.
+                    <!-- 2026-09-18：原先整段含 <br>/<a>，applyUiI18n 用 textContent 取 key
+                         会带上标签文本、无法命中词表。拆成两个可独立翻译的节点。 -->
+                    <div><span>JoyAI VL Interaction</span> · v6-lite.22</div>
+                    <div><span data-i18n>MIT-licensed open source. See</span> <a href="https://github.com/" target="_blank" rel="noopener" style="color:var(--brand-bright);" data-i18n>repository</a> <span data-i18n>for issues, roadmap, and changelog.</span></div>
                 </div>
             </div>
         </div>
@@ -834,11 +1023,11 @@ limitations under the License.
         <div class="main-content">
             <!-- Video Feed -->
             <div class="video-card" id="videoCard">
-                <!-- 视频工具栏（右上）：镜像、切换前后置、全屏 —— 全部收纳在 .video-tools 中 -->
+                <!-- 视频工具栏（右上）：切换前后置、全屏 —— 全部收纳在 .video-tools 中 -->
                 <div class="video-tools">
-                    <button class="video-control-btn" id="mirrorBtn" title="Mirror video" aria-label="Mirror video">
-                        <i data-lucide="flip-horizontal"></i>
-                    </button>
+                    <!-- #mirrorBtn（镜像翻转）已删除（2026-09-18，用户要求）。
+                         同时移除了 index.html 中的 mirrorBtn 常量声明与 click 绑定，
+                         以及 videoElement 的 .mirrored 类切换逻辑。 -->
                     <button class="quick-camera-btn" id="quickCameraBtn" title="切换前置/后置" type="button" aria-label="切换前置/后置">
                         <i data-lucide="camera"></i>
                         <span id="quickCameraLabel">后置</span>
@@ -850,13 +1039,19 @@ limitations under the License.
 
                 <div class="fullscreen-prompt-overlay" id="fullscreenPromptOverlay"></div>
 
-                <!-- VLM Output Overlay (shown in fullscreen mode) -->
-                <div class="fullscreen-vlm-overlay" id="fullscreenVlmOverlay">
+                <!-- VLM Output Overlay (shown in fullscreen mode)
+                     2026-09-19（用户要求）：占位文案「Ready/就绪」已删除。
+                     它是 #fullscreenVlmContent 的空态兜底，但外框恒常显示，
+                     表现为"空盒子写着就绪"，影响观感。
+                     现在改为：无字幕内容时整个浮层收起（见 syncVlmToFullscreen 的 is-empty）。
+                     #fullscreenVlmContent / #fullscreenVlmMetrics 的 id 保留
+                     （前者是字幕文本节点，后者被 syncVlmToFullscreen 写入指标）。 -->
+                <div class="fullscreen-vlm-overlay is-empty" id="fullscreenVlmOverlay">
                     <div class="vlm-title">
                         <i data-lucide="bot"></i>
                         VLM Output
                     </div>
-                    <div class="vlm-content" id="fullscreenVlmContent" data-i18n>Ready</div>
+                    <div class="vlm-content" id="fullscreenVlmContent"></div>
                     <div class="vlm-metrics" id="fullscreenVlmMetrics"></div>
                 </div>
 
@@ -870,105 +1065,6 @@ limitations under the License.
 
             <!-- Generation Result -->
             <div class="result-card" id="vlmOutputCard">
-                <div class="result-header">
-                    <div class="result-header-left">
-                        <div class="result-title">
-                            <i data-lucide="lock"></i> <span data-i18n>实时输出</span>
-                        </div>
-                        <div class="result-subtitle" style="display: none;" aria-hidden="true">
-                            Model: <span id="modelName" style="font-weight: 600; color: var(--accent-color);">--</span>
-                        </div>
-                        <div class="tts-speaking-line" id="ttsSpeakingLine">
-                            <strong data-i18n>Speaking:</strong> <span id="ttsSpeakingText"></span>
-                        </div>
-                    </div>
-                    <div class="result-header-metrics">
-                        <div class="bt-latency-inline" id="btLatencyInline" aria-label="BT chain latency">
-                            <span class="bt-latency-chip">MIC <strong id="btMicLevelValue">--</strong></span>
-                            <span class="bt-latency-chip" title="BT listening input device" data-i18n-title="BT listening input device">INPUT <strong id="btMicDeviceValue">--</strong></span>
-                            <span class="bt-latency-chip">ASR <strong id="btAsrLatencyValue">--</strong></span>
-                            <span class="bt-latency-chip">LLM <strong id="btLlmLatencyValue">--</strong></span>
-                            <span class="bt-latency-chip">TTS <strong id="btTtsLatencyValue">--</strong></span>
-                            <span class="bt-latency-chip">E2E <strong id="btE2eLatencyValue">--</strong></span>
-                            <span class="bt-latency-chip" title="监听链路麦克风增益 (Web Audio GainNode)，数值高 = KWS 输入能量强，但太大会削顶">GAIN <select id="btMicGainSelect" style="background:transparent;border:0;color:inherit;font-weight:600;cursor:pointer;font-size:inherit">
-                                <option value="1.0">1.0x</option>
-                                <option value="1.5" selected>1.5x</option>
-                                <option value="2.0">2.0x</option>
-                                <option value="2.5">2.5x</option>
-                                <option value="3.0">3.0x</option>
-                            </select></span>
-                        </div>
-                        <div class="metrics-inline" id="metricsInline" style="display: none;">
-                            <div class="metric-item">
-                                <span>Latency:</span>
-                                <span class="metric-value" id="latencyValue">--</span>
-                                <span>ms</span>
-                            </div>
-                            <div class="metric-item">
-                                <span>Avg:</span>
-                                <span class="metric-value" id="avgLatencyValue">--</span>
-                                <span>ms</span>
-                            </div>
-                            <div class="metric-item">
-                                <span>Count:</span>
-                                <span class="metric-value" id="countValue">--</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="result-header-actions">
-                        <button class="ghost-btn" id="mdToggleHeader" type="button" title="Toggle Markdown Rendering" aria-label="Toggle Markdown">
-                            <i data-lucide="code"></i><span>MD</span>
-                        </button>
-                        <button class="ghost-btn" id="copyBtnHeader" type="button" title="Copy to clipboard" aria-label="Copy">
-                            <i data-lucide="copy"></i><span data-i18n>复制</span>
-                        </button>
-                    </div>
-            </div>
-
-                <div class="result-prompt" id="currentPrompt" style="display: none;"></div>
-                <div id="requestPayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
-                    <details style="margin: 0;">
-                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);">Request payload (debug)</summary>
-                        <pre id="requestPayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </details>
-                </div>
-                <div class="result-text vlm-history-shell" id="resultText">
-                    <button class="markdown-toggle-embedded" id="markdownToggle" title="Toggle Markdown Rendering" aria-label="Toggle Markdown Rendering">
-                        <span id="markdownIcon"><i data-lucide="code"></i></span>
-                        <span id="markdownText">Markdown</span>
-                    </button>
-                    <button class="copy-button-embedded" id="copyButton" title="Copy to clipboard" aria-label="Copy to clipboard">
-                        <i data-lucide="copy"></i>
-                    </button>
-                    <div class="result-text-content vlm-history" id="resultTextContent">
-                        <div class="vlm-history-empty-state" id="vlmHistoryEmpty">
-                            <div class="empty-emoji" aria-hidden="true">🎙️</div>
-                            <div class="empty-title">等待 Pilot 输入</div>
-                            <div class="empty-hint">在下方对话框输入文字，或喊一声 &quot;BT&quot;，即可开始与 BT-7274 对话。</div>
-                        </div>
-                    </div>
-                </div>
-                <div id="responsePayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
-                    <details style="margin: 0;">
-                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);">Response payload (debug)</summary>
-                        <pre id="responsePayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </details>
-                </div>
-                <div id="memoryStateDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
-                    <details open style="margin: 0;">
-                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);" data-i18n>Mid-term memory</summary>
-                        <pre id="midTermMemoryContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </details>
-                    <details open style="margin: 4px 0 0;">
-                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);" data-i18n>Long-term memory</summary>
-                        <pre id="longTermMemoryContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </details>
-                </div>
-
-        </div>
-    </div>
-
-        <!-- 输入栏：锚定 .container 底部，全宽，与样板 .inputbar 对齐 -->
     <div class="prompt-editor-inline">
 <button class="capture-fab" id="captureFabBtn" type="button" title="Video Source" aria-label="Video Source" onclick="var c=document.getElementById('captureOverlay'); c.classList.toggle('hidden'); if(!c.classList.contains('hidden')) positionCaptureOverlay();">
     <i data-lucide="video"></i>
@@ -1051,71 +1147,11 @@ limitations under the License.
                 </div>
                 </div>
         </div>
-            <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
-                <i data-lucide="radio"></i>
-                <span class="listen-label">Jarvis 唤醒</span>
-            </button>
             <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="实时">
                 <i data-lucide="radio-tower"></i>
                 <span class="ctrl-label">实时</span>
             </button>
-            <button class="chat-prompt-action" id="promptPresetBtn" title="快速预设" type="button" aria-label="快速预设">
-                <i data-lucide="sparkles"></i>
-            </button>
-            <div class="prompt-popover hidden" id="promptPresetMenu">
-                <button class="prompt-preset-option" type="button" data-label="请实时解说我的表情和动作" data-prompt="请实时解说我的表情和动作">
-                    <span class="prompt-preset-copy">
-                        <span class="zh">请实时解说我的表情和动作</span>
-                        <span class="en">Describe my facial expressions and movements in real time</span>
-                    </span>
-                    <span class="check">✓</span>
-                </button>
-                <button class="prompt-preset-option" type="button" data-label="结合画面内容，生成一张水彩风格的图像" data-prompt="结合画面内容，生成一张水彩风格的图像">
-                    <span class="prompt-preset-copy">
-                        <span class="zh">结合画面内容，生成一张水彩风格的图像</span>
-                        <span class="en">Generate a watercolor-style image based on the scene</span>
-                    </span>
-                    <span class="check">✓</span>
-                </button>
-                <button class="prompt-preset-option" type="button" data-label="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我" data-prompt="现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我">
-                    <span class="prompt-preset-copy">
-                        <span class="zh">现在我们玩一个快问快答的游戏，限时30秒，迅速回答问题，结束提醒我</span>
-                        <span class="en">Let's play a rapid-fire Q&amp;A game for 30 seconds; answer quickly and remind me when it ends</span>
-                    </span>
-                    <span class="check">✓</span>
-                </button>
-                <button class="prompt-preset-option" type="button" data-label="每当一个瓶子出现时，介绍它的样子" data-prompt="每当一个瓶子出现时，介绍它的样子">
-                    <span class="prompt-preset-copy">
-                        <span class="zh">每当一个瓶子出现时，介绍它的样子</span>
-                        <span class="en">Whenever a bottle appears, describe what it looks like</span>
-                    </span>
-                    <span class="check">✓</span>
-                </button>
-            </div>
             <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="和 BT-7274 对话..."></textarea>
-            <div class="live-enroll-row" id="liveEnrollRow">
-                <button class="chat-prompt-action live-enroll" id="liveEnrollBtn" title="注册你的声音（Addressee 过滤：只响应你）" type="button" aria-label="注册声音" disabled>
-                    <i data-lucide="user-check"></i>
-                    <span class="live-enroll-label">注册声音</span>
-                </button>
-                <span class="live-enroll-hint" id="liveEnrollHint" role="status" aria-live="polite"></span>
-            </div>
-            <div class="live-video-row" id="liveVideoRow">
-                <button class="chat-prompt-action live-video" id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled>
-                    <i data-lucide="video"></i>
-                    <span class="live-video-label">开画面</span>
-                </button>
-                <select class="live-video-source" id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled>
-                    <option value="screen" data-i18n>屏幕</option>
-                    <option value="camera" data-i18n>摄像头</option>
-                </select>
-                <label class="live-proactive-toggle" title="主动搭话：无用户语音时周期性看画面，有值得说的就开口">
-                    <input type="checkbox" id="liveProactiveToggle" aria-label="主动搭话" disabled>
-                    <span class="live-proactive-label">主动搭话</span>
-                </label>
-                <span class="live-video-hint" id="liveVideoHint" role="status" aria-live="polite"></span>
-                <span class="live-proactive-hint" id="liveProactiveHint" role="status" aria-live="polite"></span>
-            </div>
             <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
                 <i class="mic-icon" data-lucide="mic"></i>
                 <span class="voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
@@ -1126,6 +1162,98 @@ limitations under the License.
             </button>
         </div>
 </div>
+                <div class="result-header">
+                    <div class="result-header-left">
+                        <!-- 「实时输出」标题块已删除（2026-09-18，用户要求）。
+                             原 .result-title（🔒 + 实时输出）整体移除。 -->
+                        <!-- 2026-09-18：Model 行保留实现、不显示（原本即 display:none）。
+                             #modelName 被 index.html:2393/2410 与 ws_dispatcher.js:187/233 写入，
+                             保留可避免那 4 处退化为死代码。 -->
+                        <div class="result-subtitle" style="display: none;" aria-hidden="true">
+                            Model: <span id="modelName" style="font-weight: 600; color: var(--accent-color);">--</span>
+                        </div>
+                        <div class="tts-speaking-line" id="ttsSpeakingLine">
+                            <strong data-i18n>Speaking:</strong> <span id="ttsSpeakingText"></span>
+                        </div>
+                    </div>
+                    <!-- 2026-09-18 UI 精简：头部指标/按钮「保留实现、隐藏显示」。
+                         用户要求只隐藏不删除 —— MD/复制是 #markdownToggle/#copyButton 的唯一
+                         可见入口（内嵌那两个被 styles.css 设为 display:none !important），
+                         故这里必须存在于 DOM 中，仅以 .result-header-tools-hidden 隐藏。
+                         三个 id（metricsInline/latencyValue/avgLatencyValue/countValue）
+                         与 mdToggleHeader/copyBtnHeader 均被 JS 引用，不可移除。 -->
+                    <div class="result-header-metrics result-header-tools-hidden" aria-hidden="true">
+                        <div class="metrics-inline" id="metricsInline" style="display: none;">
+                            <div class="metric-item">
+                                <span>Latency:</span>
+                                <span class="metric-value" id="latencyValue">--</span>
+                                <span>ms</span>
+                            </div>
+                            <div class="metric-item">
+                                <span>Avg:</span>
+                                <span class="metric-value" id="avgLatencyValue">--</span>
+                                <span>ms</span>
+                            </div>
+                            <div class="metric-item">
+                                <span>Count:</span>
+                                <span class="metric-value" id="countValue">--</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="result-header-actions result-header-tools-hidden" aria-hidden="true">
+                        <button class="ghost-btn" id="mdToggleHeader" type="button" title="Toggle Markdown Rendering" aria-label="Toggle Markdown">
+                            <i data-lucide="code"></i><span>MD</span>
+                        </button>
+                        <button class="ghost-btn" id="copyBtnHeader" type="button" title="Copy to clipboard" aria-label="Copy">
+                            <i data-lucide="copy"></i><span data-i18n>复制</span>
+                        </button>
+                    </div>
+            </div>
+
+                <div class="result-prompt" id="currentPrompt" style="display: none;"></div>
+                <div id="requestPayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
+                    <details style="margin: 0;">
+                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);">Request payload (debug)</summary>
+                        <pre id="requestPayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
+                    </details>
+                </div>
+                <div class="result-text vlm-history-shell" id="resultText">
+                    <button class="markdown-toggle-embedded" id="markdownToggle" title="Toggle Markdown Rendering" aria-label="Toggle Markdown Rendering">
+                        <span id="markdownIcon"><i data-lucide="code"></i></span>
+                        <span id="markdownText">Markdown</span>
+                    </button>
+                    <button class="copy-button-embedded" id="copyButton" title="Copy to clipboard" aria-label="Copy to clipboard">
+                        <i data-lucide="copy"></i>
+                    </button>
+                    <div class="result-text-content vlm-history" id="resultTextContent">
+                        <div class="vlm-history-empty-state" id="vlmHistoryEmpty">
+                            <div class="empty-emoji" aria-hidden="true">🎙️</div>
+                            <div class="empty-title">等待 Pilot 输入</div>
+                            <div class="empty-hint">在下方对话框输入文字，或喊一声 &quot;BT&quot;，即可开始与 BT-7274 对话。</div>
+                        </div>
+                    </div>
+                </div>
+                <div id="responsePayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
+                    <details style="margin: 0;">
+                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);">Response payload (debug)</summary>
+                        <pre id="responsePayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
+                    </details>
+                </div>
+                <div id="memoryStateDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
+                    <details open style="margin: 0;">
+                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);" data-i18n>Mid-term memory</summary>
+                        <pre id="midTermMemoryContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-all;"></pre>
+                    </details>
+                    <details open style="margin: 4px 0 0;">
+                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);" data-i18n>Long-term memory</summary>
+                        <pre id="longTermMemoryContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-all;"></pre>
+                    </details>
+                </div>
+
+        </div>
+    </div>
+
+        <!-- 输入栏：锚定 .container 底部，全宽，与样板 .inputbar 对齐 -->
         </div>
 
     <!-- Batch-3 split: monolith decoupling (pure move, zero logic change).
@@ -1139,1700 +1267,7 @@ limitations under the License.
     <script src="./vlm_history.js"></script>
     <script src="./llm_reply_ui.js"></script>
     <script src="./ws_dispatcher.js"></script>
-    <script>
-        // ASR parameters
-        const ASR_TARGET_SAMPLE_RATE = 16000;
-        const ASR_SILENCE_AUTO_STOP_MS = 2000;
-        const ASR_SILENCE_RMS_THRESHOLD = 0.012;
-        const ASR_AUDIO_BUFFER_SIZE = 4096;
-        const ASR_FINAL_FALLBACK_MS = 1200;
-        const ASR_WS_PATH = '/ws/asr';
-
-        // Elements
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = document.getElementById('themeIcon');
-        const themeText = document.getElementById('themeText');
-        const jdLogo = document.getElementById('jdLogo');
-        const videoElement = document.getElementById('videoElement');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const connectionStatus = document.getElementById('connectionStatus');
-        const resultText = document.getElementById('resultText');
-
-        let vlmHistory = [];
-        if (typeof syncVlmHistoryEmpty === "function") syncVlmHistoryEmpty();
-        const currentPrompt = document.getElementById('currentPrompt');
-        const metricsInline = document.getElementById('metricsInline');
-        const markdownToggle = document.getElementById('markdownToggle');
-        const markdownIcon = document.getElementById('markdownIcon');
-        const markdownText = document.getElementById('markdownText');
-        const copyButton = document.getElementById('copyButton');
-        // v6-lite.23 — header MD/复制 按钮（v6-lite.22 起移到 result-header）：转发点击到内嵌实现，单一真值保持不动
-        const mdToggleHeader = document.getElementById('mdToggleHeader');
-        const copyBtnHeader = document.getElementById('copyBtnHeader');
-        if (mdToggleHeader && markdownToggle) {
-            mdToggleHeader.addEventListener('click', () => markdownToggle.click());
-        }
-        if (copyBtnHeader && copyButton) {
-            copyBtnHeader.addEventListener('click', () => copyButton.click());
-        }
-        const latencyValue = document.getElementById('latencyValue');
-        const avgLatencyValue = document.getElementById('avgLatencyValue');
-        const countValue = document.getElementById('countValue');
-        const btMicLevelValue = document.getElementById('btMicLevelValue');
-        const btMicDeviceValue = document.getElementById('btMicDeviceValue');
-        const btAsrLatencyValue = document.getElementById('btAsrLatencyValue');
-        const btLlmLatencyValue = document.getElementById('btLlmLatencyValue');
-        const btTtsLatencyValue = document.getElementById('btTtsLatencyValue');
-        const btE2eLatencyValue = document.getElementById('btE2eLatencyValue');
-        const promptPresetBtn = document.getElementById('promptPresetBtn');
-        const promptPresetMenu = document.getElementById('promptPresetMenu');
-        const promptPresetOptions = document.querySelectorAll('.prompt-preset-option');
-        const promptEditor = document.getElementById('promptEditor');
-        const promptEditorHome = document.querySelector('.prompt-editor-inline');
-        const fullscreenPromptOverlay = document.getElementById('fullscreenPromptOverlay');
-        const promptText = document.getElementById('promptText');
-        const btListenBtn = document.getElementById('btListenBtn');
-        const btListenPlayer = document.getElementById('btListenPlayer');
-        const liveModeBtn = document.getElementById('liveModeBtn');
-        const liveEnrollBtn = document.getElementById('liveEnrollBtn');
-        const liveEnrollHint = document.getElementById('liveEnrollHint');
-        const liveVideoBtn = document.getElementById('liveVideoBtn');
-        const liveVideoSourceEl = document.getElementById('liveVideoSource');
-        const liveProactiveToggle = document.getElementById('liveProactiveToggle');
-        const liveVideoHint = document.getElementById('liveVideoHint');
-        const liveProactiveHint = document.getElementById('liveProactiveHint');
-        const speechBtn = document.getElementById('speechBtn');
-        const speechButtons = [speechBtn].filter(Boolean);
-        const promptSendBtn = document.getElementById('promptSendBtn');
-        // Block 3 renamed the API form fields to service-scoped `svc-*` ids, so the
-        // legacy `modelSelect`/`apiBaseUrl`/`apiKey` element ids no longer exist. Point
-        // these closure refs at the LLM service inputs so applyApiSettings / fetchModels
-        // read the live values (fixes the null addEventListener crash + undeclared refs).
-        const modelSelect = document.getElementById('svc-llm-model');
-        const apiBaseUrl = document.getElementById('svc-llm-api-base');
-        const apiKey = document.getElementById('svc-llm-api-key');
-        const refreshModelsBtn = document.getElementById('refreshModelsBtn');
-        const processEvery = document.getElementById('processEvery');
-        const framesPerBatch = document.getElementById('framesPerBatch');
-        const maxLatency = document.getElementById('maxLatency');
-        const mirrorBtn = document.getElementById('mirrorBtn');
-        const quickCameraBtn = document.getElementById('quickCameraBtn');
-        const quickCameraLabel = document.getElementById('quickCameraLabel');
-        const ttsEnabledToggle = document.getElementById('ttsEnabledToggle');
-        const ttsSpeakingLine = document.getElementById('ttsSpeakingLine');
-        const ttsSpeakingText = document.getElementById('ttsSpeakingText');
-        const backgroundEnabledToggle = document.getElementById('backgroundEnabledToggle');
-        const backgroundFrameMultiplier = document.getElementById('backgroundFrameMultiplier');
-        const backgroundMaxFrames = document.getElementById('backgroundMaxFrames');
-        const asrPromotionToggle = document.getElementById('asrPromotionToggle');
-        const asrModelName = document.getElementById('asrModelName');
-
-        let peerConnection = null;
-        let localStream = null;
-        let btListenPeerConnection = null;
-        let btListenStream = null;
-        let btListening = false;
-        let btListeningStarting = false;
-        let liveModeActive = false;
-        let liveModeStarting = false;
-        let liveModePeerConnection = null;
-        let liveModeStream = null;
-        let _livePollTimer = null;
-        // Addressee Detection Phase 1 enrollment (live 注册声音).
-        let liveEnrollActive = false;
-        let liveEnrollTimer = null;
-        let liveEnrollCompleted = false;
-        // C.B live visual (spec live-visual-cb.md §3 层 3): the live
-        // panel owns a 1fps visual feed (screen via screen_capture.js OR
-        // camera via an inline getUserMedia -> WS frame sender; single-select,
-        // never both). Frames travel over the SAME main WS as jarvis/live
-        // audio — server.py forwards `frame` to the live session ring buffer.
-        let liveVideoActive = false;
-        let liveVideoOwned = false;      // did the live panel start the capture?
-        let liveCameraInterval = null;   // 1fps camera-frame sender
-        let liveCameraStream = null;     // getUserMedia camera stream (live panel)
-        let liveCameraFrameSeq = 0;      // monotonic frame_seq for camera frames
-        // Proactive speak runtime state (from /api/live/status).
-        let liveProactiveSupported = false;  // env gate LIVE_PROACTIVE_ENABLED
-        let btMicLevelAudioContext = null;
-        let btListenGainNode = null;
-        let btMicGainAudioContext = null;
-        let btMicLevelSource = null;
-        let btMicLevelAnalyser = null;
-        let btMicLevelFrame = null;
-        let btMicLevelBuffer = null;
-        let websocket = null;
-        let serverConfigApplied = false;
-        let fadeTimeout = null;
-        let lastText = '';
-        let lastTtsEventKey = '';
-        let ttsEventSequence = 0;
-        let ttsRequestToken = 0;
-        let ttsWs = null;
-        let ttsWsReadyPromise = null;
-        let ttsAudioContext = null;
-        let ttsNextPlayTime = 0;
-        let ttsSources = [];
-        let ttsPcmRemainder = null;
-        let ttsSpeaking = false;
-        let pendingTtsText = '';
-        let ttsFinishTimer = null;
-        let backgroundTaskEntries = new Map();
-        let backgroundSummaryEntries = new Map();
-        let lastReadyBackgroundTaskId = '';
-        let backgroundConfig = null;
-        let lastHistoryKey = null;
-        let lastLoggedInferenceCount = 0;
-        let pendingPromptEntry = null;
-        let streamStartToken = 0;
-        let revealVideoAfterMetricsToken = null;
-        let revealVideoFallbackTimeout = null;
-        let asrWs = null;
-        let asrStream = null;
-        let asrAudioContext = null;
-        let asrSource = null;
-        let asrProcessor = null;
-        let asrSilence = null;
-        let asrStarting = false;
-        let asrRecording = false;
-        let asrFinalText = '';
-        let asrPartialText = '';
-        let asrLastFinalText = '';
-        let asrLastVoiceTime = 0;
-        let asrSendPromptWhenFinal = false;
-        let asrStopMode = 'toggle';
-        let asrPointerId = null;
-        let ignoreNextSpeechClick = false;
-        let ignoreSpeechClickTimeout = null;
-        let asrStartToken = 0;
-        let asrFinalFallbackTimer = null;
-        let asrStopRequested = false;
-        let asrResettingSegment = false;
-        let asrPromptInputResetTimer = null;
-        let btLatency = {
-            asrStartAt: null,
-            asrMicReadyAt: null,
-            asrConnectedAt: null,
-            asrFirstPartialAt: null,
-            asrFinalAt: null,
-            sendStartAt: null,
-            sendAckAt: null,
-            llmReplyAt: null,
-            ttsStartAt: null,
-            ttsReadyAt: null,
-            ttsPlayAt: null,
-        };
-        let mobileVoiceMode = false;
-        // Multi-session: one ID per page/tab; sent in WebSocket and /offer so this tab gets only its VLM output.
-        // sessionId now lives on window.sessionId (assigned below; originally a redundant local `let` mirror).
-        window.sessionId = crypto.randomUUID ? crypto.randomUUID() : 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-        let isAnalysisRunning = false;
-        let selectedCameraId = null;
-        let videoDevices = [];
-        let preferredCameraFacing = 'environment';
-        let rtspSessionId = 'default';  // For RTSP mode
-        // Markdown toggle default is initialized on window.JoyState.markdownEnabled (see joy_state.js).
-        function getCameraFacing(device, index = 0) {
-            const label = (device?.label || '').toLowerCase();
-            if (/front|user|face|前/.test(label)) {
-                return 'user';
-            }
-            if (/back|rear|environment|world|后/.test(label)) {
-                return 'environment';
-            }
-            return index === 0 ? 'user' : 'environment';
-        }
-
-        function syncQuickCameraButton() {
-            const activeDevice = videoDevices.find(device => device.deviceId === selectedCameraId);
-            const activeIndex = activeDevice ? videoDevices.indexOf(activeDevice) : 0;
-            const facing = getCameraFacing(activeDevice, activeIndex);
-            preferredCameraFacing = facing;
-
-            if (quickCameraLabel) {
-                quickCameraLabel.textContent = facing === 'user' ? '前置' : '后置';
-            }
-            if (quickCameraBtn) {
-                quickCameraBtn.disabled = videoDevices.length < 2;
-            }
-        }
-
-        // Enumerate and list available cameras
-        async function enumerateCameras() {
-            try {
-                // Request permission first to get device labels
-                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                tempStream.getTracks().forEach(track => track.stop());
-
-                // Now enumerate with labels
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-                const cameraSelect = document.getElementById('cameraSelect');
-                cameraSelect.innerHTML = '';
-
-                if (videoDevices.length === 0) {
-                    cameraSelect.innerHTML = '<option value="">' + window.JoyI18n.localizeUiString('No cameras found') + '</option>';
-                    return;
-                }
-
-                videoDevices.forEach((device, index) => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = window.JoyI18n.localizeDeviceLabel(device.label) || (window.JoyI18n.localizeUiString('Camera') + (index + 1));
-                    cameraSelect.appendChild(option);
-                });
-
-                // Select first camera by default
-                selectedCameraId = videoDevices[0].deviceId;
-                syncQuickCameraButton();
-                console.log(`Found ${videoDevices.length} camera(s)`);
-            } catch (err) {
-                console.error('Error enumerating cameras:', err);
-                document.getElementById('cameraSelect').innerHTML = '<option value="">' + window.JoyI18n.localizeUiString('Error detecting cameras') + '</option>';
-            }
-        }
-
-        // Handle camera selection change (v3.38: use webcam module API)
-        document.getElementById('cameraSelect').addEventListener('change', async (e) => {
-            selectedCameraId = e.target.value;
-            syncQuickCameraButton();
-            console.log('Selected camera:', selectedCameraId);
-            if (window.isWebcamCapturing && window.isWebcamCapturing()) {
-                try {
-                    window.stopWebcamCapture();
-                    const constraints = {
-                        deviceId: { exact: selectedCameraId },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    };
-                    await window.startWebcamCapture(window.websocket, {
-                        constraints,
-                        sessionId: window.sessionId,
-                    });
-                    // 切换摄像头后同样接本地预览流到显示区
-                    const camStream = window.getWebcamStream && window.getWebcamStream();
-                    if (camStream && typeof videoElement !== "undefined" && videoElement) {
-                        videoElement.classList.remove("mirrored");
-                        videoElement.srcObject = camStream;
-                    }
-                } catch (err) {
-                    console.error('Error switching camera:', err);
-                }
-            }
-        });
-
-        // Also trigger flash on blur (when dropdown closes)
-        document.getElementById('cameraSelect').addEventListener('blur', () => {
-            const cameraSelect = document.getElementById('cameraSelect');
-            if (cameraSelect.value) {
-                // Trigger flash animation
-                cameraSelect.classList.add('applied');
-                setTimeout(() => {
-                    cameraSelect.classList.remove('applied');
-                }, 600);
-            }
-        });
-
-        function findCameraByFacing(facing) {
-            return videoDevices.find((device, index) => getCameraFacing(device, index) === facing);
-        }
-
-        async function switchCameraByFacing(facing) {
-            const cameraSelect = document.getElementById('cameraSelect');
-            let targetDevice = findCameraByFacing(facing);
-
-            if (!targetDevice && videoDevices.length > 1) {
-                const currentIndex = Math.max(0, videoDevices.findIndex(device => device.deviceId === selectedCameraId));
-                targetDevice = videoDevices[(currentIndex + 1) % videoDevices.length];
-            }
-
-            if (!targetDevice || targetDevice.deviceId === selectedCameraId) {
-                return;
-            }
-
-            preferredCameraFacing = getCameraFacing(targetDevice, videoDevices.indexOf(targetDevice));
-            selectedCameraId = targetDevice.deviceId;
-            if (cameraSelect) {
-                cameraSelect.value = selectedCameraId;
-                cameraSelect.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            syncQuickCameraButton();
-        }
-
-        quickCameraBtn?.addEventListener('click', () => {
-            const nextFacing = preferredCameraFacing === 'user' ? 'environment' : 'user';
-            switchCameraByFacing(nextFacing);
-        });
-
-        // Tooltip positioning (for fixed position tooltips)
-        document.querySelectorAll('.tooltip-wrapper').forEach(wrapper => {
-            const icon = wrapper.querySelector('.tooltip-icon');
-            const tooltip = wrapper.querySelector('.tooltip-text');
-
-            if (icon && tooltip) {
-                wrapper.addEventListener('mouseenter', () => {
-                    const rect = icon.getBoundingClientRect();
-                    tooltip.style.left = `${rect.left}px`;
-                    tooltip.style.top = `${rect.bottom + 8}px`;
-                });
-            }
-        });
-
-        // Handle input source tabs (Webcam vs RTSP)
-        document.querySelectorAll('.input-source-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                const source = tab.getAttribute('data-source');
-                const webcamControls = document.getElementById('webcamControls');
-                const rtspControls = document.getElementById('rtspControls');
-                const rtspBetaWarning = document.getElementById('rtspBetaWarning');
-                const startBtn = document.getElementById('startBtn');
-
-                // Update active tab
-                document.querySelectorAll('.input-source-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-
-                // Show/hide controls
-                const screenControls = document.getElementById('screenControls');
-                if (source === 'webcam') {
-                    webcamControls.style.display = 'block';
-                    rtspControls.style.display = 'none';
-                    rtspBetaWarning.style.display = 'none';
-                    if (screenControls) screenControls.style.display = 'none';
-                } else if (source === 'rtsp') {
-                    webcamControls.style.display = 'none';
-                    rtspControls.style.display = 'block';
-                    rtspBetaWarning.style.display = 'flex';
-                    if (screenControls) screenControls.style.display = 'none';
-                } else if (source === 'screen') {
-                    webcamControls.style.display = 'none';
-                    rtspControls.style.display = 'none';
-                    rtspBetaWarning.style.display = 'none';
-                    if (screenControls) screenControls.style.display = 'block';
-                }
-            });
-        });
-
-        // Per-source capture handlers (v3.38). Each video source has its own
-        // start/stop button pair wired to its module. No global dispatcher.
-        (function () {
-            function setStatus(elem, text, color) {
-                if (!elem) return;
-                elem.textContent = text;
-                if (color) elem.style.color = color; else elem.style.color = "";
-            }
-
-            // Webcam
-            (function () {
-                const startBtn = document.getElementById("webcamStartBtn");
-                const stopBtn = document.getElementById("webcamStopBtn");
-                const status = document.getElementById("webcamStatus");
-                function refresh() {
-                    const running = !!(window.isWebcamCapturing && window.isWebcamCapturing());
-                    if (startBtn) startBtn.disabled = running;
-                    if (stopBtn) stopBtn.disabled = !running;
-                    setStatus(status, running ? "Streaming" : "Idle", running ? "var(--success-color, #4caf50)" : "");
-                }
-                if (startBtn) startBtn.addEventListener("click", async () => {
-                    try {
-                        const constraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
-                        const sel = document.getElementById("cameraSelect");
-                        if (sel && sel.value) constraints.deviceId = { exact: sel.value };
-                        if (!window.websocket || window.websocket.readyState !== WebSocket.OPEN) {
-                            if (typeof connectWebSocket === "function") connectWebSocket();
-                        }
-                        await window.startWebcamCapture(window.websocket, {
-                            constraints: constraints,
-                            sessionId: window.sessionId,
-                        });
-                        // 接本地预览流到主显示区（与屏幕采集路径对齐：getScreenCaptureStream -> videoElement.srcObject，修复 OBS VC 黑屏）
-                        const camStream = window.getWebcamStream && window.getWebcamStream();
-                        if (camStream && typeof videoElement !== "undefined" && videoElement) {
-                            videoElement.classList.remove("mirrored");
-                            videoElement.srcObject = camStream;
-                        }
-                        setStatus(status, "Streaming", "var(--success-color, #4caf50)");
-                    } catch (err) {
-                        console.error("startWebcamCapture:", err);
-                        setStatus(status, "Error: " + (err && err.message ? err.message : err), "var(--error-color, #f44336)");
-                    }
-                });
-                if (stopBtn) stopBtn.addEventListener("click", () => {
-                    window.stopWebcamCapture();
-                    setStatus(status, "Idle");
-                    refresh();
-                });
-                setInterval(refresh, 1000);
-                refresh();
-            })();
-
-            // RTSP
-            (function () {
-                const startBtn = document.getElementById("rtspStartBtn");
-                const stopBtn = document.getElementById("rtspStopBtn");
-                const status = document.getElementById("rtspCaptureStatus");
-                const urlInput = document.getElementById("rtspUrl");
-                function refresh() {
-                    const running = !!(window.isRtspCapturing && window.isRtspCapturing());
-                    if (startBtn) startBtn.disabled = running;
-                    if (stopBtn) stopBtn.disabled = !running;
-                    if (urlInput) urlInput.disabled = running;
-                    setStatus(status, running ? "Streaming" : "Idle", running ? "var(--success-color, #4caf50)" : "");
-                }
-                if (startBtn) startBtn.addEventListener("click", async () => {
-                    const url = urlInput ? urlInput.value.trim() : "";
-                    if (!url) { alert("Please enter an RTSP URL"); return; }
-                    try {
-                        if (!window.websocket || window.websocket.readyState !== WebSocket.OPEN) {
-                            if (typeof connectWebSocket === "function") connectWebSocket();
-                        }
-                        await window.startRtspCapture(window.websocket, {
-                            rtspUrl: url,
-                            sessionId: window.sessionId,
-                        });
-                        setStatus(status, "Streaming", "var(--success-color, #4caf50)");
-                    } catch (err) {
-                        console.error("startRtspCapture:", err);
-                        setStatus(status, "Error: " + (err && err.message ? err.message : err), "var(--error-color, #f44336)");
-                    }
-                });
-                if (stopBtn) stopBtn.addEventListener("click", () => {
-                    window.stopRtspCapture();
-                    setStatus(status, "Idle");
-                    refresh();
-                });
-                setInterval(refresh, 1000);
-                refresh();
-            })();
-
-            // Screen Capture
-            (function () {
-                const startBtn = document.getElementById("screenStartBtn");
-                const stopBtn = document.getElementById("screenStopBtn");
-                const status = document.getElementById("screenStatus");
-                function refresh() {
-                    const running = !!(window.isScreenCapturing && window.isScreenCapturing());
-                    if (startBtn) startBtn.disabled = running;
-                    if (stopBtn) stopBtn.disabled = !running;
-                    setStatus(status, running ? "Capturing (1 fps)" : "Idle", running ? "var(--success-color, #4caf50)" : "");
-                }
-                if (startBtn) startBtn.addEventListener("click", async () => {
-                    try {
-                        if (!window.websocket || window.websocket.readyState !== WebSocket.OPEN) {
-                            if (typeof connectWebSocket === "function") connectWebSocket();
-                        }
-                        await window.startScreenCapture(window.websocket, { fps: 1 });
-                        const previewStream = window.getScreenCaptureStream && window.getScreenCaptureStream();
-                        if (previewStream && typeof videoElement !== "undefined" && videoElement) {
-                            videoElement.classList.remove("mirrored");
-                            videoElement.srcObject = previewStream;
-                        }
-                        setStatus(status, "Capturing (1 fps)", "var(--success-color, #4caf50)");
-                    } catch (err) {
-                        console.error("startScreenCapture:", err);
-                        setStatus(status, "Error: " + (err && err.message ? err.message : err), "var(--error-color, #f44336)");
-                    }
-                });
-                if (stopBtn) stopBtn.addEventListener("click", () => {
-                    window.stopScreenCapture();
-                    setStatus(status, "Idle");
-                    refresh();
-                });
-                setInterval(refresh, 1000);
-                refresh();
-            })();
-        })();
-
-        // Services panel (v3.38): load / save / probe 6 API slots (LLM / Summary / TTS / ASR / Agent / Embedding)
-        // (function bodies extracted to config_services.js → window.JoyConfig)
-        (function () {
-            const { readForm, writeForm, load, probe, save, wireSummaryProvider, wireSegProvider, testSlot } = window.JoyConfig;
-            const saveBtn = document.getElementById("svcSaveBtn");
-            const probeBtn = document.getElementById("svcProbeBtn");
-            // N9: 各槽位「Test」按钮（表单当前值 → POST /api/services/test）。
-            // testSlot 按 svc-{slot}-test-btn / -label / -status 取元素；summary 沿用旧 id。
-            ['summary', 'llm', 'tts', 'asr', 'agent', 'embedding'].forEach(function (slot) {
-                const btn = document.getElementById('svc-' + slot + '-test-btn');
-                if (btn && testSlot) {
-                    btn.addEventListener('click', function () {
-                        testSlot(slot, readForm()[slot]);
-                    });
-                }
-            });
-            if (saveBtn) saveBtn.addEventListener("click", save);
-            if (probeBtn) probeBtn.addEventListener("click", probe);
-            // N8: summary provider 下拉联动默认值
-            if (wireSummaryProvider) wireSummaryProvider();
-            // Axis 4 (v6-lite.12): local/cloud seg + Provider named presets
-            if (wireSegProvider) wireSegProvider();
-            load();
-        })();
-
-        // Memory Store sub-area (embedding/provider portion of /v1/settings/network).
-        // Load is triggered when the settings modal opens (see settingsBtn handler below);
-        // save is handled by joy_ws.js so the logic stays co-located with the WS/API cluster.
-        (function () {
-            const msSaveBtn = document.getElementById("memoryStoreSaveBtn");
-            if (msSaveBtn && window.JoyWs && window.JoyWs.saveMemoryStoreSettings) {
-                msSaveBtn.addEventListener("click", function () {
-                    window.JoyWs.saveMemoryStoreSettings();
-                });
-            }
-        })();
-
-        // Radio Silence (radio-silence.md §3/§7): init 组合键监听 + 角标 +
-        // 初始状态读取。面板在 settingsModal 内；打开 modal 时刷新（见 settingsBtn handler）。
-        (function () {
-            if (window.JoyRadioSilence && window.JoyRadioSilence.init) {
-                window.JoyRadioSilence.init();
-            }
-        })();
-
-        // Clear RTSP status message when user types
-        const rtspUrlInput = document.getElementById('rtspUrl');
-        rtspUrlInput.addEventListener('input', () => {
-            const statusDiv = document.getElementById('rtspStatus');
-            statusDiv.style.display = 'none';
-        });
-
-        // Green flash animation when RTSP URL is set (same as API Base URL)
-        rtspUrlInput.addEventListener('blur', () => {
-            if (rtspUrlInput.value.trim()) {
-                rtspUrlInput.classList.add('applied');
-                setTimeout(() => {
-                    rtspUrlInput.classList.remove('applied');
-                }, 600);
-            }
-        });
-
-        // Test RTSP connection
-        document.getElementById('testRtspBtn').addEventListener('click', async () => {
-            const rtspUrl = document.getElementById('rtspUrl').value.trim();
-            const statusDiv = document.getElementById('rtspStatus');
-            const testBtn = document.getElementById('testRtspBtn');
-
-            if (!rtspUrl) {
-                statusDiv.textContent = '⚠️ Please enter an RTSP URL';
-                statusDiv.style.display = 'block';
-                statusDiv.style.color = '#ff6b35';
-                return;
-            }
-
-            testBtn.disabled = true;
-            statusDiv.textContent = '🔄 Testing connection...';
-            statusDiv.style.display = 'block';
-            statusDiv.style.color = '#76b900';
-
-            try {
-                const response = await fetch('/api/rtsp/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        rtsp_url: rtspUrl,
-                        session_id: 'test-' + Date.now()
-                    })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    const info = data.stream_info;
-                    statusDiv.innerHTML = `✅ Connected!<br>${info.codec} ${info.width}x${info.height} @${info.fps}fps`;
-                    statusDiv.style.color = '#76b900';
-
-                    // Stop the test connection after 2 seconds
-                    setTimeout(async () => {
-                        await fetch('/api/rtsp/stop', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ session_id: data.session_id })
-                        });
-                    }, 2000);
-                } else {
-                    statusDiv.textContent = '❌ ' + (data.error || 'Connection failed');
-                    statusDiv.style.color = '#ff6b35';
-                }
-            } catch (err) {
-                console.error('RTSP test error:', err);
-                statusDiv.textContent = '❌ Connection failed: ' + err.message;
-                statusDiv.style.color = '#ff6b35';
-            } finally {
-                testBtn.disabled = false;
-            }
-        });
-
-        // Tooltip positioning - dynamically position tooltip to avoid clipping
-        document.querySelectorAll('.tooltip-wrapper').forEach(wrapper => {
-            const icon = wrapper.querySelector('.tooltip-icon');
-            const tooltip = wrapper.querySelector('.tooltip-text');
-
-            if (icon && tooltip) {
-                icon.addEventListener('mouseenter', () => {
-                    const rect = icon.getBoundingClientRect();
-                    const tooltipWidth = 380; // Match CSS width
-
-                    // Position below the icon
-                    let left = rect.left - 10; // Slight offset to left
-                    let top = rect.bottom + 8;
-
-                    // Ensure tooltip doesn't go off right edge of viewport
-                    if (left + tooltipWidth > window.innerWidth - 20) {
-                        left = window.innerWidth - tooltipWidth - 20;
-                    }
-
-                    // Ensure tooltip doesn't go off left edge
-                    if (left < 20) {
-                        left = 20;
-                    }
-
-                    tooltip.style.left = left + 'px';
-                    tooltip.style.top = top + 'px';
-                });
-            }
-        });
-        // Enumerate cameras on page load
-        enumerateCameras();
-        // Theme management: Honor OS preference with manual override support
-        function applyTheme(theme) {
-            // theme can be 'light', 'dark', or 'auto'
-            if (theme === 'light') {
-                document.body.classList.add('light-theme');
-                themeIcon.innerHTML = '<i data-lucide="sun"></i>';
-                themeText.textContent = window.JoyI18n.localizeUiString('Light');
-            } else if (theme === 'dark') {
-                document.body.classList.remove('light-theme');
-                themeIcon.innerHTML = '<i data-lucide="moon"></i>';
-                themeText.textContent = window.JoyI18n.localizeUiString('Dark');
-            } else { // 'auto' - follow OS preference
-                const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-                if (prefersLight) {
-                    document.body.classList.add('light-theme');
-                } else {
-                    document.body.classList.remove('light-theme');
-                }
-                // Always show monitor icon for AUTO mode
-                themeIcon.innerHTML = '<i data-lucide="monitor"></i>';
-                themeText.textContent = window.JoyI18n.localizeUiString('Auto');
-            }
-            lucide.createIcons();
-
-        }
-
-        // Theme Toggle: cycles through Auto -> Light -> Dark -> Auto
-        jdLogo.addEventListener('click', () => {
-            window.location.reload();
-        });
-
-        jdLogo.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                window.location.reload();
-            }
-        });
-
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = localStorage.getItem('theme') || 'auto';
-            let nextTheme;
-
-            if (currentTheme === 'auto' || !currentTheme) {
-                nextTheme = 'light';
-            } else if (currentTheme === 'light') {
-                nextTheme = 'dark';
-            } else { // dark
-                nextTheme = 'auto';
-            }
-
-            // Only save manual overrides (light/dark) to localStorage
-            // Don't save 'auto' - always check OS preference when in auto mode
-            if (nextTheme === 'auto') {
-                localStorage.removeItem('theme');
-            } else {
-                localStorage.setItem('theme', nextTheme);
-            }
-            applyTheme(nextTheme);
-        });
-
-        // Load saved theme or detect OS preference
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light' || savedTheme === 'dark') {
-            // User has manually set a preference - use it
-            applyTheme(savedTheme);
-        } else {
-            // No manual preference saved - default to dark (sample preview is dark-themed; user can toggle to Light/Auto)
-            applyTheme('dark');
-        }
-
-        // Listen for OS preference changes when in 'auto' mode
-        const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: light)');
-        colorSchemeQuery.addEventListener('change', (e) => {
-            const currentTheme = localStorage.getItem('theme');
-            // Only update if user hasn't manually set a preference
-            if (!currentTheme || currentTheme === 'auto') {
-                applyTheme('auto');
-            }
-        });
-
-        // Load saved colorful UI accents setting (default: disabled for clean two-tone system)
-        const colorfulFocusToggle = document.getElementById('colorfulFocusToggle');
-        const colorfulFocusSaved = localStorage.getItem('colorfulFocus');
-        if (colorfulFocusSaved === 'true') {
-            document.body.classList.add('colorful-focus');
-            colorfulFocusToggle.checked = true;
-        } else {
-            // Default: neutral white/gray icons and focus glows with red flash
-            document.body.classList.remove('colorful-focus');
-            colorfulFocusToggle.checked = false;
-        }
-
-        // Settings Modal
-        const settingsBtn = document.getElementById('settingsBtn');
-        const settingsModal = document.getElementById('settingsModal');
-        const settingsClose = document.getElementById('settingsClose');
-        const popInToggle = document.getElementById('popInToggle');
-        const glowToggle = document.getElementById('glowToggle');
-        const fadeToggle = document.getElementById('fadeToggle');
-        const overlayPosition = document.getElementById('overlayPosition');
-        const layoutOrder = document.getElementById('layoutOrder');
-        const videoOverlay = document.getElementById('videoOverlay');
-
-        // Settings state
-        const settings = {
-            popIn: localStorage.getItem('popIn') !== 'false',
-            glow: localStorage.getItem('glow') !== 'false',
-            fade: localStorage.getItem('fade') !== 'false',
-            overlayPosition: localStorage.getItem('overlayPosition') || 'none',
-            layoutOrder: localStorage.getItem('layoutOrder') || 'vlm-first',
-            ttsEnabled: localStorage.getItem('ttsEnabled') !== 'false',
-            // Server-driven: authoritative value arrives via server_config / asr_promotion_updated.
-            asrPromotionEnabled: false
-        };
-
-        // Load saved settings
-        popInToggle.checked = settings.popIn;
-        glowToggle.checked = settings.glow;
-        fadeToggle.checked = settings.fade;
-        overlayPosition.value = settings.overlayPosition;
-        layoutOrder.value = settings.layoutOrder;
-        if (ttsEnabledToggle) {
-            ttsEnabledToggle.checked = settings.ttsEnabled;
-        }
-
-        // Apply overlay position
-        function applyOverlayPosition(position) {
-            videoOverlay.classList.remove('show', 'top', 'bottom');
-            const resultText = document.getElementById('resultText');
-            const hasDisplayText = (vlmHistory[vlmHistory.length - 1]?.response || getVlmDisplayText(lastText)).trim() !== '';
-            const hasJarvisDialog = hasJarvisDialogHistory();
-
-            if (position !== 'none') {
-                // Overlay enabled - show on video, hide response balloon (keep prompt visible)
-                if (hasDisplayText) {
-                    videoOverlay.classList.add('show', position);
-                }
-                resultText.style.display = hasJarvisDialog ? 'flex' : 'none';
-            } else {
-                // Overlay disabled - hide from video, show response balloon
-                resultText.style.display = hasDisplayText ? 'flex' : 'none';
-            }
-        }
-        // P0-1 (audit 2026-08-13): getVlmDisplayText lives in the post-main
-        // vlm_render.js script, which loads after this inline script — an
-        // immediate call here would throw ReferenceError (getVlmDisplayText is
-        // not defined) and abort the whole inline script (WS bootstrap, settings
-        // modal, WrappedWS IIFE, ...). Defer the overlay initial paint until that
-        // script is guaranteed to have loaded. DOMContentLoaded fires after all
-        // synchronous classic scripts at the end of <body> have executed.
-        if (typeof getVlmDisplayText === 'function') {
-            applyOverlayPosition(settings.overlayPosition);
-        } else {
-            window.addEventListener('DOMContentLoaded', () => {
-                applyOverlayPosition(settings.overlayPosition);
-            });
-        }
-
-        // Apply layout order
-        function isMobileLayout() {
-            return window.matchMedia('(max-width: 768px)').matches;
-        }
-
-        function isPressToTalkLayout() {
-            return isMobileLayout() && mobileVoiceMode;
-        }
-
-        function applyLayoutOrder(order) {
-            const mainContent = document.querySelector('.main-content');
-            const videoCard = document.querySelector('.video-card');
-            const resultCard = document.getElementById('vlmOutputCard');
-
-            if (!mainContent || !videoCard || !resultCard) {
-                return;
-            }
-
-            if (isMobileLayout()) {
-                mainContent.insertBefore(videoCard, resultCard);
-            } else if (order === 'vlm-first') {
-                // VLM Output Info at top, Camera below (default)
-                mainContent.insertBefore(resultCard, videoCard);
-            } else {
-                // Camera at top, VLM Output Info below
-                mainContent.insertBefore(videoCard, resultCard);
-            }
-        }
-        applyLayoutOrder(settings.layoutOrder);
-
-        window.matchMedia('(max-width: 768px)').addEventListener('change', () => {
-            applyLayoutOrder(settings.layoutOrder);
-            updatePromptAvailability();
-            syncSpeechButtons();
-        });
-
-        // Open settings modal
-        settingsBtn.addEventListener('click', () => {
-            settingsModal.classList.add('show');
-            if (window.JoyWiki) {
-                window.JoyWiki.loadHealth();
-                window.JoyWiki.loadNetwork();
-            }
-            // Pull the latest Memory Store (embedding/provider) settings when the
-            // modal opens so the form always reflects the server snapshot.
-            if (window.JoyWs && window.JoyWs.loadMemoryStoreSettings) {
-                window.JoyWs.loadMemoryStoreSettings();
-            }
-            // Radio Silence: 打开 modal 时刷新静默设置 + 状态角标。
-            if (window.JoyRadioSilence && window.JoyRadioSilence.load) {
-                window.JoyRadioSilence.load();
-            }
-        });
-
-        // Close settings modal
-        settingsClose.addEventListener('click', () => {
-            settingsModal.classList.remove('show');
-        });
-
-        // Close modal when clicking outside
-        settingsModal.addEventListener('click', (e) => {
-            if (e.target === settingsModal) {
-                settingsModal.classList.remove('show');
-            }
-        });
-
-        // Handle settings changes
-        popInToggle.addEventListener('change', (e) => {
-            settings.popIn = e.target.checked;
-            localStorage.setItem('popIn', settings.popIn);
-        });
-
-        glowToggle.addEventListener('change', (e) => {
-            settings.glow = e.target.checked;
-            localStorage.setItem('glow', settings.glow);
-        });
-
-        fadeToggle.addEventListener('change', (e) => {
-            settings.fade = e.target.checked;
-            localStorage.setItem('fade', settings.fade);
-        });
-
-        if (ttsEnabledToggle) {
-            ttsEnabledToggle.addEventListener('change', (e) => {
-                settings.ttsEnabled = e.target.checked;
-                localStorage.setItem('ttsEnabled', settings.ttsEnabled);
-                if (!settings.ttsEnabled) {
-                    closeTtsWebSocket();
-                } else {
-                    try {
-                        ensureTtsAudioContext();
-                    } catch (error) {
-                        console.warn('Unable to initialize TTS audio context:', error);
-                    }
-                }
-            });
-        }
-
-        colorfulFocusToggle.addEventListener('change', (e) => {
-            const enabled = e.target.checked;
-            localStorage.setItem('colorfulFocus', enabled);
-            if (enabled) {
-                document.body.classList.add('colorful-focus');
-            } else {
-                document.body.classList.remove('colorful-focus');
-            }
-            // Force icon re-render to apply new colors
-            lucide.createIcons();
-        });
-
-        overlayPosition.addEventListener('change', (e) => {
-            settings.overlayPosition = e.target.value;
-            localStorage.setItem('overlayPosition', settings.overlayPosition);
-            applyOverlayPosition(settings.overlayPosition);
-        });
-
-        layoutOrder.addEventListener('change', (e) => {
-            settings.layoutOrder = e.target.value;
-            localStorage.setItem('layoutOrder', settings.layoutOrder);
-            applyLayoutOrder(settings.layoutOrder);
-        });
-
-        // Panel Toggle
-        function togglePanel(panelId) {
-            const sidebar = document.getElementById('sidebar');
-            const content = document.getElementById(panelId);
-            const toggle = document.getElementById(panelId + 'Toggle');
-            const sidebarPanelIds = ['vlmConfig', 'cameraConfig'];
-            const isSidebarPanel = sidebarPanelIds.includes(panelId);
-
-            if (isSidebarPanel && sidebar?.classList.contains('docked')) {
-                sidebar.classList.remove('docked');
-                sidebarPanelIds.forEach(id => {
-                    const panelContent = document.getElementById(id);
-                    const panelToggle = document.getElementById(id + 'Toggle');
-                    const isActive = id === panelId;
-                    panelContent?.classList.toggle('collapsed', !isActive);
-                    panelToggle?.classList.toggle('collapsed', !isActive);
-                });
-                return;
-            }
-
-            content?.classList.toggle('collapsed');
-            toggle?.classList.toggle('collapsed');
-
-            // [Local Wiki] F4: lazy-load namespace list when the panel opens
-            if (panelId === 'knowledgeBase' && window.JoyWiki) {
-                window.JoyWiki.loadNamespaces();
-            }
-
-            const allSidebarPanelsCollapsed = sidebarPanelIds
-                .every(id => document.getElementById(id)?.classList.contains('collapsed'));
-            if (isSidebarPanel && allSidebarPanelsCollapsed) {
-                sidebar?.classList.add('docked');
-            }
-        }
-
-
-        // Fullscreen Toggle
-        function toggleFullscreen() {
-            const videoCard = document.getElementById('videoCard');
-            const fullscreenIcon = document.getElementById('fullscreenIcon');
-
-            videoCard.classList.toggle('fullscreen');
-
-            // Update icon: maximize when normal, minimize when fullscreen
-            if (videoCard.classList.contains('fullscreen')) {
-                fullscreenIcon.setAttribute('data-lucide', 'minimize');
-                if (fullscreenPromptOverlay && promptEditor) {
-                    fullscreenPromptOverlay.appendChild(promptEditor);
-                }
-                // Sync current VLM output to fullscreen overlay
-                syncVlmToFullscreen();
-            } else {
-                fullscreenIcon.setAttribute('data-lucide', 'maximize');
-                restorePromptEditorHome();
-            }
-            lucide.createIcons();
-        }
-
-        function restorePromptEditorHome() {
-            if (promptEditorHome && promptEditor && promptEditor.parentElement !== promptEditorHome) {
-                promptEditorHome.appendChild(promptEditor);
-            }
-        }
-
-        // Sync VLM output to fullscreen overlay
-        function syncVlmToFullscreen() {
-            const fullscreenVlmContent = document.getElementById('fullscreenVlmContent');
-            const fullscreenVlmMetrics = document.getElementById('fullscreenVlmMetrics');
-
-            if (fullscreenVlmContent) {
-                fullscreenVlmContent.textContent = getFullscreenVlmText();
-            }
-
-            // Add metrics if available
-            const latency = document.getElementById('latencyValue')?.textContent;
-            const count = document.getElementById('countValue')?.textContent;
-            if (latency && count) {
-                fullscreenVlmMetrics.innerHTML = `<span>Latency: ${latency}ms</span><span>Count: ${count}</span>`;
-            }
-        }
-
-        function normalizeFullscreenLine(text) {
-            return String(text || '').replace(/\s+/g, ' ').trim();
-        }
-
-        function getFullscreenVlmText() {
-            const lines = [];
-
-            vlmHistory.forEach(entry => {
-                if (entry.kind === 'background' || entry.contextExcluded) {
-                    return;
-                }
-                const prompt = normalizeFullscreenLine(entry.prompt);
-                const response = normalizeFullscreenLine(entry.response);
-
-                if (hasVisiblePrompt(entry) && prompt) {
-                    lines.push(`输入：${prompt}`);
-                }
-                if (response) {
-                    lines.push(`输出：${response}`);
-                }
-            });
-
-            const liveResponse = normalizeFullscreenLine(getVlmDisplayText(lastText));
-            if (!lines.length && liveResponse) {
-                lines.push(`输出：${liveResponse}`);
-            }
-
-            return lines.slice(-4).join('\n') || window.JoyI18n.localizeUiString('Ready');
-        }
-
-        // ESC key to exit fullscreen
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const videoCard = document.getElementById('videoCard');
-                if (videoCard.classList.contains('fullscreen')) {
-                    toggleFullscreen();
-                }
-            }
-        });
-
-        // API Key Field Toggle
-        function toggleApiKeyField() {
-            const field = document.getElementById('apiKeyField');
-            const toggle = document.getElementById('apiKeyToggle');
-            field.classList.toggle('collapsed');
-            toggle.classList.toggle('collapsed');
-        }
-
-        // Check if API Base URL requires API key
-        function checkApiKeyRequirement(url) {
-            const apiKeyField = document.getElementById('apiKeyField');
-            const apiKeyToggle = document.getElementById('apiKeyToggle');
-
-            // Check if URL is a remote service (not localhost or 127.0.0.1)
-            const isLocal = url.includes('localhost') || url.includes('127.0.0.1') || url.includes('0.0.0.0');
-            const isRemote = !isLocal;
-
-            if (isRemote) {
-                // Show API key field for remote services
-                if (apiKeyField && apiKeyToggle) {
-                    apiKeyField.classList.remove('collapsed');
-                    apiKeyToggle.classList.remove('collapsed');
-                }
-                console.log('Remote API detected - API Key field expanded');
-            } else {
-                // Hide API key field for local services
-                if (apiKeyField && apiKeyToggle) {
-                    apiKeyField.classList.add('collapsed');
-                    apiKeyToggle.classList.add('collapsed');
-                }
-                console.log('Local API detected - API Key field collapsed');
-            }
-        }
-
-        // Status Update
-        function updateStatus(message, state) {
-            connectionStatus.textContent = message;
-            connectionStatus.className = `status-badge ${state}`;
-        }
-
-        function updatePromptAvailability() {
-            const canSendPrompt = true;
-            promptSendBtn.disabled = false;
-            speechButtons.forEach(button => {
-                button.disabled = false;
-            });
-            promptText.placeholder = '和 BT-7274 对话...';
-            promptSendBtn.title = '发送给 BT-7274';
-            syncSpeechButtons();
-
-            if (processEvery) {
-                processEvery.disabled = isAnalysisRunning;
-                processEvery.title = isAnalysisRunning ? '推理中不可修改，请先停止视频' : '';
-            }
-            if (framesPerBatch) {
-                framesPerBatch.disabled = isAnalysisRunning;
-                framesPerBatch.title = isAnalysisRunning ? '推理中不可修改，请先停止视频' : '';
-            }
-        }
-
-        function setVideoWaitingForStream(waiting) {
-            const videoCard = document.getElementById('videoCard');
-            videoCard?.classList.toggle('waiting-for-stream', waiting);
-        }
-
-        function resetVideoButtons() {
-            // v3.38: red Start / small Stop removed. Each capture source refreshes its own button.
-        }
-
-        function cancelRevealVideoFallback() {
-            if (revealVideoFallbackTimeout) {
-                clearTimeout(revealVideoFallbackTimeout);
-                revealVideoFallbackTimeout = null;
-            }
-        }
-
-        function revealVideoWhenReady(token) {
-            if (token !== streamStartToken) {
-                return;
-            }
-            cancelRevealVideoFallback();
-            revealVideoAfterMetricsToken = null;
-            setVideoWaitingForStream(false);
-            updateStatus(window.JoyI18n.localizeUiString('Streaming'), 'connected');
-        }
-
-        function showProcessedVideoStream(stream, token) {
-            if (token !== streamStartToken) {
-                return;
-            }
-            videoElement.srcObject = stream;
-
-            const markStreaming = () => {
-                if (token !== streamStartToken || videoElement.srcObject !== stream) {
-                    return;
-                }
-                isAnalysisRunning = true;
-                updatePromptAvailability();
-                if (revealVideoAfterMetricsToken === token) {
-                    updateStatus(window.JoyI18n.localizeUiString('Preparing first metrics...'), 'processing');
-                    cancelRevealVideoFallback();
-                    revealVideoFallbackTimeout = setTimeout(() => {
-                        revealVideoWhenReady(token);
-                    }, 5000);
-                } else {
-                    revealVideoWhenReady(token);
-                }
-            };
-
-            const playPromise = videoElement.play();
-            if (playPromise && typeof playPromise.then === 'function') {
-                playPromise.then(markStreaming).catch(err => {
-                    console.error('Error playing video:', err);
-                    markStreaming();
-                });
-            } else {
-                markStreaming();
-            }
-        }
-
-        // Detect Local VLM Services
-        async function detectServices() {
-            try {
-                const response = await fetch('/detect-services');
-                const data = await response.json();
-
-                if (data.default) {
-                    const service = data.default;
-                    console.log('Detected service:', service.name);
-
-                    // Update API Base URL
-                    apiBaseUrl.value = service.url;
-
-                    // Check if API key is required
-                    checkApiKeyRequirement(service.url);
-
-                    // Update hint text (svc-llm-api-base has no hint sibling after
-                    // Block 3's form refactor, so guard against a null element).
-                    const hintDiv = apiBaseUrl.nextElementSibling;
-                    if (hintDiv) {
-                        if (data.detected.length > 1) {
-                            const serviceNames = data.detected.map(s => s.name).join(', ');
-                            hintDiv.textContent = `Detected: ${serviceNames}`;
-                        } else if (service.name === 'NVIDIA API Catalog') {
-                            hintDiv.textContent = window.JoyI18n.localizeUiString('No local VLM services found. Using NVIDIA API Catalog (requires API key from build.nvidia.com)');
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error detecting services:', error);
-                // Default to showing API key field on error
-                checkApiKeyRequirement('https://');
-            }
-        }
-
-        // Fetch Models
-        function isValidModelName(model) {
-            const value = String(model || '').trim();
-            return Boolean(value) && !['undefined', 'null', 'none'].includes(value.toLowerCase());
-        }
-
-        async function fetchModels() {
-            try {
-                if (!apiBaseUrl || !apiKey || !modelSelect) return;
-
-                // Get current API settings from UI
-                const currentApiBase = apiBaseUrl.value.trim();
-                const currentApiKey = apiKey.value.trim();
-
-                // Build query params
-                const params = new URLSearchParams();
-                if (currentApiBase) {
-                    params.append('api_base', currentApiBase);
-                }
-                if (currentApiKey) {
-                    params.append('api_key', currentApiKey);
-                }
-
-                const url = `/models${params.toString() ? '?' + params.toString() : ''}`;
-                const response = await fetch(url);
-                const data = await response.json();
-
-                const validModels = (data.models || []).filter(model => isValidModelName(model && model.id));
-                if (validModels.length > 0) {
-                    // `modelSelect` is now the `svc-llm-model` text input (Block 3), not a
-                    // <select>, so prefill its value instead of building <option>s.
-                    let currentModel = (modelSelect.value || '').trim();
-                    if (!currentModel) {
-                        const current = validModels.find(m => m.current);
-                        const autoSelectedModel = current ? current.id : validModels[0].id;
-                        modelSelect.value = autoSelectedModel;
-                        currentModel = autoSelectedModel;
-
-                        // Auto-apply the new model
-                        console.log(`Auto-selected model: ${autoSelectedModel}`);
-                        applyApiSettings({ showFeedback: false });
-                    }
-
-                    // Update model name in VLM output header
-                    if (currentModel) {
-                        const nameEl = document.getElementById('modelName');
-                        if (nameEl) nameEl.textContent = currentModel;
-                    }
-                } else {
-                    console.warn('fetchModels: no models available from', currentApiBase);
-                }
-            } catch (error) {
-                console.error('Error fetching models:', error);
-            }
-        }
-
-        // Handle model change
-        modelSelect.addEventListener('change', (e) => {
-            const newModel = e.target.value;
-            if (!newModel) return;
-
-            // Update model name in VLM output header
-            document.getElementById('modelName').textContent = newModel;
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                // Send model, API base, and API key together
-                websocket.send(JSON.stringify({
-                    type: 'update_model',
-                    model: newModel,
-                    api_base: apiBaseUrl.value.trim(),
-                    api_key: apiKey.value.trim()
-                }));
-                updateStatus(window.JoyI18n.localizeUiString('Model configured'), 'connected');
-            }
-
-            // Trigger flash animation
-            modelSelect.classList.add('applied');
-            setTimeout(() => {
-                modelSelect.classList.remove('applied');
-            }, 600);
-        });
-
-        // Also trigger flash on blur (when dropdown closes)
-        modelSelect.addEventListener('blur', () => {
-            const currentModel = modelSelect.value;
-            if (currentModel) {
-                // Trigger flash animation
-                modelSelect.classList.add('applied');
-                setTimeout(() => {
-                    modelSelect.classList.remove('applied');
-                }, 600);
-            }
-        });
-
-        // Helper function to apply prompt settings
-        function applyPromptSettings() {
-            if (!isAnalysisRunning) {
-                updateStatus('请先开始视频', 'disconnected');
-                updatePromptAvailability();
-                return false;
-            }
-
-            const newPrompt = cleanBackgroundQuestionText(promptText.value.trim());
-
-            window.JoyState.currentPromptText = newPrompt;
-            if (newPrompt) {
-                appendPromptHistoryEntry(newPrompt);
-            } else {
-                pendingPromptEntry = null;
-            }
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({
-                    type: 'update_prompt',
-                    prompt: newPrompt
-                }));
-            }
-
-            // Clear input after applying (one-shot mode)
-            promptText.value = '';
-            resetAsrTranscriptState('');
-            resetActiveAsrSegment();
-            resizePromptInput();
-            return true;
-        }
-
-        function resizePromptInput() {
-            promptText.style.height = 'auto';
-            promptText.style.height = Math.min(promptText.scrollHeight, 120) + 'px';
-        }
-
-        function closePromptPopovers(except = null) {
-            if (except !== 'presets') {
-                promptPresetMenu.classList.add('hidden');
-                promptPresetBtn.classList.remove('active');
-            }
-        }
-
-        function flashPromptControl(element) {
-            element.classList.add('applied');
-            setTimeout(() => {
-                element.classList.remove('applied');
-            }, 600);
-        }
-        // P0-1 sibling (audit 2026-08-13): updatePromptAvailability() calls
-        // syncSpeechButtons(), which lives in the post-main speech_input.js script
-        // (loaded after this inline script). Deferring the initial paint to
-        // DOMContentLoaded keeps the same load behavior while guaranteeing the
-        // helper exists — an immediate call would throw ReferenceError before
-        // window.JoyWs.register() runs (WS bootstrap lost).
-        if (typeof syncSpeechButtons === 'function') {
-            updatePromptAvailability();
-        } else {
-            window.addEventListener('DOMContentLoaded', () => {
-                updatePromptAvailability();
-            });
-        }
-        resizePromptInput();
-
-        // refreshModelsBtn was removed by the Block 3 services-panel refactor (the
-        // "Probe" action covers re-probing). Guard so a missing element can't abort the
-        // IIFE before window.JoyWs.register() runs. fetchModels still fires on load and
-        // on API-base change via applyApiSettings({ refreshModels: true }).
-        if (refreshModelsBtn) refreshModelsBtn.addEventListener('click', fetchModels);
-
-        // Block 4: applyApiSettings + cleanupServerSession extracted to joy_ws.js (window.JoyWs)
-        // Block 5: connectWebSocket extracted to joy_ws.js; the onmessage protocol router stays
-        // inline as dispatchServerMessage (declared below) and is handed to JoyWs via register so
-        // connectWebSocket can wire ws.onmessage. Reassigned closure vars are bridged with live
-        // accessors (getWebSocket/setWebSocket/getSessionId).
-        const { applyApiSettings, cleanupServerSession } = window.JoyWs;
-        window.JoyWs.register({
-            apiBaseUrl,
-            apiKey,
-            modelSelect,
-            isValidModelName,
-            updateStatus,
-            fetchModels,
-            getWebSocket: () => websocket,
-            // P1-1 (audit 2026-08-13): screen_capture.js / live_ui.js / capture
-            // helpers resolve the socket via window.websocket, but the lexical
-            // `let websocket` is not visible on window — without this mirror the
-            // screen-capture and live-camera frame pipelines short-circuit on
-            // `!window.websocket`. Also clears window.websocket on close because
-            // joy_ws.js calls setWebSocket(null) in onclose/reset paths.
-            setWebSocket: (ws) => {
-                websocket = ws;
-                window.websocket = ws;
-            },
-            getSessionId: () => window.sessionId,
-            installLlmReplyHandler,
-            dispatchServerMessage
-        });
-
-        // Auto-apply API settings when API Base URL changes
-        apiBaseUrl.addEventListener('blur', (e) => {
-            checkApiKeyRequirement(e.target.value);
-            applyApiSettings({ refreshModels: true, showFeedback: true });
-
-            // Trigger flash animation
-            apiBaseUrl.classList.add('applied');
-            setTimeout(() => {
-                apiBaseUrl.classList.remove('applied');
-            }, 600);
-        });
-
-        apiBaseUrl.addEventListener('change', (e) => {
-            checkApiKeyRequirement(e.target.value);
-            applyApiSettings({ refreshModels: true, showFeedback: true });
-
-            // Trigger flash animation
-            apiBaseUrl.classList.add('applied');
-            setTimeout(() => {
-                apiBaseUrl.classList.remove('applied');
-            }, 600);
-        });
-
-        // Auto-apply API settings when API Key changes (with debounce)
-        let apiKeyDebounceTimer;
-        apiKey.addEventListener('input', () => {
-            clearTimeout(apiKeyDebounceTimer);
-            apiKeyDebounceTimer = setTimeout(() => {
-                applyApiSettings({ showFeedback: false });
-            }, 1000); // Wait 1 second after user stops typing
-        });
-
-        // Flash animation when API Key loses focus
-        apiKey.addEventListener('blur', () => {
-            clearTimeout(apiKeyDebounceTimer);
-            applyApiSettings({ showFeedback: false });
-
-            // Trigger flash animation
-            apiKey.classList.add('applied');
-            setTimeout(() => {
-                apiKey.classList.remove('applied');
-            }, 600);
-        });
-
-        // API Presets Menu
-        const apiPresetsBtn = document.getElementById('apiPresetsBtn');
-        const apiPresetsMenu = document.getElementById('apiPresetsMenu');
-
-        if (apiPresetsBtn && apiPresetsMenu) {
-            apiPresetsBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                apiPresetsMenu.style.display = apiPresetsMenu.style.display === 'none' ? 'block' : 'none';
-            });
-
-            // Close menu when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!apiPresetsMenu.contains(e.target) && e.target !== apiPresetsBtn) {
-                    apiPresetsMenu.style.display = 'none';
-                }
-            });
-
-            // Handle preset selection
-            document.querySelectorAll('.api-preset-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    const url = e.currentTarget.getAttribute('data-url');
-                    apiBaseUrl.value = url;
-                    apiPresetsMenu.style.display = 'none';
-
-                    // Trigger checks
-                    checkApiKeyRequirement(url);
-
-                    // Auto-apply new API settings
-                    applyApiSettings({ refreshModels: true, showFeedback: true });
-
-                    // Update hint
-                    const hint = document.getElementById('apiBaseHint');
-                    const serviceName = e.currentTarget.querySelector('strong').textContent;
-                    if (hint) hint.textContent = `Using ${serviceName}`;
-                });
-            });
-        }
-
-        // Mirror video toggle
-        mirrorBtn.addEventListener('click', () => {
-            videoElement.classList.toggle('mirrored');
-            mirrorBtn.classList.toggle('active');
-        });
-
-        // Auto-apply processing interval on change
-        if (processEvery) processEvery.addEventListener('change', () => {
-            const interval = parseFloat(processEvery.value) || 1.0;
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                // P1-3 (audit 2026-08-13): backend ws_handler.py only handles
-                // `update_process_interval`; the old `update_processing` name was
-                // silently dropped so the RTSP Processing Interval never applied.
-                websocket.send(JSON.stringify({
-                    type: 'update_process_interval',
-                    process_interval: interval
-                }));
-            }
-
-            // Trigger flash animation
-            processEvery.classList.add('applied');
-            setTimeout(() => {
-                processEvery.classList.remove('applied');
-            }, 600);
-        });
-
-        // Also trigger flash on blur
-        if (processEvery) processEvery.addEventListener('blur', () => {
-            const interval = parseFloat(processEvery.value) || 1.0;
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({
-                    type: 'update_process_interval',
-                    process_interval: interval
-                }));
-            }
-
-            // Trigger flash animation
-            processEvery.classList.add('applied');
-            setTimeout(() => {
-                processEvery.classList.remove('applied');
-            }, 600);
-        });
-
-        // Auto-apply frames per batch on change
-        if (framesPerBatch) framesPerBatch.addEventListener('change', () => {
-            const value = parseInt(framesPerBatch.value) || 1;
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({
-                    type: 'update_frames_per_batch',
-                    frames_per_batch: value
-                }));
-            }
-
-            framesPerBatch.classList.add('applied');
-            setTimeout(() => {
-                framesPerBatch.classList.remove('applied');
-            }, 600);
-        });
-
-        if (framesPerBatch) framesPerBatch.addEventListener('blur', () => {
-            const value = parseInt(framesPerBatch.value) || 1;
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({
-                    type: 'update_frames_per_batch',
-                    frames_per_batch: value
-                }));
-            }
-
-            framesPerBatch.classList.add('applied');
-            setTimeout(() => {
-                framesPerBatch.classList.remove('applied');
-            }, 600);
-        });
-
-        // Auto-apply max latency on change
-        maxLatency.addEventListener('change', () => {
-            const latency = parseFloat(maxLatency.value) || 1.0;
-
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({
-                    type: 'update_max_latency',
-                    max_latency: latency
-                }));
-            }
-        });
-
-        // Debug payload toggles (Settings modal): send set_debug so server includes request/response payload in vlm_response
-        function sendDebugFlags() {
-            if (!websocket || websocket.readyState !== WebSocket.OPEN) return;
-            const req = document.getElementById('debugShowRequestPayload');
-            const res = document.getElementById('debugShowResponsePayload');
-            const mem = document.getElementById('debugShowMemoryState');
-            websocket.send(JSON.stringify({
-                type: 'set_debug',
-                show_request_payload: !!req?.checked,
-                show_response_payload: !!res?.checked,
-                show_memory_state: !!mem?.checked
-            }));
-        }
-        const debugShowRequestPayload = document.getElementById('debugShowRequestPayload');
-        const debugShowResponsePayload = document.getElementById('debugShowResponsePayload');
-        const debugShowMemoryState = document.getElementById('debugShowMemoryState');
-        const requestPayloadDebugEl = document.getElementById('requestPayloadDebug');
-        const responsePayloadDebugEl = document.getElementById('responsePayloadDebug');
-        const memoryStateDebugEl = document.getElementById('memoryStateDebug');
-        if (debugShowRequestPayload) {
-            debugShowRequestPayload.addEventListener('change', () => {
-                sendDebugFlags();
-                if (requestPayloadDebugEl) requestPayloadDebugEl.style.display = debugShowRequestPayload.checked ? 'block' : 'none';
-            });
-        }
-        if (debugShowResponsePayload) {
-            debugShowResponsePayload.addEventListener('change', () => {
-                sendDebugFlags();
-                if (responsePayloadDebugEl) responsePayloadDebugEl.style.display = debugShowResponsePayload.checked ? 'block' : 'none';
-            });
-        }
-        if (debugShowMemoryState) {
-            debugShowMemoryState.addEventListener('change', () => {
-                sendDebugFlags();
-                if (memoryStateDebugEl) memoryStateDebugEl.style.display = debugShowMemoryState.checked ? 'block' : 'none';
-            });
-        }
-
-        [backgroundEnabledToggle, backgroundFrameMultiplier, backgroundMaxFrames].forEach(control => {
-            if (!control) return;
-            control.addEventListener('change', () => {
-                sendBackgroundConfig();
-                control.classList?.add('applied');
-                setTimeout(() => control.classList?.remove('applied'), 600);
-            });
-        });
-
-        // ASR promotion toggle (joyai-asr-promotion-ui): notify the server; it echoes
-        // back an `asr_promotion_updated` message which re-syncs the UI.
-        if (asrPromotionToggle) {
-            asrPromotionToggle.addEventListener('change', (e) => {
-                settings.asrPromotionEnabled = e.target.checked;
-                if (websocket && websocket.readyState === WebSocket.OPEN) {
-                    websocket.send(JSON.stringify({ type: 'update_asr_promotion', enabled: e.target.checked }));
-                }
-                e.target.classList?.add('applied');
-                setTimeout(() => e.target.classList?.remove('applied'), 600);
-            });
-        }
-
-        // Memory state change detection for console logging
-        let _lastMemoryStateHash = '';
-
-
-        // Start - dispatch to webcam or RTSP based on active tab
-
-        // Start WebRTC (Webcam mode)
-
-        // Start RTSP mode
-
-        // Stop (handles both webcam and RTSP)
-
-        // Sidebar start/stop buttons removed - using overlay buttons instead
-        // startBtn.addEventListener('click', start);
-        // stopBtn.addEventListener('click', stop);
-
-        // Load on page load
-        window.addEventListener('load', async () => {
-            connectWebSocket();
-
-            // Fallback for older servers that do not send server_config.
-            setTimeout(() => {
-                if (!serverConfigApplied) {
-                    checkApiKeyRequirement(apiBaseUrl.value);
-                    fetchModels();
-                }
-            }, 1000);
-
-            // Initialize prompt display
-            const initialPrompt = promptText.value.trim();
-            if (initialPrompt) {
-                window.JoyState.currentPromptText = initialPrompt;
-            }
-
-            // Initialize Lucide icons
-            lucide.createIcons();
-        });
-        (function () {
-            const OrigWS = window.WebSocket;
-            function WrappedWS(url, protocols) {
-                const ws = protocols !== undefined
-                    ? new OrigWS(url, protocols)
-                    : new OrigWS(url);
-                try { installLlmReplyHandler(ws); } catch (e) { /* ignore */ }
-                return ws;
-            }
-            WrappedWS.prototype = OrigWS.prototype;
-            WrappedWS.CONNECTING = OrigWS.CONNECTING;
-            WrappedWS.OPEN = OrigWS.OPEN;
-            WrappedWS.CLOSING = OrigWS.CLOSING;
-            WrappedWS.CLOSED = OrigWS.CLOSED;
-            window.WebSocket = WrappedWS;
-
-            // Also wrap any ws already in flight (e.g. created before
-            // this script ran).
-            try { if (window.websocket) installLlmReplyHandler(window.websocket); } catch (e) { /* ignore */ }
-        })();
-    </script>
+    <script src="./app_main.js"></script>
     <script src="./vlm_render.js"></script>
     <script src="./background_rich.js"></script>
     <script src="./tts_player.js"></script>
@@ -2843,156 +1278,9 @@ limitations under the License.
 
         <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-        <script>
-        (function () {
-            var body = document.body;
-            var toggle = document.getElementById('sidebarToggle');
-            var scrim = document.getElementById('sidebarScrim');
-            if (!toggle || !scrim) return;
-            function setOpen(open) {
-                body.classList.toggle('sidebar-open', open);
-                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            }
-            toggle.addEventListener('click', function () {
-                setOpen(!body.classList.contains('sidebar-open'));
-            });
-            scrim.addEventListener('click', function () { setOpen(false); });
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape') setOpen(false);
-            });
-            window.addEventListener('resize', function () {
-                if (window.innerWidth >= 1024) setOpen(false);
-            });
-        })();
-        </script>
+        <script src="./sidebar_toggle.js"></script>
 </body>
 </html>
     <!-- v6-lite.19b incremental wiring: additive only; never touches contract JS -->
-    <script>
-    (function () {
-        var pill = document.getElementById('healthPill');
-        var menu = document.getElementById('healthMenu');
-        if (pill && menu) {
-            pill.addEventListener('click', function (e) { e.stopPropagation(); menu.classList.toggle('open'); });
-            document.addEventListener('click', function (e) {
-                if (menu.classList.contains('open') && !menu.contains(e.target) && e.target !== pill && !pill.contains(e.target)) {
-                    menu.classList.remove('open');
-                }
-            });
-        }
-        // 设置左侧导航：面板切换（参考 design/joyai-redesign-preview.html 的 showSection 模型）
-        // 点击导航项 → 仅显示对应大类面板，其余隐藏（不再把所有 section 平铺长滚）。
-        var nav = document.getElementById('modalNav');
-        var PANEL_ROOTS = {
-            services: 'servicesPanel',
-            input: 'capSettingCard',
-            wiki: 'wikiPanel',
-            voice: 'voicePanel',
-            memory: 'memoryPanel',
-            api: 'apiStatusSection',
-            appearance: 'appearanceSection',
-            advanced: 'radioSilenceSection',
-            about: 'aboutFooter'
-        };
-        function showSettingsPanel(key, scrollId) {
-            Object.keys(PANEL_ROOTS).forEach(function (k) {
-                var el = document.getElementById(PANEL_ROOTS[k]);
-                if (el) el.classList.toggle('cat-hidden', k !== key);
-            });
-            if (nav) {
-                nav.querySelectorAll('.nav-item').forEach(function (n) {
-                    n.classList.toggle('active', n.getAttribute('data-panel') === key);
-                });
-            }
-            if (scrollId) {
-                var s = document.getElementById(scrollId);
-                if (s) {
-                    // 确保目标所在的折叠面板（如 servicesConfig）已展开
-                    var pc = s.closest('.panel-content.collapsed');
-                    if (pc) {
-                        pc.classList.remove('collapsed');
-                        var pt = document.getElementById(pc.id + 'Toggle');
-                        if (pt) pt.classList.remove('collapsed');
-                    }
-                    s.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    s.classList.add('nav-flash');
-                    setTimeout(function () { s.classList.remove('nav-flash'); }, 5000);
-                }
-            }
-        }
-        if (nav) {
-            nav.querySelectorAll('.nav-item').forEach(function (it) {
-                it.addEventListener('click', function () {
-                    showSettingsPanel(it.getAttribute('data-panel'), it.getAttribute('data-scroll'));
-                });
-            });
-            // 初始：仅显示「模型」面板（其余收入左侧栏，按需切换）
-            showSettingsPanel('services');
-        }
-        // 外观面板内的子节使用手风琴：展开一项时自动收起同面板其他项，避免 9 个标题平铺
-        (function () {
-            var appearanceSection = document.getElementById('appearanceSection');
-            if (appearanceSection) {
-                appearanceSection.addEventListener('click', function (e) {
-                    var title = e.target.closest('.settings-section-title');
-                    if (!title) return;
-                    var section = title.parentElement;
-                    if (!section || !section.classList.contains('settings-section')) return;
-                    // inline onclick 已先切换；若当前处于展开状态，收起兄弟节
-                    if (!section.classList.contains('collapsed')) {
-                        appearanceSection.querySelectorAll('.settings-section').forEach(function (sib) {
-                            if (sib !== section) sib.classList.add('collapsed');
-                        });
-                    }
-                });
-            }
-        })();
-        var cam = document.getElementById('camBtn');
-        var cap = document.getElementById('captureOverlay');
-        // Reparent the capture overlay to <body> so position:fixed resolves
-        // against the viewport instead of a transformed ancestor
-        // (.chat-prompt-shell / .prompt-editor-inline). Otherwise fixed
-        // positioning is trapped by the local containing block and the
-        // overlay renders clipped/offset outside the visible area.
-        if (cap && cap.parentElement !== document.body) {
-            document.body.appendChild(cap);
-        }
-        function positionCaptureOverlay() {
-            if (!cam || !cap) return;
-            var rect = cam.getBoundingClientRect();
-            var capWidth = 360;
-            var pad = 12;
-            var left = rect.left + rect.width / 2 - capWidth / 2;
-            var maxLeft = window.innerWidth - capWidth - pad;
-            if (left < pad) left = pad;
-            if (left > maxLeft) left = maxLeft;
-            var spaceAbove = rect.top - pad;
-            var spaceBelow = window.innerHeight - rect.bottom - pad;
-            // Prefer opening upward (above the button); if it does not fit, shrink the overlay.
-            if (spaceAbove >= 180 || spaceAbove >= spaceBelow) {
-                cap.style.maxHeight = Math.min(spaceAbove, parseFloat(getComputedStyle(cap).maxHeight) || 600) + 'px';
-                cap.style.top = (rect.top - cap.offsetHeight - pad) + 'px';
-                cap.style.bottom = 'auto';
-            } else {
-                cap.style.maxHeight = Math.min(spaceBelow, parseFloat(getComputedStyle(cap).maxHeight) || 600) + 'px';
-                cap.style.top = (rect.bottom + pad) + 'px';
-                cap.style.bottom = 'auto';
-            }
-            cap.style.left = left + 'px';
-        }
-        if (cam && cap) {
-            cam.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var willShow = cap.classList.contains('hidden');
-                cap.classList.toggle('hidden');
-                if (willShow) positionCaptureOverlay();
-            });
-            document.addEventListener('click', function (e) {
-                if (cap && !cap.classList.contains('hidden') && !cap.contains(e.target) && e.target !== cam && !cam.contains(e.target)) {
-                    cap.classList.add('hidden');
-                }
-            });
-        }
-    })();
-    </script>
+    <script src="./incremental_wiring.js"></script>
 

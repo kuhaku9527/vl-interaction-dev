@@ -120,6 +120,8 @@ from .admin_endpoints import _screen_latency_handler as _screen_latency_handler 
 from .admin_endpoints import _services_config_handler as _services_config_handler  # noqa: E402
 from .admin_endpoints import _services_status_handler as _services_status_handler  # noqa: E402
 from .admin_endpoints import extended_status as extended_status  # noqa: E402
+# 2026-09-18: 命名连接列表（后端持久化，A2-b）
+from .admin_endpoints import connections_handler as connections_handler  # noqa: E402
 from .asr import setup_asr_routes  # noqa: E402
 
 # Facade re-exports from asr_bridge (internal ASR bridge subprocess manager).
@@ -172,6 +174,8 @@ from .service_probe import tts_health as tts_health  # noqa: E402
 
 # Facade re-export from service_test (POST /api/services/test model-test button).
 from .service_test import _services_test_handler as _services_test_handler  # noqa: E402
+# 2026-09-18: 列出上游可用模型（供「模型」输入框做候选下拉）。
+from .service_test import _services_list_models_handler as _services_list_models_handler  # noqa: E402
 from .services_config import _SERVICES_CONFIG_DEFAULTS as _SERVICES_CONFIG_DEFAULTS  # noqa: E402
 from .services_config import _SERVICES_CONFIG_PATH as _SERVICES_CONFIG_PATH  # noqa: E402
 
@@ -669,6 +673,11 @@ def main():
     # Model-test button (task M1): live-test a candidate api_base/model/api_key
     # triple with one minimal OpenAI-compatible chat request; never writes back.
     app.router.add_post("/api/services/test", _services_test_handler)
+    # 2026-09-18: 获取上游模型列表（纯探测，不写配置）。供前端「模型」字段的候选下拉。
+    app.router.add_post("/api/services/list-models", _services_list_models_handler)
+    # 2026-09-18: 命名连接列表（GET 读 / PUT 整体替换）。存 config/connections.json
+    app.router.add_get("/api/connections", connections_handler)
+    app.router.add_put("/api/connections", connections_handler)
     # [Local Wiki] frontend gateway (ADR-0012, tasks F1-F4). Provider health
     # (B3) and network settings (B4) are OWNED by the backend (#36); this
     # gateway only FORWARDS them to memory-store — no business logic here.

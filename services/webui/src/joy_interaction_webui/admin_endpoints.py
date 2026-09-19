@@ -561,3 +561,80 @@ async def _push_embedding_provider(embed_cfg: dict) -> None:
                 )
     except Exception as exc:
         logger.warning("memory-store embedding route push failed: %s", exc)
+
+
+# ============================================================================
+# 2026-09-18 新增：命名连接列表（后端持久化，A2-b）
+# ----------------------------------------------------------------------------
+# 用户诉求：原先「预设」存浏览器 localStorage，换浏览器即丢失，且 UI 难懂
+# （"保存按钮在哪都不知道"）。现改为后端持久化的连接列表，并配列表化 UI。
+#
+# 存储：config/connections.json（独立文件，对 services.json 零侵入）
+#   - chmod 0600 + config/ 已 gitignore
+#   - api_key 明文，与 services.json 同一安全基线（E3，经用户确认）
+#   - 详见 connections_store.py 的模块 docstring
+# ============================================================================
+
+
+async def connections_handler(request: web.Request) -> web.Response:
+    """GET/PUT /api/connections — 读取或替换命名连接列表。
+
+    GET  → ``{"version":1, "connections": {"<slot>": [ {id,name,api_base,model,api_key?,provider?} ]}}``
+    PUT  ← 同结构（整体替换语义：前端持有完整列表，删除即不在列表中）
+
+    为什么是「整体替换」而不是逐条增删：
+      列表规模小（每槽位上限 50），整体替换让前端无需处理部分失败的
+      中间态，也让后端写入保持单次原子操作。冲突风险由「单用户本地」
+      这一部署形态兜底（无并发写者）。
+
+    安全：PUT 响应回显时会**脱敏 api_key**（返回是否已设置，不回显明文），
+          与 services_config 的 ``***set***`` 约定一致。
+    """
+    from . import connections_store as _cs
+
+    if request.method == "GET":
+        data = _cs.load_connections()
+        return web.json_response(_redact_connections(data))
+
+    # ---- PUT ----
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        return web.json_response({"error": "bad json: %s" % exc}, status=400)
+
+    reason = _cs.validate_connections_payload(payload)
+    if reason:
+        logger.warning("PUT /api/connections rejected: %s", reason)
+        return web.json_response({"error": reason}, status=400)
+
+    try:
+        saved = _cs.save_connections(payload.get("connections") or {})
+    except Exception as exc:
+        logger.error("PUT /api/connections persist failed: %s", exc)
+        return web.json_response(
+            {"error": "could not persist connections", "reason": str(exc)[:200]},
+            status=500,
+        )
+    logger.info("PUT /api/connections saved (%s)", _connections_summary(saved))
+    return web.json_response(_redact_connections(saved))
+
+
+def _redact_connections(data: dict) -> dict:
+    """把 api_key 换成是否已设置，避免明文经 HTTP 回显。"""
+    out: dict = {"version": data.get("version", 1), "connections": {}}
+    for slot, rows in (data.get("connections") or {}).items():
+        cleaned = []
+        for row in rows:
+            safe = {k: v for k, v in row.items() if k != "api_key"}
+            safe["api_key_set"] = bool(row.get("api_key"))
+            cleaned.append(safe)
+        out["connections"][slot] = cleaned
+    return out
+
+
+def _connections_summary(data: dict) -> str:
+    parts = []
+    for slot, rows in (data.get("connections") or {}).items():
+        if rows:
+            parts.append("%s=%d" % (slot, len(rows)))
+    return ", ".join(parts) or "empty"

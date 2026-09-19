@@ -132,6 +132,18 @@
 | --- | --- |
 | [`glossary.md`](glossary.md) | BT 语音交互栈术语表 |
 
+### 规范（`standards/`，动手前必读）
+
+> **纪律**：改 WebUI / 改代码风格前先查这里。规范是**强制约束**，不是参考建议。
+
+| 文档 | 状态 | 用途 |
+| --- | --- | --- |
+| [`standards/webui-design-standards.md`](standards/webui-design-standards.md) | ✅ **新建 2026-09-18** | **WebUI 设计规范**：卡片契约 / 按钮尺寸 / i18n 纪律 / 主题 token / 批量改界面的结构守恒自检 / 删除元素纪律 |
+| [`standards/coding-standards.md`](standards/coding-standards.md) | ✅ | 编码规范 |
+| [`standards/code-review-checklist.md`](standards/code-review-checklist.md) | ✅ | 代码审查清单 |
+| [`standards/lint-baseline.md`](standards/lint-baseline.md) | ✅ | Lint 基线（ADR-0011 分阶段门禁） |
+| [`standards/workspace-isolation.md`](standards/workspace-isolation.md) | ✅ | 工作区隔离规范 |
+
 ### 维护工具（跨目录引用）
 
 - [`../services/scripts/README.md`](../services/scripts/README.md) — 改代码后必跑 [`sync-docs.py`](../services/scripts/sync-docs.py)

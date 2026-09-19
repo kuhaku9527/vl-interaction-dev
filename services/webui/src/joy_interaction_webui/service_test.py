@@ -280,3 +280,98 @@ async def _run_asr_test(api_base: str, api_key: str | None) -> dict:
     if not api_base:
         return {"ok": True, "reason": "local model (no key needed)", "status": 200}
     return await _auth_or_reachable(_origin_of(api_base), api_key)
+
+
+# ============================================================================
+# 2026-09-18 新增：获取上游模型列表（用户要求「透出模型列表」）
+# ----------------------------------------------------------------------------
+# 背景：底层管道早已存在 —— service_probe.py 的 _probe_llm 已经 GET
+#   {api_base}/models 并解析出 data[].id 列表（其 :31-36），
+#   但 admin_endpoints.py:178-182 在组装 /api/services/status 响应时
+#   只取 status/reason，把 models 丢掉了，所以前端拿不到可选模型。
+#
+# 本端点直接复用同一套调用约定，把列表透出给前端，供「模型」输入框做候选下拉。
+# 设计约束：
+#   - 与 /api/services/test 一致：只读探测，永不写回配置（never mutates config）
+#   - 与 /api/services/test 一致：坏输入 400，真实探测恒 200 + {ok:false, reason}
+#   - api_key 只用于本次请求的 Authorization，不落盘、不记日志
+# ============================================================================
+
+async def _fetch_openai_models(api_base: str, api_key: str | None) -> dict:
+    """GET ``{api_base}/models`` and return the model ids.
+
+    Returns ``{"ok": bool, "models": [str], "status": int, "reason"?: str}``.
+    Never raises: transport errors / timeouts / non-2xx all resolve to
+    ``ok=False`` with a short reason.
+    """
+    url = api_base.rstrip("/") + "/models"
+    headers = {}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    try:
+        async with (
+            aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=_TEST_TIMEOUT_S)) as session,
+            session.get(url, headers=headers) as resp,
+        ):
+            if resp.status >= 400:
+                reason = (await resp.text(errors="replace"))[:_REASON_MAX_CHARS].strip()
+                return {"ok": False, "models": [], "status": resp.status,
+                        "reason": reason or ("HTTP %d" % resp.status)}
+            try:
+                body = await resp.json(content_type=None)
+            except Exception as exc:  # 上游返回非 JSON
+                return {"ok": False, "models": [], "status": resp.status,
+                        "reason": "invalid json: %s" % str(exc)[:120]}
+            # OpenAI 兼容格式：{"data": [{"id": "..."}]}
+            # 少数实现直接返回 {"models": [...]} 或裸数组，这里都兼容。
+            rows = None
+            if isinstance(body, dict):
+                rows = body.get("data")
+                if rows is None:
+                    rows = body.get("models")
+            elif isinstance(body, list):
+                rows = body
+            ids: list[str] = []
+            if isinstance(rows, list):
+                for m in rows:
+                    if isinstance(m, dict):
+                        mid = m.get("id") or m.get("name") or m.get("model")
+                        if isinstance(mid, str) and mid:
+                            ids.append(mid)
+                    elif isinstance(m, str) and m:
+                        ids.append(m)
+            ids = sorted(set(ids))
+            return {"ok": True, "models": ids, "status": resp.status,
+                    "reason": "" if ids else "upstream returned no model ids"}
+    except Exception as exc:
+        return {"ok": False, "models": [], "status": 0, "reason": str(exc)[:120]}
+
+
+async def _services_list_models_handler(request: web.Request) -> web.Response:
+    """POST /api/services/list-models — 列出上游可用模型。
+
+    请求体：``{"api_base": "https://.../v1", "api_key": "..."}``（api_key 可选）
+    响应：``{"ok": bool, "models": [str], "status": int, "reason"?: str}``
+
+    纯探测，不读写任何持久化配置。空 api_base 返回 400（无从探测）。
+    """
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        return web.json_response({"error": "bad json: %s" % exc}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "payload must be a JSON object"}, status=400)
+
+    api_base = payload.get("api_base")
+    if not isinstance(api_base, str) or not api_base.strip():
+        return web.json_response({"error": "api_base is required"}, status=400)
+    api_key = payload.get("api_key")
+    if api_key is not None and not isinstance(api_key, str):
+        return web.json_response({"error": "api_key must be a string"}, status=400)
+
+    result = await _fetch_openai_models(api_base.strip(), api_key or None)
+    logger.info(
+        "POST /api/services/list-models base=%s ok=%s n=%s",
+        api_base.strip(), result.get("ok"), len(result.get("models") or []),
+    )
+    return web.json_response(result)

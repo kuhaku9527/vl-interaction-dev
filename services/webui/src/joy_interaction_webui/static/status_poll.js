@@ -83,6 +83,7 @@
             if (!payload || !payload.exists) {
                 el.textContent = '⚫ 未连接';
                 el.className = 'status-badge jarvis-disconnected';
+                setModeChipState('kws', 'off');
                 return;
             }
             const info = JARVIS_STATE_MAP[payload.state] ||
@@ -90,7 +91,22 @@
             const awake = payload.is_awake ? ' (唤醒)' : '';
             el.textContent = info.emoji + ' ' + info.text + awake;
             el.className = 'status-badge ' + info.cls;
+            // 状态灯对接（2026-09-18）：kws chip 由真实 Jarvis 状态机驱动三态色。
+            setModeChipState('kws', JARVIS_CHIP_STATE[payload.state] || 'warn');
         }
+
+        // Jarvis 状态机 -> kws chip 三态色。
+        // LISTENING = 正常待唤醒(绿)；DIALOG/唤醒链路 = 处理中(黄)；
+        // ERROR = 错误(红)；EXIT/PAUSED = 未启用(灰)。
+        const JARVIS_CHIP_STATE = {
+            'KWS_LISTENING': 'ok',
+            'WAKE_DETECTED': 'warn',
+            'WAIT_ASR_CONFIRM': 'warn',
+            'DIALOG_ACTIVE': 'warn',
+            'PAUSED': 'off',
+            'EXIT': 'off',
+            'ERROR': 'err',
+        };
 
         async function pollJarvisStatus() {
             try {
@@ -130,6 +146,38 @@
         // Live state-pill (polls /api/live/status every 1s)
         // Shows the live turn-state transitions (免唤醒词常驻监听).
         // ====================================================================
+        // ====================================================================
+        // 2026-09-18 — 顶栏 mode-chip（live / kws）的状态灯对接
+        // 此前 .mode-chip .cdot 的颜色纯由 CSS 决定（.active → 恒绿），
+        // 没有任何 JS 写入 —— 是空壳，永远显示绿色，不反映真实状态。
+        // 现由 renderLiveStatus() / renderJarvisStatus() 调用下面的
+        // setModeChipState()，把真实运行状态映射成三态色。
+        //   ok   = 正常运行（绿）
+        //   warn = 中间态/处理中（黄）
+        //   err  = 未连接/错误（红）
+        //   off  = 未启用（灰）
+        // ====================================================================
+        function setModeChipState(mode, state) {
+            const btn = document.querySelector('.mode-chip[data-mode="' + mode + '"]');
+            if (!btn) return;
+            const dot = btn.querySelector('.cdot');
+            if (dot) {
+                dot.classList.remove('ok', 'warn', 'err', 'off');
+                dot.classList.add(state || 'off');
+            }
+            // 同步 aria：让无障碍属性也反映真实状态
+            btn.setAttribute('data-state', state || 'off');
+            // 2026-09-19（用户反馈）：.active 此前**从未被 JS 切换** —— HTML 硬编码
+            // 在 live chip 上，于是红框恒亮，成了常态装饰而非"使用中"提醒。
+            // 现改为与真实状态对齐：只有该模式真的在跑（非 off）才算 active。
+            // 用户要求：「应该是在使用的时候被红色框包裹作为提醒，而不是常态的」。
+            const running = Boolean(state) && state !== 'off';
+            btn.classList.toggle('active', running);
+        }
+        // 对外暴露，供 live/jarvis 的其它模块（live_ui.js / jarvis 相关）复用
+        window.JoyModeChip = window.JoyModeChip || {};
+        window.JoyModeChip.setState = setModeChipState;
+
         const LIVE_STATE_MAP = {
             'LISTENING':       { emoji: '🟢', text: 'Live 监听中', cls: 'live-listening' },
             'USER_SPEAKING':   { emoji: '🔵', text: 'Live 听你说',  cls: 'live-speaking' },
@@ -144,18 +192,36 @@
             'ERROR':           { emoji: '❌', text: 'Live 错误',    cls: 'live-error' },
         };
 
+        // turn_state -> mode-chip 的三态色（与上面的 LIVE_STATE_MAP 同源，避免两处口径漂移）
+        const LIVE_CHIP_STATE = {
+            'LISTENING': 'ok',
+            'USER_SPEAKING': 'ok',
+            'PROCESSING': 'warn',
+            'THINKING': 'warn',
+            'PRE_SPEECH': 'warn',
+            'SPEAKING': 'warn',
+            'HARD_INTERRUPTED': 'warn',
+            'SOFT_INTERRUPTED': 'warn',
+            'COOLDOWN': 'warn',
+            'ENDED': 'off',
+            'ERROR': 'err',
+        };
+
         function renderLiveStatus(payload) {
             const el = document.getElementById('liveStatus');
             if (!el) return;
             if (!payload || !payload.exists || !liveModeActive) {
                 el.textContent = '⚫ Live 未连接';
                 el.className = 'status-badge live-disconnected';
+                setModeChipState('live', 'off');
                 return;
             }
             const info = LIVE_STATE_MAP[payload.turn_state] ||
                 { emoji: '⚪', text: payload.turn_state, cls: 'live-unknown' };
             el.textContent = info.emoji + ' ' + info.text;
             el.className = 'status-badge ' + info.cls;
+            // 状态灯对接：用真实 turn_state 驱动 chip 的三态色
+            setModeChipState('live', LIVE_CHIP_STATE[payload.turn_state] || 'warn');
             // C.B layer 3: keep the proactive switch in sync with the runtime
             // state reported by the backend (env gate + actual loop task).
             if (typeof payload.proactive_supported === 'boolean') {
@@ -242,8 +308,31 @@
                     const sm = document.getElementById('settingsModal');
                     if (sm) sm.classList.add('show');
                     if (kind === 'wiki') {
-                        const kb = document.getElementById('knowledgeBaseToggle');
-                        if (kb) kb.click();
+                        // #knowledgeBaseToggle 已不存在（旧折叠开关随面板重构移除）→ 原先
+                        // `if (kb) kb.click()` 恒静默跳过，点击徽章根本不展开知识库面板。
+                        //
+                        // 现代等价物 = showSettingsPanel('wiki')（按 PANEL_ROOTS 显示
+                        // wikiPanel 并同步左侧导航高亮）。它声明在 index.html 尾部
+                        // `(function(){…})()` 内部，**不是原生全局**（CDP 实测
+                        // typeof showSettingsPanel === 'undefined'，裸调用会 ReferenceError）；
+                        // 该 IIFE 已把它加法暴露为 window.showSettingsPanel /
+                        // window.JoySettingsNav.showSettingsPanel，此处按优先级取用。
+                        //
+                        // 三级取用，每级都有实测依据，不留"看起来对、其实不执行"的静默分支：
+                        //  1) window.showSettingsPanel —— 正常路径
+                        //  2) 派发 click 到左侧导航 wiki 项 —— 复用导航 handler 的同一条路径
+                        //  3) 只打开设置弹窗 —— 最后兜底，至少不彻底无反应
+                        const setPanel = (typeof window.showSettingsPanel === 'function')
+                            ? window.showSettingsPanel
+                            : (window.JoySettingsNav && typeof window.JoySettingsNav.showSettingsPanel === 'function'
+                                ? window.JoySettingsNav.showSettingsPanel
+                                : null);
+                        if (setPanel) {
+                            setPanel('wiki');
+                        } else {
+                            const navItem = sm && sm.querySelector('#modalNav .nav-item[data-panel="wiki"]');
+                            if (navItem) navItem.click();
+                        }
                         if (window.JoyWiki) window.JoyWiki.loadHealth();
                     }
                 };

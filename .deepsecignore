@@ -6,3 +6,82 @@
 # 全局忽略；真 key 泄漏仍由 L2/L3 与其他 L1 规则覆盖。
 rule_ids:
   - hardcoded_secret_assignment
+
+# =============================================================================
+# 2026-09-19（security-guard，任务 t3）：wiki_frontend.js / joy_ws.js 的 7 个
+# high findings **一条都没有加进本文件** —— 全部以代码改写消除触发条件。
+# 本节只是处置留痕，供后续审查者复核「为什么这里没有 ignore 规则」。
+#
+# 被改写消除的 7 条（改写后重跑 `deepsec shield scan` 该文件集 findings = 0）：
+#
+#   sast_xss_inner_html (job: joy_ws.js:290)
+#     `form.innerHTML = ''` → `form.replaceChildren()`
+#     零插值清空；规则 sast_xss_inner_html 是纯正则不区分空串与拼装 HTML。
+#
+#   sast_xss_inner_html (wiki_frontend.js:193)
+#     加载中提示 `list.innerHTML = '<div class="input-hint">' + i18n + '</div>'`
+#     → 新增 `_setListHint()`，createElement + textContent + replaceChildren()。
+#
+#   sast_xss_inner_html (wiki_frontend.js:198、:203)
+#     列表清空 `list.innerHTML = ''` → `list.replaceChildren()`。
+#
+#   sast_xss_inner_html (wiki_frontend.js:222)
+#     删除按钮图标 `del.innerHTML = '<i data-lucide="trash-2"></i>'`
+#     → createElement('i') + setAttribute('data-lucide', 'trash-2')
+#       （与 vlm_render.js:9 createLucideIcon 同一既有路子）。
+#
+#   sast_xss_inner_html (wiki_frontend.js:232)
+#     **真漏洞**（不是误报）：失败提示把 `_e.message` 拼进 innerHTML，而该 message
+#     源自 `apiJson()` 抛出的后端错误体；server.py:690 的
+#     `/v1/namespaces/{ns}` DELETE 走 `admin_endpoints._proxy_to_memory_store`，
+#     会把上游 memory-store 的响应原样转发，属外部可控文本 → 真实 DOM-XSS 汇聚点。
+#     → 改走 `_setListHint(..., true)` 纯文本路径，HTML 解析器不再接触该字符串。
+#     渲染实测：namespace 名带 `<img src=x onerror=…>` 时 img 元素数 0、
+#     onerror 未触发；错误消息 `boom<b>bold</b>` 渲染后 <b> 元素数 0。
+#
+#   sast_sql_string_concat (wiki_frontend.js:321)
+#     **误报**：规则 sast.py:32 的正则要求引号串内含 SELECT|INSERT|UPDATE|DELETE
+#     关键字（sast.py:27-28），而 `'Delete failed: '` 的 "Delete" 恰好命中该表；
+#     本文件是浏览器侧 ES 脚本（无 import / 无 require / 无任何 SQL 驱动），
+#     全文件对 ^(SELECT|INSERT|UPDATE|DELETE)$ 的唯一命中就是这个提示词本身，
+#     删除动作打的是 REST DELETE /v1/namespaces/{ns}（server.py:690），
+#     SQL 语句在后端 memory-store 内，左值 textContent 也不是 SQL sink。
+#     → 不做抑制：改写为「先 localizeUiString 前缀、再拼接 message」的两段式赋值，
+#       左值不再是引号字面量，触发条件消失且 i18n 行为不变
+#       （前缀单独本地化是必要的：UI_STRING_MAP 的 /: /→'：' 是全局规则，
+#        整串过一遍会把 message 里的英文冒号一起汉化）。
+#
+# ---------------------------------------------------------------- 坑（务必先读）
+#
+# 坑1：本文件使用的 L2 规则**不剥离注释**，命中只看文本。
+#   sast_sql_string_concat / sast_xss_inner_html 都是纯文本正则，既不区分
+#   代码与注释，也不跳过注释。**实测证据（负向对照）**：单独建一个只含注释的
+#   .js，注释里写「old code was: <旧的状态栏赋值语句>」+ 一个带 Delete 字样的
+#   引号字面量，scan 立刻 rc=2 并报出 sast_sql_string_concat。
+#   ⇒ 后果：在「修复说明」的注释里逐字照抄被命中的旧语句，等于把 finding
+#     原样复现。本任务就踩过这个坑（首轮修复后仍残留 1 条，最终归零）。
+#   ⇒ 纪律：说明文字只做**描述**，绝不逐字复现旧语句；
+#     需要举例时改写措辞或用占位符（如 <旧语句>）。
+#   ⇒ 另外：注释里单独出现 innerHTML 这个单词是安全的 —— 该规则要求
+#     「点号 + 属性名 + 赋值号」完整形态才命中（本注释即为反例，scan 干净）。
+#
+# 坑2：localizeUiString 的替换是**全局**的，不能把整串交给它。
+#   UI_STRING_MAP 含 /: /→'：'、/, /→'，' 这类无锚点的全局替换规则。
+#   **实测证据**：后端 message 为 'Fetch failed: HTTP 500' 时，
+#     整串过一遍 → '删除失败：Fetch failed：HTTP 500'（message 里的英文冒号
+#     被一并汉化，后端原文被破坏）
+#     前缀单独过再拼接 → '删除失败：Fetch failed: HTTP 500'（正确）
+#   ⇒ 纪律：动态文案一律「先对**前缀字面量**调用 localizeUiString，
+#     再拼接后端/运行时字符串」；绝不 localizeUiString(prefix + dynamic)。
+#
+# 维护纪律：以后新增 ignore 规则一律用
+#   files:
+#     <相对路径>:
+#       - <rule_id>
+# 做**文件级**抑制，并在本文件写明「为何改写不可行」；
+# 禁止再用上面的全局 rule_ids 掩盖问题（那是 2026-08-17 的历史遗留，
+# 且该规则确实无真实价值，故保留）。
+#
+# 本文件改动后须自检：`deepsec shield scan` 对该文件所在树仍应 findings=0 ——
+# 留痕注释本身不得引入新命中（本注释段已实测 rc=0 / findings=0）。
+# =============================================================================

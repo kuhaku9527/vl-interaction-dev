@@ -77,6 +77,10 @@
     [/\bRTSP Stream\b/i, 'RTSP 流'],
     [/\bVLM Output on Camera View\b/i, '摄像头画面 VLM 输出'],
     [/\bCamera Selection\b/i, '摄像头选择'],
+    // Main Content Order arrow labels: both contain the generic key below, so
+    // they MUST sit above [/Camera/] or it renders as "摄像头 → VLM Output Info".
+    [/\bCamera → VLM Output Info\b/i, '摄像头 → VLM 输出信息'],
+    [/\bVLM Output Info → Camera\b/i, 'VLM 输出信息 → 摄像头'],
     [/\bCamera\b/i, '摄像头'],
     [/No local VLM services found\. Using NVIDIA API Catalog \(requires API key from build\.nvidia\.com\)/i, '未找到本地 VLM 服务，改用 NVIDIA API Catalog（需 build.nvidia.com 的 API Key）'],
     [/Failed to load network settings: /i, '加载网络设置失败：'],
@@ -99,6 +103,10 @@
     [/Probe complete \(v1 traffic stays direct per ADR-0012 §4\)\./i, '探测完成（v1 流量按 ADR-0012 §4 直连）。'],
     [/Enter a wiki\/<game> folder path first\./i, '请先输入 wiki/<游戏> 文件夹路径。'],
     [/Provide both a namespace \(game\) and markdown text\./i, '请提供命名空间（游戏）与 markdown 文本。'],
+    // 2026-09-18：关于页整句（必须排在下面 `: ` 与 `, ` 两条【全局替换】规则之前，
+    // 否则英文逗号/冒号会被无差别换成全角，产出「issues，roadmap」这种半吊子结果）。
+    [/MIT-licensed open source\. See/i, 'MIT 许可开源。参见'],
+    [/for issues, roadmap, and changelog\./i, '查看 issue、路线图与更新日志。'],
     [/: /i, '：'],
     [/, /i, '，'],
     [/ embedded/i, ' 已嵌入'],
@@ -124,9 +132,71 @@
     [/\bProcessing Interval\b/i, '处理间隔'],
     [/\bFrames per Batch\b/i, '每批帧数'],
     [/\bServices\b/i, '服务'],
+    // The 6 backend "local-hint" lines (index.html 576/603/631/660/687/732) MUST
+    // precede BOTH [/\bAPI Key\b/i] (consumes their "API key" tail) and
+    // [/\bLocal\b/i] (consumes their "Local" head) — otherwise they come out
+    // half-translated as "本地 default endpoint · no API 密钥".
+    [/\bLocal default endpoint · no API key\b/i, '本地默认端点 · 无需 API 密钥'],
+    [/\bLocal Whisper \/ FunASR · no API key\b/i, '本地 Whisper / FunASR · 无需 API 密钥'],
+    [/\bLocal agent · no API key\b/i, '本地 agent · 无需 API 密钥'],
+    [/\bLocal bge-m3 · no API key\b/i, '本地 bge-m3 · 无需 API 密钥'],
+    [/\bLocal Jarvis TTS · no API key\b/i, '本地 Jarvis TTS · 无需 API 密钥'],
     [/\bAPI Base URL\b/i, 'API 基础地址'],
     [/\bAPI Key\b/i, 'API 密钥'],
     [/\bAPI URL\b/i, 'API 地址'],
+    // --- Services-config panel + Settings + Memory Store (issue #47 follow-up)
+    // Placed immediately above [/\bModel\b/i] because several new keys CONTAIN
+    // an existing shorter key and would be half-eaten if they followed it:
+    //   "Save this set" / "Save Memory Store"       contain \bSave\b
+    //   "No editable Memory Store ..."              contains \bMemory Store\b
+    //   "Embedding / vector provider settings ..."  contains \bEmbedding\b
+    //   "Local wiki corpora ..."                    contains \bLocal\b
+    //   "Six pluggable backends. Save applies ..."  contains \bSave\b
+    //   "Wake / ASR"                                would hit \bASR\b if it existed
+    // Every rule below is anchored with \b and matches a full key or a phrase
+    // whose remainder is intentional; proper nouns (WebRTC, ADR-0012,
+    // memory-store, wiki/<game>, VLM/VLM Output) are deliberately preserved.
+    // 2026-09-18 修正：原为「六类可插拔后端」，但 #servicesPanel 实际只有 5 个槽位
+    // （llm / summary / asr / embedding / tts）—— agent 已分离到独立的「委派」面板，
+    // 它不是模型推理服务（见 services_config.py:53-56 与 doc/adr/0020 修订 R1.4）。
+    [/\bSix pluggable backends\. Save applies at runtime; no service restart\./i, '五类可插拔后端；保存即时生效，无需重启服务'],
+    [/\bFive pluggable backends\. Save applies at runtime; no service restart\./i, '五类可插拔后端；保存即时生效，无需重启服务'],
+    // 2026-09-18 补充：设置页「说明文字」漏网条目（用户反馈「还有很多小文字没汉化」）。
+    // 均为完整句子，必须排在短词规则（\bSave\b / \bTest\b / \bLocal\b 等）之前。
+    [/\bScale animation when new VLM response arrives\b/i, '新回复到达时的缩放动画'],
+    [/\bDrop old frames if delay exceeds this \(0 = no intervention\)/i, '延迟超阈值即丢弃旧帧（0 = 不干预）'],
+    [/\bRun Qwen3\.5-122B-A10B-FP8 for delegated questions, visual reasoning, and chart tasks in the background\b/i, '后台运行 Qwen3.5-122B-A10B-FP8，处理委派问题、视觉推理与图表任务'],
+    [/\bBackground frames per second relative to foreground streaming FPS\b/i, '后台帧率，相对于前台流式 FPS'],
+    [/\bRecent background frame cache cap; default and maximum are 100\b/i, '后台帧缓存上限；默认与最大均为 100'],
+    [/\bInclude request JSON \(image \+ prompt\) under the prompt area; collapsed by default\b/i, '在提示词区域下方显示请求 JSON（图像 + prompt）；默认折叠'],
+    [/\bInclude API response JSON under the VLM output; collapsed by default\b/i, '在 VLM 输出下方显示 API 响应 JSON；默认折叠'],
+    [/\bDisplay mid-term and long-term memory content below VLM output\b/i, '在 VLM 输出下方显示中期与长期记忆内容'],
+    [/\bReserve only; v1 traffic stays direct \(ADR-0012 §4\)/i, '仅预留；v1 流量仍直连（ADR-0012 §4）'],
+    [/\bSave this set\b/i, '保存当前组合为预设'],
+    [/\bSave Memory Store\b/i, '保存记忆存储'],
+    [/\bSave\b/i, '保存'],
+    [/\bNo editable Memory Store fields returned by the server\./i, '服务端未返回可编辑的记忆存储字段'],
+    [/\bEmbedding \/ vector provider settings\. Saved to the memory-store network config\./i, '嵌入/向量服务设置；保存到 memory-store 网络配置'],
+    [/\bLocal wiki corpora \(per game\)\. Sync a wiki\/<game> folder into a vector namespace\./i, '本地知识库语料（按游戏）。把 wiki/<游戏> 目录同步为向量命名空间'],
+    [/\bLocal\b/i, '本地'],
+    [/\bCloud\b/i, '云端'],
+    [/\bPreset name\b/i, '预设名称'],
+    [/\bProvider\b/i, '服务商'],
+    [/\bProbe\b/i, '探测'],
+    [/\bTest\b/i, '测试'],
+    [/\bDelete\b/i, '删除'],
+    [/— saved presets —/i, '— 已保存的预设 —'],
+    [/\bAbout\b/i, '关于'],
+    [/\bSettings\b/i, '设置'],
+    [/\brepository\b/i, '仓库'],
+    [/\bMax Video Latency \(seconds\)/i, '最大视频延迟（秒）'],
+    [/\bDrop old frames if delay exceeds this \(0 = no intervention\)/i, '延迟超阈值即丢弃旧帧（0 = 不干预）'],
+    [/\bWake \/ ASR\b/i, '唤醒 / ASR'],
+    [/\bScale animation when new VLM response arrives\b/i, '新回复到达时的缩放动画'],
+    [/\bReserve only; v1 traffic stays direct \(ADR-0012 §4\)/i, '仅预留；v1 流量仍直连（ADR-0012 §4）'],
+    [/\bIngest\b/i, '导入'],
+    [/\bSync folder path \(wiki\/<game>\)/i, '同步目录路径（wiki/<游戏>）'],
+    [/\bSync\b/i, '同步'],
     [/\bModel\b/i, '模型'],
     [/\bAPI Status\b/i, '接口状态'],
     [/\bMain LLM\b/i, '主 LLM'],

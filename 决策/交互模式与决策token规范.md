@@ -52,3 +52,46 @@
 - **Drift**: 无
 - **Owner**: 产品 / 架构
 - **锁定**: 🔒
+
+---
+
+## D-2026-09-19-001  ★ 战略转变：KWS 降级为静默模式内的可选开关，jarvis 模式标记待收敛
+
+- **事实**: 用户拍板（2026-09-19）——**唤醒词（KWS）自训效果差、收敛差、唤醒率低，必须靠其它通道兜底**
+  （实测基线 FAR 2% / recall 49%，见 `doc/research/kws-v5-2026-08-10-diagnosis.md`）。
+  因此转变战略：
+  1. **不再把 KWS 当作主入口**。原「jarvis 唤醒模式」（用户称之为**开机词**：没通话时用唤醒词
+     进入对话）**降级为待收敛状态，后续应删除**。
+  2. 唤醒词**收编为「无线电静默」模式内的一个开关**：静默中可选让它继续工作，
+     用唤醒词作为**静默结束（被召唤）**的通道之一 —— 这与 `radio-silence.md §2/§4/§5`
+     既有的「唤醒三通道（KWS 若开 / 组合键 / 语音）」设计**一致**，是该设计的自然延伸。
+  3. **实现路径倾向用 ASR 而非 KWS**：用户明确指出「这个功能的实现其实可以直接靠 ASR 来实现，
+     KWS 的效率实在是太低了」，具体方案待定（"到时候再说"）。
+- **影响**:
+  - **产品**：唤入口从「模式切换（jarvis ↔ live）」收敛为「live 常驻 + 静默子状态」单线；
+    不再有独立的"开机词"概念。
+  - **前端**：`#btListenBtn`（Jarvis 唤醒）与 `#liveModeBtn`（实时）现为**互斥 radio** ——
+    按此决策，`btListenBtn` 属待删项（**当前不擅自删除**，等收敛实施时一并处理）。
+  - **后端**：`jarvis_mode.py` / `jarvis_state.py` / `interaction_mode="jarvis"` 暂时保留
+    （`决策/交互模式与决策token规范.md` D-2026-08-03-001 的三模式隔离**在收敛前仍然有效**，
+    不得提前破坏；收敛时需同步改该条）。
+  - **KWS 本体**（`services/kws-training/`、`services/asr/jarvis/kws.py`）暂留，
+    但**不再有产品主路径依赖**；若 ASR 方案落地，KWS 可退为可选。
+- **校验**:
+  - `grep -n "唤醒" doc/specs/radio-silence.md` → 唤醒三通道设计已存在（本决策是收编而非新建）
+  - `grep -rn "btListenBtn" services/webui/src/joy_interaction_webui/static/` → 当前仍在（待删标记）
+  - `grep -n "live 为当前主线，jarvis 模式之后搞" doc/specs/live-interaction-layer.md` → 既有战略与本决策同向
+- **预期**: KWS 从"主入口"降为"静默态的兜底通道之一"；jarvis 模式在收敛完成后删除；
+  单线交互（live + 静默子状态）。
+- **与既有决策的关系**: **不冲突、是延伸**。D-2026-08-03-001 定义三模式**隔离**（隔离仍要维持到收敛完成）；
+  本条定义**收敛方向**（三模式 → 单线）。`live-interaction-layer.md §0`「jarvis 收敛到同一核心」
+  是本条的**上游战略**，本条给出**收敛后的形态**。
+- **已知文档漂移（本决策附带发现，待修）**:
+  `doc/specs/draft-mode-isolation-boundaries.md:17` 写「"Jarvis 唤醒"按钮 → **`/api/jarvis/start`**」，
+  但该端点在代码中**不存在**（实测 `grep -rn "api/jarvis/start" services/webui/.../*.py` → 零命中）。
+  实际唤醒链走 `/offer` + `jarvis_audio:true`（WebRTC），由 `server.py` 的 offer handler 建会话。
+  → 该行应修正为实况，或随 jarvis 删除一并移除。
+- **Drift**: ⚠️ 有（上述文档漂移；另：前端 `#btListenBtn` 链路完整但产品上已判定为待删）
+- **Owner**: 产品 / 架构 / 前端
+- **锁定**: 🔒（战略方向已拍板；**具体实施待排期**，实施时须回写本条的"已完成"状态）
+

@@ -287,7 +287,12 @@
     function renderMemoryStoreForm(snapshot) {
         const form = document.getElementById('memoryStoreForm');
         if (!form) return;
-        form.innerHTML = ''; // clears only; we rebuild below with createElement + textContent
+        // 2026-09-19（security-guard，deepsec t3）：清空改写为 replaceChildren()。
+        // 原写法是「innerHTML 赋空串」，语义上只清空、零插值，但 deepsec L2 规则
+        // sast_xss_inner_html 是纯正则（`\.(?:innerHTML|outerHTML)\s*=\s*…`），不区分
+        // 「赋静态空串」与「赋拼装 HTML」，故必然命中。replaceChildren() 无参调用
+        // 的语义与原来完全一致（移除全部子节点），且不经过 HTML 解析器 → 触发条件消失。
+        form.replaceChildren();
         if (!snapshot || typeof snapshot !== 'object') return;
         Object.keys(snapshot).forEach(function (topKey) {
             if (topKey === 'proxy') return; // edited by the [Local Wiki] network proxy form
@@ -301,7 +306,10 @@
         if (!form.children.length) {
             const hint = document.createElement('div');
             hint.className = 'input-hint';
-            hint.textContent = 'No editable Memory Store fields returned by the server.';
+            // 2026-09-18: 该串已在 UI_STRING_MAP 中备好，但裸赋值不会触发翻译，
+            // 必须显式走 localizeUiString（与同文件其它动态文案一致）。
+            const _noFieldsMsg = 'No editable Memory Store fields returned by the server.';
+            hint.textContent = window.JoyI18n ? window.JoyI18n.localizeUiString(_noFieldsMsg) : _noFieldsMsg;
             form.appendChild(hint);
         }
     }

@@ -28,6 +28,10 @@ INDEX_HTML = WEBUI_ROOT / "src" / "joy_interaction_webui" / "static" / "index.ht
 # files (same dependency order as the <script src> tags). Assertions run against
 # the combined sources so moved code keeps its contract with unchanged semantics.
 SPLIT_JS = (
+    "app_boot.js",
+    "app_main.js",
+    "sidebar_toggle.js",
+    "incremental_wiring.js",
     "vlm_history.js",
     "llm_reply_ui.js",
     "ws_dispatcher.js",

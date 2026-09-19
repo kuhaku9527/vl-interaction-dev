@@ -61,3 +61,113 @@
   - 已由 #122（PR #125）闭合：webui 重启后配置保留（持久化）；无效配置 PUT 显式报错且服务不静默失效（校验硬化）。
   - 已由 #124（PR #129）闭合：memory-store 补 `POST /v1/settings/embedding` 端点，运行时热重载 embedding provider（D-080 无静默 fallback / ADR-0014 脱敏 / D-033 默认 local 不变）。
 - **明确排除**：bug 修复、bug 验证、运维操作不属本 spec（见 `决策/spec编写规范.md` §3）；相关 runbook 见 `docs/github-runbook.md`。ASR 云 provider 实现另立（见 §2 负面约束 4）。
+
+---
+
+## 6. 端点与数据契约（as-built，2026-09-18 增补）
+
+> 本节记录**当前实际存在**的端点契约，供前后端对接时查证。
+> 与 §3 设计描述冲突处，以本节为准（§3 是 2026-08-08 的快照）。
+
+### 6.1 端点清单
+
+| 方法 | 路径 | 用途 | 入参 | 出参 |
+|---|---|---|---|---|
+| GET | `/api/services/config` | 读当前生效配置 | — | `{<slot>: {api_base, model, api_key, provider}}` |
+| PUT | `/api/services/config` | 写配置 + 热重载 | 同上（增量按 slot 合并） | 完整配置；失败 `{error, slot, field, reason}` + 4xx |
+| GET | `/api/services/status` | 各服务健康聚合 | — | `{llm, summary, tts, asr, agent, embedding}`，每项 `{ok, reason, endpoint?}` |
+| POST | `/api/services/test` | 单槽位连通性测试 | `{slot, api_base, model, api_key}` | `{ok, model?, status, reason?}`；**纯探测不写配置** |
+| POST | `/api/services/list-models` | **列出上游模型** | `{api_base, api_key}` | `{ok, models: string[], status, reason?}`；**纯探测不写配置** |
+| GET | `/api/connections` | **读命名连接列表** | — | `{version, connections: {<slot>: [{id,name,api_base,model,provider?,api_key_set}]}}`（**api_key 脱敏**） |
+| PUT | `/api/connections` | **替换命名连接列表** | `{connections: {<slot>: [{id?,name,api_base,model,api_key?,provider?}]}}` | 同 GET（脱敏后）；校验失败 400 |
+
+> 说明：`/api/services/list-models` 与 `/api/connections` 为 **2026-09-18 新增**。
+
+### 6.2 `connections.json` 存储契约
+
+- 路径：`config/connections.json`（与 `services.json` 同目录）
+- 权限/安全：`chmod 0600` + `.gitignore`；**`api_key` 明文**（与 `services.json` 同一基线，
+  用户确认的 E3 决策）。Windows 上 POSIX 权限位不生效，实际保护来自 gitignore +
+  用户目录 NTFS ACL —— 这一点与 `services.json` 相同，非新引入风险。
+- 槽位白名单：`llm` / `summary` / `embedding` / `asr` / `tts`
+  （**不含 `silence`**（非服务连接）与 **`agent`**（provider 二选一 + gateway 地址，
+  语义不同，见 §6.4））
+- 每槽位上限 50 条；字段白名单 `{id, name, api_base, model, api_key, provider}`，
+  未知字段导致 PUT 400
+- **主键是 `id`**（不是 `name`）：用户可重命名而不丢引用
+- 写入为**整体替换** + 原子写（`tempfile` + `os.replace`），临时文件
+  `config/.connections-*.tmp` 也已 gitignore（防写入崩溃留下含明文 key 的孤儿文件）
+- 加载为 best-effort：文件缺失/损坏只记日志并回退空表，**绝不阻断 webui 启动**
+
+### 6.3 前端契约（连接列表）
+
+`config_services.js`（`window.JoyConfig`）：
+
+| 导出 | 说明 |
+|---|---|
+| `loadConnections()` | 拉取并缓存后端连接列表（`_connCache`，仅首次发请求） |
+| `_putConnections(conns)` | 整体 PUT；失败抛出带原因的错误 |
+| `wireSegProvider()` | 接线 seg 切换 + 连接 CRUD（CRUD 已改为**异步**） |
+
+**DOM 契约（2026-09-18 方案 X 重构后）**：
+
+| 元素 id | 用途 |
+|---|---|
+| `svc-<slot>-conn-toggle` | 「已保存的连接 (N) ▾」展开/收起（`aria-expanded`） |
+| `svc-<slot>-conn-count` | 连接数量徽标 |
+| `svc-<slot>-conn-save` | 「保存当前为连接」（文字按钮） |
+| `svc-<slot>-conn-list` | 列表容器（`hidden` 控制显隐，默认收起） |
+| `svc-<slot>-conn-name-row` / `-conn-name` | 行内命名输入（替代原生 prompt） |
+| `svc-<slot>-conn-confirm` / `-conn-cancel` | 命名确认 / 取消（Enter / Esc 亦可） |
+| `svc-<slot>-provider-msg` | 状态提示（**保留复用**） |
+
+> ⚠️ **已移除**：`svc-<slot>-provider-name` / `-provider-add` / `-provider-pick` / `-provider-del`
+> （原「名称 + 加号 + 下拉」三件套）。前端 `_pFillPick()` 一并删除，
+> 列表渲染改由 `wireSegProvider` 内的 `renderConnList()` 承担
+> —— 仍为 DOM 构造 + `textContent`，不使用 `innerHTML`。
+
+**交互要点**：
+- **默认收起**（用户要求），点标题展开；保存成功后自动展开并刷新
+- 每项一行：名称 + 副标题（provider · api_base · model · 是否已存密钥）+ [应用] [删除]
+- 命名走**行内输入**（不用 `window.prompt` —— ADR-0020 §二.2 禁止交互路径依赖原生对话框）
+- 应用连接时：`api_key` 若该连接已存（`api_key_set`）则**不清空**用户当前输入；
+  未存则清空（防跨服务商误用旧 key 导致 401）
+
+**改造范围（用户要求「需要的才改」）**：`llm` / `summary` / `asr` / `embedding` / `tts`
+共 5 槽位；**`agent` 不改造**——已分离为独立「委派」面板，语义不同（provider 二选一 +
+gateway 地址），不做形式统一。详见 `doc/adr/0020` 修订 R1.5。
+
+- **一次性迁移**：后端为空且 `localStorage['joyai.providers.<slot>']` 有数据时自动导入
+  （旧格式不含 `api_key`，故迁移不涉及密钥）
+- 安全基线：不使用 `innerHTML` 构造 DOM，与 `radio_silence.js` 一致
+
+### 6.4 Agent 槽位的特殊契约
+
+`agent` **不是模型推理服务**，不适用上面「连接列表」语义：
+
+- 真值源是 `provider`（`codex` | `hermes`），经 background-agent
+  `POST /v1/provider/route` **热切**（白名单见 `services_config.py:_PROVIDER_CHOICES`）
+- 其 `api_base` 是 **agent gateway 的服务地址**，探活走
+  `GET {api_base}/health`（`service_test.py:13`），**不是** `/models` 或 `/chat/completions`
+- 默认值来自 `BACKGROUND_AGENT_API_URL` 环境变量，回退 `http://127.0.0.1:8079`
+  （`bg_agent_proxy.py:20-29`）
+- 前端位于独立面板 `#agentPanel`（标题「委派」），字段：Provider +
+  后端服务地址（可选）+ 测试
+
+### 6.5 已废弃 / 不再适用（本节取代 §2 相关描述）
+
+- ~~Provider 预设存 `localStorage`~~ → 改为后端 `config/connections.json`（§6.2）
+- ~~`api_key` 不入本地存储~~ → 当前允许存入 `connections.json`，但 `GET` 响应脱敏（§6.1）
+- ~~修改配置「零后端改动」~~ → `/api/connections`、`/api/services/list-models` 为后端新增
+
+### 6.6 验证记录（2026-09-18，实测非推断）
+
+- `/api/connections` 端到端（真实 aiohttp app，非 mock）：
+  GET 初始 200；PUT 保存 200；**响应中不含 `api_key` 字段**（仅 `api_key_set: true`）；
+  落盘文件确认含明文 key（E3 预期）；GET 读回脱敏；未知槽位 400；坏 JSON 400；
+  整体替换语义验证通过。
+- `/api/services/list-models`：`_fetch_openai_models` 对 4 种上游格式
+  （OpenAI 标准 `{data:[{id}]}` / `{models:[...]}` / 裸数组 / 错误响应）均正确处理。
+- 前端：21 个 JS + `index.html` 内联脚本语法通过；运行时无 TypeError；
+  `id` 计数符合预期 delta（agent 分离使 -4，新增面板 +1）。
+

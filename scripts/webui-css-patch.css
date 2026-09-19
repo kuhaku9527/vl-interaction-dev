@@ -1,0 +1,805 @@
+/* ============================================================================
+   2026-09-18 · JoyAI WebUI UI 修复补丁（由 scripts/webui-css-patch.mjs 追加）
+   ----------------------------------------------------------------------------
+   为什么以「追加」形式存在：
+     本文件里 .icon-btn 有 3 处定义（约 820 / 4615 / 5099 行）、
+     .panel / .settings-section 也有多代规则并存。css 同特异性下后者胜，
+     因此把这些修复统一放在【文件末尾】，可稳定覆盖前面所有定义，
+     且不需要改动上方任何既有规则（保留可回溯性 + 避免误删）。
+
+   覆盖内容（对应用户反馈）：
+     1. 设置页卡片化统一（11 个无卡区块包裹成卡）
+     2. 模型面板「只显示一半」修复（flex-shrink:0）
+     3. service-row 可折叠 + 箭头放大
+     4. 「测试」按钮汉化后竖排修复
+     5. 图标浅色/深色反色（深色白、浅色黑）
+     6. 输入栏嵌入聊天卡后的层级整合
+     7. 结果卡头部工具区隐藏（保留实现）
+     8. 顶栏链路胶囊（B2 收纳）
+     9. live/kws 状态灯三态色
+   ============================================================================ */
+
+/* --- 1) 设置页卡片化统一 ------------------------------------------------ */
+/* 取值来源（iDesign 官方预设实测）：
+   ipollowork.html-anything.data-report/entry.html:43,49,55,61
+     → rounded-2xl(16px) + p-5(20px) + 1px border + 近平面阴影 */
+.settings-body > .settings-section,
+.settings-body > .panel,
+.settings-body #appearanceSection .settings-section {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.settings-body > .settings-section:hover,
+.settings-body > .panel:hover,
+.settings-body #appearanceSection .settings-section:hover {
+    border-color: var(--border-strong);
+}
+/* 区块间距（原为 0，卡片贴在一起看不清边界） */
+.settings-body > .settings-section + .settings-section,
+.settings-body > .settings-section + .panel,
+.settings-body > .panel + .settings-section,
+.settings-body > .panel + .panel,
+.settings-body #appearanceSection .settings-section + .settings-section {
+    margin-top: 12px;
+}
+/* 嵌套卡圆角 = 外层 × .65 ≈ 10px（site-signal-workspace/entry.html:62,67 的官方手法） */
+.settings-body > .settings-section .service-row,
+.settings-body > .settings-section .provider-mgr,
+.settings-body > .panel .service-row,
+.settings-body > .panel .provider-mgr {
+    border-radius: 10px;
+}
+/* #appearanceSection 是 display:contents 容器，其内还有一层未命名 <div> 包裹
+   （index.html:317 → 318 → 9 个 .settings-section），故间距要后代替换覆盖 */
+.settings-body > #appearanceSection { display: contents; }
+
+/* --- 2) 模型面板「只显示一半」修复 -------------------------------------- */
+/* 实测根因：内容 scrollHeight=3167px，容器只给 696px，
+   且 .panel 是 flex-shrink:1 + overflow:hidden → 5 行只可见 1 行。
+   修复：子项不收缩，让父级 .settings-body 既有的 overflow:auto 承担滚动。 */
+.settings-body > .panel,
+.settings-body > .settings-section {
+    flex-shrink: 0;
+}
+
+/* --- 3) service-row 可折叠 + 箭头放大 ----------------------------------- */
+.service-row.collapsed > *:not(.service-row-header) { display: none; }
+.service-row > .service-row-header {
+    cursor: pointer;
+    user-select: none;
+}
+/* 用户反馈「箭头太小看不清」：11px → 18px */
+.service-row > .service-row-header::after {
+    content: "\25BE";
+    margin-left: auto;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    padding-left: 12px;
+    color: var(--text-2);
+}
+.service-row.collapsed > .service-row-header::after { content: "\25B8"; }
+
+/* 不可折叠的区块不显示折叠箭头、不用 pointer（否则误导可折叠） */
+#aboutFooter > .settings-section-title::after,
+#radioSilenceSection > .settings-section-title::after { content: none; }
+#aboutFooter > .settings-section-title,
+#radioSilenceSection > .settings-section-title { cursor: default; }
+
+/* --- 4) 「测试」按钮：横向排布、不换行 ---------------------------------- */
+.action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.action-row .icon-btn {
+    width: auto;
+    min-width: 76px;
+    height: 32px;
+    padding: 0 12px;
+    gap: 6px;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    line-height: 1;
+    border-radius: 8px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+}
+.action-row .icon-btn:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+/* 按钮内文字节点禁止换行（中文两字在窄容器里会逐字竖排） */
+.action-row .icon-btn > span,
+.service-row .action-row .icon-btn span,
+.service-row [id$="-test-btn"] span {
+    white-space: nowrap;
+}
+.service-row [id$="-test-btn"] { flex: 0 0 auto; }
+
+/* --- 5) 图标反色：深色白、浅色黑 ---------------------------------------- */
+.panel-icon svg,
+.panel-icon .lucide,
+.result-title svg,
+.result-title .lucide,
+.settings-btn .lucide,
+.theme-toggle .lucide,
+#themeIcon .lucide,
+.sidebar-toggle-btn .lucide,
+.health-pill .lucide,
+.latency-pill .lucide {
+    stroke: var(--text) !important;
+}
+
+/* --- 6) 输入栏嵌入聊天卡（B 方案：嵌入 + 吸底）------------------------- */
+.result-card > .prompt-editor-inline {
+    order: 10;
+    margin-top: auto;
+    border-top: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 10px 12px 12px;
+}
+.result-card > .result-text,
+.result-card > .vlm-history-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.result-card > .prompt-editor-inline .capture-fab { position: absolute; }
+/* 层级整合：内层胶囊原为 999px 全圆角 + 独立边框，与外卡叠成「盒中盒」 */
+.result-card > .prompt-editor-inline .chat-prompt-shell {
+    border-radius: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+}
+/* 主区列宽比：输入栏进卡后聊天卡需要更多横向空间；视频侧仍明显更大 */
+.main-content { grid-template-columns: 1.9fr 1fr; }
+@media (max-width: 1280px) { .main-content { grid-template-columns: 1.6fr 1fr; } }
+
+/* --- 7) 结果卡头部工具区：保留实现、仅隐藏（用户明确要求）-------------- */
+.result-header-tools-hidden { display: none !important; }
+
+/* --- 8) 顶栏链路胶囊（B2：延迟条收纳）---------------------------------- */
+.latency-wrap { position: relative; display: inline-flex; }
+.latency-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    padding: 6px 11px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    color: var(--text-2);
+    transition: border-color .15s, color .15s;
+}
+.latency-pill:hover { border-color: var(--border-strong); color: var(--text); }
+.latency-pill svg { width: 14px; height: 14px; }
+.latency-pill-label { color: var(--text-3); letter-spacing: .04em; }
+.latency-pill strong { color: var(--accent-color); font-weight: 700; font-variant-numeric: tabular-nums; }
+.latency-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 236px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 10px;
+    box-shadow: var(--shadow);
+    display: none;
+    z-index: 60;
+    max-height: min(70vh, 420px);
+    overflow: auto;
+}
+.latency-menu.open { display: block; }
+.latency-group + .latency-group { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.latency-group-title { margin: 0 0 6px; font-size: 11px; color: var(--text-3); font-weight: 500; letter-spacing: .06em; }
+.latency-menu .bt-latency-chip {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 26px;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+.latency-menu .bt-latency-chip + .bt-latency-chip { margin-top: 4px; }
+.latency-menu .bt-latency-chip strong { font-variant-numeric: tabular-nums; }
+
+/* --- 9) live/kws 状态灯三态色（由 status_poll.js setModeChipState 写入）-- */
+.mode-chip.active .cdot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(47,191,113,.6); }
+.mode-chip.active .cdot.warn { background: var(--warn); box-shadow: 0 0 6px rgba(224,163,46,.5); }
+.mode-chip.active .cdot.err { background: var(--bad); box-shadow: 0 0 6px rgba(239,83,80,.5); }
+.mode-chip.active .cdot.off { background: var(--text-3); box-shadow: none; }
+.mode-chip .cdot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(47,191,113,.55); }
+.mode-chip .cdot.warn { background: var(--warn); box-shadow: 0 0 6px rgba(224,163,46,.5); }
+.mode-chip .cdot.err { background: var(--bad); box-shadow: 0 0 6px rgba(239,83,80,.5); }
+.mode-chip .cdot.off { background: var(--text-3); box-shadow: none; }
+
+/* --- 10) 健康菜单状态点三态色（由 wiki_frontend.js setStatusDot 写入）--- */
+.sdot { background: var(--text-3); }
+.sdot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(47,191,113,.5); }
+.sdot.err { background: var(--bad); box-shadow: 0 0 6px rgba(239,83,80,.5); }
+.sdot.pending { background: var(--warn); }
+
+/* --- 11) 顶栏设置/主题按钮：改用主题 token（原先硬编码白色，浅色下隐形）-- */
+.settings-btn,
+.theme-toggle {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+}
+.settings-btn:hover,
+.theme-toggle:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+/* --- 12) 「模型」字段：输入框 + 获取模型按钮 同行 ------------------------- */
+.model-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.model-field > input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.model-field > .model-fetch-btn {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 88px;
+    height: 36px;
+    padding: 0 12px;
+    gap: 6px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+.model-field > .model-fetch-btn:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+.model-field > .model-fetch-btn:disabled {
+    opacity: .6;
+    cursor: progress;
+}
+
+/* --- 13) agent 面板的「可选」标签 --------------------------------------- */
+.opt-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-3);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+/* 连接管理区的说明与状态 */
+.provider-msg.ok  { color: var(--ok, #3fb950); }
+.provider-msg.err { color: var(--error-color, #e5484d); }
+
+/* --- 14) 连接列表（方案 X：替换「名称 + 加号 + 下拉」三件套）------------- */
+.conn-mgr {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+.conn-mgr-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+/* 「已保存的连接 (N) ▾」——整块可点，展开/收起 */
+.conn-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    padding: 4px 2px;
+    color: var(--text-2);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.conn-toggle:hover { color: var(--text); }
+.conn-toggle svg { width: 14px; height: 14px; }
+.conn-count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+    color: var(--text-2);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+.conn-caret { margin-left: auto; transition: transform .18s; }
+.conn-toggle.open .conn-caret { transform: rotate(180deg); }
+
+/* 「保存当前为连接」——文字明确，不再是孤零零的 + */
+.conn-save-btn {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    height: 30px;
+    padding: 0 10px;
+    gap: 6px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+}
+.conn-save-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.conn-save-btn svg { width: 13px; height: 13px; }
+
+/* 行内命名行（替代原生 prompt —— ADR-0020 §二.2 禁止交互路径依赖原生对话框） */
+.conn-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.conn-name-row > input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+.conn-name-row > input:focus { border-color: var(--border-strong); }
+.conn-name-row .icon-btn { width: auto; min-width: 56px; height: 32px; padding: 0 10px; gap: 5px;
+    white-space: nowrap; font-size: 12px; border-radius: 8px; }
+
+/* 列表本体 */
+.conn-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+.conn-list[hidden] { display: none; }
+.conn-empty {
+    color: var(--text-3);
+    font-size: 12px;
+    padding: 6px 2px;
+    line-height: 1.5;
+}
+.conn-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bg-elev-2);
+    border: 1px solid transparent;
+    transition: border-color .15s;
+}
+.conn-item:hover { border-color: var(--border-strong); }
+.conn-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-3);
+}
+.conn-item:hover .conn-dot { background: var(--brand-bright); }
+.conn-meta { flex: 1 1 auto; min-width: 0; }
+.conn-name {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.conn-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+.conn-actions { flex: 0 0 auto; display: flex; gap: 6px; }
+.conn-act {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 7px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: .15s;
+}
+.conn-act:hover { border-color: var(--border-strong); color: var(--text); }
+.conn-act.danger:hover { border-color: var(--bad, #ef5350); color: var(--bad, #ef5350); }
+
+/* --- 15) 兜底：任何带文字的 icon-btn 都禁止换行 ---------------------------
+   2026-09-18：用户反馈「知识库和记忆卡片，有按钮显示错位」——根因是这些按钮
+   写在内联 style="display:flex" 的容器里，未被 .action-row 契约覆盖，
+   中文文字逐字竖排（"保存记忆存储" 竖成 6 行）。
+   这里做一次兜底：凡按钮内含有文字 span 的 .icon-btn，一律 nowrap。
+   （纯图标按钮不受影响 —— 它们本来就不会换行。） */
+.icon-btn:has(> span) {
+    white-space: nowrap;
+    flex-wrap: nowrap;
+}
+.icon-btn > span {
+    white-space: nowrap;
+}
+
+/* --- 16) 连接列表的「确定 / 取消」按钮：中文两字需足够宽度 ---------------
+   2026-09-18：verify-panels 扫描发现 .conn-name-row 内的 icon-btn 仍竖排
+   （"确定"/"取消" 是 2 个全角字，原 min-width:56px 不足）。
+   提高 min-width 并强制 nowrap。 */
+.conn-name-row .icon-btn {
+    min-width: 68px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+.conn-name-row .icon-btn > span {
+    white-space: nowrap;
+}
+
+/* ============================================================================
+   2026-09-19 · 路线 B：Live 常驻模式控件迁入设置页 + 全屏收口
+   ----------------------------------------------------------------------------
+   背景（详见 doc/frontend/fullscreen-audit-2026-09-19.md）：
+     toggleFullscreen() 会把 #promptEditor **物理搬**进 #fullscreenPromptOverlay。
+     父节点一变，所有 `.prompt-editor-inline <sel>` 作用域的隐藏规则立刻失效 ——
+     5 个 Live 控件集体复活，输入栏被挤爆。实测三项独立缺陷：
+       ① .main-content{z-index:1} 新建层叠上下文，把 #videoCard.fullscreen 的
+          z-index:200 囚禁其中 → 根层里整笼只值 1，而 .header{z-index:50} 永远在上，
+          其右上角按钮正好盖住退出按钮（elementFromPoint 实测命中的是 #themeToggle）。
+       ② .fullscreen-prompt-overlay{max-height:72px} 截断 139px 的 #promptEditor，
+          把 #promptText 压到 8px 宽。
+       ③ 字幕面 #fullscreenVlmOverlay 空内容时仍显示外框（写着占位「就绪」）。
+   收口策略：不要在输入栏里继续藏，而是**把这 5 个控件真删出输入栏、
+   改建到设置页**（用户拍板路线 B）。于是：
+     • 常规态与全屏态**共用同一套输入栏**（只有 视频 / 输入框 / 按住说话 / 发送）
+       → 2(a)「两态按钮统一」自然成立，不再需要"补一份隐藏契约"
+     • 全屏不再发生布局突变
+   ============================================================================ */
+
+/* --- 17) 设置页「Live 常驻模式」区块 -------------------------------------
+   2026-09-19 二次修订（用户拍板）：
+     • 本卡与 Wake/ASR 已从「外观」移到「高级」（它们不是视觉功能）
+     • 「实时」按钮已回到聊天输入栏，本卡不再含它 → 去掉相关规则
+     • 「主动搭话」改用设计系统既有的 .toggle-switch（原为原生 checkbox），
+       故删除 .live-proactive-toggle 的全部规则（该元素已不存在） */
+#liveModeSection .settings-item {
+    align-items: flex-start;
+}
+#liveModeSection .live-mode-stack {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+    max-width: 58%;
+    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+/* 设置页内的 Live 按钮：取消输入栏的双行大按钮规格，回到普通设置控件尺寸 */
+#liveModeSection .chat-prompt-action {
+    width: auto;
+    min-width: 0;
+    height: 34px;
+    padding: 0 12px;
+    gap: 6px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-family: inherit;
+    white-space: nowrap;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+#liveModeSection .chat-prompt-action svg,
+#liveModeSection .chat-prompt-action .lucide {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+#liveModeSection .chat-prompt-action > span {
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 1;
+}
+/* 选中态沿用输入栏语义：Jarvis = brand 红 */
+#liveModeSection #btListenBtn.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+}
+#liveModeSection .live-enroll-hint,
+#liveModeSection .live-video-hint {
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: right;
+    max-width: 100%;
+}
+#liveModeSection .live-enroll-hint:empty,
+#liveModeSection .live-video-hint:empty {
+    display: none;
+}
+/* 主动搭话的提示语：空时收缩，避免占位 */
+#liveProactiveHint:empty {
+    display: none;
+}
+/* 主动搭话用设计系统既有开关；disabled 时给出可见的弱化反馈 */
+#liveModeSection .toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+#liveModeSection .live-video-source {
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 9px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+}
+/* 快速预设：迁出输入栏浮层后，改为设置页内的竖排按钮列表（不再 absolute 定位） */
+#liveModeSection .prompt-preset-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 300px;
+    max-height: 260px;
+    overflow: auto;
+    padding: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+#liveModeSection .prompt-preset-inline.hidden {
+    display: none !important;
+}
+#liveModeSection .prompt-preset-option {
+    position: static;
+    width: 100%;
+    text-align: left;
+}
+#liveModeSection #promptPresetBtn {
+    align-self: flex-end;
+}
+
+/* --- 17b) 设置页内必须显示按钮上的文字标签 -------------------------------
+   原输入栏时代，`.listen-label{display:none}` 与 `.speech-label{display:none}`
+   把「Jarvis 唤醒」等文字藏了起来（靠 title/图标表达）。
+   搬进设置页后，用户在设置里需要一眼看懂每个开关是什么 —— 必须显示文字。
+   实测：#btListenBtn 迁入后只剩一个电台图标，完全看不出是「Jarvis 唤醒」。 */
+#liveModeSection .chat-prompt-action .listen-label,
+#liveModeSection .chat-prompt-action .live-enroll-label,
+#liveModeSection .chat-prompt-action .live-video-label {
+    display: inline;
+    white-space: nowrap;
+}
+
+/* --- 17c) 快速预设列表不得溢出卡片 --------------------------------------
+   实测：4 条预设（含英文副标）总高 ~470px，而 max-height:260px 被父级
+   .settings-item 裁切，最后一条显示不全（"结束提醒我"被切掉半行）。
+   收紧行高 + 允许内部滚动，并给最后一条留出可见余量。 */
+#liveModeSection .prompt-preset-inline {
+    max-height: 300px;
+    overflow-y: auto;
+}
+#liveModeSection .prompt-preset-option {
+    padding: 10px 12px;
+    gap: 6px;
+}
+#liveModeSection .prompt-preset-copy .zh {
+    font-size: 13px;
+    line-height: 1.35;
+}
+#liveModeSection .prompt-preset-copy .en {
+    font-size: 11px;
+    line-height: 1.3;
+    margin-top: 2px;
+}
+
+/* --- 17d) 「高级」面板：三张卡片并排的视觉统一 ---------------------------
+   2026-09-19：Live 常驻模式 / Wake·ASR 从「外观」迁入「高级」，
+   与「无线电静默」并列为 .settings-body 直接子元素。
+   无线电静默是 .full-width（用户 2026-09-18 要求整宽展示），
+   两张新卡沿用普通卡片样式即可；这里只保证卡片间距与外观面板一致。 */
+#wakeAsrSection {
+    /* 与 #liveModeSection 同为普通卡片；无特殊覆盖，留锚点便于后续定位 */
+}
+
+/* --- 17e) 聊天栏「实时」按钮（回归后）------------------------------------
+   它回到 .chat-prompt-shell 后由 styles.css 的 #camBtn/#liveModeBtn 双行规则接管，
+   此处只补激活态：Live 激活时用 ok 绿（与设置页语义一致）。 */
+.chat-prompt-shell #liveModeBtn.listening {
+    border-color: var(--ok);
+    color: var(--ok);
+    background: rgba(47, 191, 113, 0.12);
+}
+.chat-prompt-shell #liveModeBtn.listening .ctrl-label {
+    color: var(--ok);
+}
+
+/* --- 18) 全屏收口：① 解除层叠囚禁 ---------------------------------------- */
+/* .main-content{z-index:1} 创建层叠上下文 → 囚禁 #videoCard.fullscreen 的 z-index:200。
+   全屏时把它降回 auto，让被 fixed 化的视频卡真正升到根层、压过 .header。 */
+.container:has(> .main-content .video-card.fullscreen) .main-content {
+    z-index: auto;
+}
+
+/* --- 19) 全屏收口：② 真正全屏（收起顶栏与侧栏）-------------------------- */
+/* 全屏语义 = 画面独占。顶栏 z-index:50 在根层，会盖住视频右上角的工具按钮；
+   收起后既有"真正的全屏感"，也彻底消除遮挡。退出仍可用：按钮 + Esc。 */
+body:has(.video-card.fullscreen) .header,
+body:has(.video-card.fullscreen) .sidebar {
+    display: none !important;
+}
+
+/* --- 20) 全屏收口：④ 去掉 72px 写死高度上限 ----------------------------- */
+/* 实测 #promptEditor 高 139px，被 max-height:72px 截断后 flex 压缩，
+   #promptText 宽度塌到 8px（占位符被砍）。改为自适应。 */
+.video-card.fullscreen .fullscreen-prompt-overlay {
+    max-height: none;
+}
+
+/* --- 21) 全屏底部布局（2(b)：画面在上，输入栏居中吸底）------------------ */
+/* 主流"视频聊天"布局：画面铺满，输入栏水平居中贴底。
+   原实现 left:18px 贴左下角、宽 min(640px, 100vw-36px)，视觉失衡。 */
+.video-card.fullscreen .fullscreen-prompt-overlay {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: max(20px, env(safe-area-inset-bottom));
+    width: min(760px, calc(100vw - 48px));
+    z-index: 103;
+}
+/* 全屏下的输入栏：加深毛玻璃，保证压在亮画面上仍可读 */
+.video-card.fullscreen .fullscreen-prompt-overlay .chat-prompt-shell {
+    background: rgba(16, 16, 20, 0.72);
+    border-color: rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(20px) saturate(150%);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+body.light-theme .video-card.fullscreen .fullscreen-prompt-overlay .chat-prompt-shell {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* --- 22) 全屏：字幕浮层（只显示模型回复）-------------------------------- */
+/* 2(c)：参考 GPT Live / 手机端 AI Agent 的视频聊天模式 —— 字幕只显示 AI 回复。
+   位置从左上角改到「输入栏正上方居中」，与输入栏同一视觉中轴（主流字幕位）。
+   空内容时整块隐藏（连同外框），不再出现"空盒子写着就绪"。 */
+.video-card.fullscreen .fullscreen-vlm-overlay {
+    top: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 84px);
+    width: min(760px, calc(100vw - 48px));
+    max-height: min(40vh, 260px);
+    overflow: auto;
+    text-align: center;
+    z-index: 102;
+}
+.video-card.fullscreen .fullscreen-vlm-overlay.is-empty {
+    display: none;
+}
+/* 字幕文字加大（远看可读），并限制行数避免糊满画面 */
+.video-card.fullscreen .fullscreen-vlm-overlay .vlm-content {
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-line-clamp: 6;
+}
+
+/* --- 24) 顶栏两处修复（2026-09-19 用户反馈）------------------------------- */
+
+/* 24a) mode-chip（live / kws）的红框改为「仅在使用时」出现 ------------------
+   问题：HTML 硬编码 `class="chip mode-chip active"`，而**没有任何 JS 切换 .active**
+   （实测 inlineHits=0）→ live 恒被红框包裹，成了常态装饰而非状态提醒。
+   用户要求：「应该是在使用的时候被红色框包裹作为提醒，而不是常态的」。
+   做法：边框改由 JS 已写入的 data-state 驱动（status_poll.js setModeChipState）：
+     data-state 缺失（JS 未跑）或 "off"（未启用）→ 中性边框
+     ok / warn / err（运行中 / 中间态 / 错误）→ brand 红框提醒
+   JS 侧同时把 .active 与真实状态对齐（见 status_poll.js），两者不再互相矛盾。 */
+.mode-chip.active {
+    border-color: var(--border);   /* 覆盖原「active 即红框」；.active 仍管背景/字色 */
+}
+.mode-chip[data-state]:not([data-state="off"]) {
+    border-color: var(--brand);
+}
+
+/* 24b) 健康菜单（Service Health）右移，避免超出左边界 ----------------------
+   问题：.health-menu{right:0} 是相对 .health-wrap 定位，而该胶囊在 x≈143；
+   菜单 280px 宽 → 左边界 = 258-280 = -22，**越出视口左侧 22px**（实测）。
+   用户要求：「点击之后的卡片超出了范围，把它往右边移一点」。
+   做法：改为左对齐到胶囊左边缘（left:0），菜单落在 143..423，完整可见。 */
+.health-menu {
+    right: auto;
+    left: 0;
+}
+
+/* --- 23) 全屏：右上角工具条（统一按钮 + 明确退出）---------------------- */
+/* 全屏与常规态**共用同一组按钮**（2(a)）：前后置 + 全屏/退出。
+   顶栏收起后不再被遮挡；提高不透明度让「退出」可被发现。 */
+.video-card.fullscreen .video-tools {
+    top: 18px;
+    right: 18px;
+    z-index: 104;
+}
+.video-card.fullscreen .fullscreen-btn {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.62);
+    border-color: rgba(255, 255, 255, 0.28);
+}
+.video-card.fullscreen .fullscreen-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.85);
+    border-color: var(--brand-bright);
+    transform: scale(1.06);
+}
+

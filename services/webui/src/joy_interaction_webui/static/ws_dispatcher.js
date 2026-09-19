@@ -86,10 +86,10 @@
                 }
 
                 if (data.metrics) {
-                    metricsInline.style.display = 'flex';
-                    latencyValue.textContent = Math.round(data.metrics.last_latency_ms);
-                    avgLatencyValue.textContent = Math.round(data.metrics.avg_latency_ms);
-                    countValue.textContent = data.metrics.total_inferences;
+                    if (metricsInline) metricsInline.style.display = 'flex';
+                    if (latencyValue) latencyValue.textContent = Math.round(data.metrics.last_latency_ms);
+                    if (avgLatencyValue) avgLatencyValue.textContent = Math.round(data.metrics.avg_latency_ms);
+                    if (countValue) countValue.textContent = data.metrics.total_inferences;
                     if (
                         revealVideoAfterMetricsToken === streamStartToken &&
                         Number(data.metrics.total_inferences) > 0
@@ -184,7 +184,8 @@
                 }
                 // Server sent its current configuration (model, api_base, prompt)
                 if (data.model) {
-                    document.getElementById('modelName').textContent = data.model;
+                    const nameEl = document.getElementById('modelName');
+                    if (nameEl) nameEl.textContent = data.model;
                     // Also update the model select if it matches
                     if (modelSelect.querySelector(`option[value="${data.model}"]`)) {
                         modelSelect.value = data.model;
@@ -192,7 +193,10 @@
                 }
                 if (data.api_base) {
                     apiBaseUrl.value = data.api_base;
-                    checkApiKeyRequirement(apiBaseUrl.value);
+                    // checkApiKeyRequirement(apiBaseUrl.value) 调用点已删除（2026-09-19
+                    // 死代码清理）：该函数取 #apiKeyField / #apiKeyToggle，而两者在 DOM 中
+                    // 都不存在 → 是一次"调了但什么都不做"的静默失效。新版 services 面板的
+                    // svc-*-api-key 字段恒显，无等价物可修，故连同函数本体一并删除。
                     serverConfigApplied = true;
                     fetchModels();
                 }
@@ -229,7 +233,8 @@
             } else if (data.type === 'model_updated') {
                 // Model was updated on server
                 if (data.model) {
-                    document.getElementById('modelName').textContent = data.model;
+                    const nameEl = document.getElementById('modelName');
+                    if (nameEl) nameEl.textContent = data.model;
                     console.log('Model updated to:', data.model);
                 }
             } else if (data.type === 'prompt_updated') {
@@ -349,13 +354,11 @@
             }
         }
 
-        // Wire the Reset Session button (was orphaned — resetSession had no call site).
-        const resetSessionBtn = document.getElementById('resetSessionBtn');
-        if (resetSessionBtn) {
-            resetSessionBtn.addEventListener('click', () => {
-                resetSession({ clearConversation: true, cleanupServer: true });
-            });
-        }
+        // 旧「Reset Session 按钮」绑定已删除（2026-09-19 死代码清理）：
+        // #resetSessionBtn 重置会话按钮已从 DOM 移除（用户删的元素不恢复），此处的
+        // `if (el)` 守卫恒假 → 属于「守卫掩盖的死引用」。resetSession 本体与其
+        // window.JoyWsDispatcher 导出保留（导出表形状不变，属已记录的 dead export，
+        // 不在此轮删除范围内）。
 
 if (typeof window !== 'undefined') {
     window.JoyWsDispatcher = {

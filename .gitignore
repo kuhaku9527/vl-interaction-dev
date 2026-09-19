@@ -94,6 +94,14 @@ agent-workspace/
 # Per-deploy webui services config (may contain api_key plaintext; persisted at
 # runtime by PUT /api/services/config, chmod 0600, restart-safe). Local-only.
 config/services.json
+# Named connection profiles (2026-09-18, A2-b): backend-persisted connection list
+# for LLM / summary / embedding / asr / tts. Also carries api_key plaintext
+# (same security baseline as services.json, E3 by user decision) — must never
+# be committed. Written by PUT /api/connections.
+# 连同原子写用的临时文件（tempfile 前缀 .connections-*.tmp）一起忽略，
+# 否则写入过程中崩溃会留下一个含明文 key 的孤儿文件。
+config/connections.json
+config/.connections-*.tmp
 # Vector index sidecar (USearch HNSW) — regenerable local artifact produced by
 # Local Wiki /v1/external/sync; never commit (companion to *.sqlite above).
 *.usearch
@@ -155,3 +163,36 @@ node_modules/
 logs/vlm-runtime-props.json
 services/.logs/*.log
 services/.logs/*.err.log
+
+# Agent-authored local artifacts (2026-09-16), local-only, not project source:
+#   doc/frontend/diagrams/ - archify 生成的流程图（规格 JSON + 交付 HTML +
+#                            visual-check 截图/回执），可由规格随时重新渲染。
+#   memory/                - DSH 按 AGENTS.md 约定追加的每日工作留痕
+#                            （目标/做了什么/踩的坑/验证结果/遗留）。
+/doc/frontend/diagrams/
+/memory/
+scripts/.fs-inspect/
+# scripts/webui-invariants.mjs 的基线快照（本机结构守恒比对用，随时可 --save 重建）
+scripts/.invariants.json
+
+# 迁移/排障用的临时备份与分块（一次性，可重建）
+scripts/.*.bak.css
+scripts/.index-before-*.html
+scripts/.blk*.css
+scripts/.head-index.html
+
+# iDesign Studio 会话镜像（由 scripts/idesign-wire.mjs 生成，含 sessionId，不应入库）
+/design/session-*/
+
+# AgentTeams 运行时团队状态（2026-09-19 补）：
+#   .agent-teams/<team>/{team.json, inbox/*.jsonl}
+#   —— 是**本机协作运行时状态**（含成员对话留痕），非项目源码；
+#      任务结束后由 agent_teams_delete 归档，也不应进入版本历史。
+#   ⚠️ 曾误以为它已被忽略（`git check-ignore` 返回 rc=1 被错读成"已忽略"，
+#      实际 rc=1 的含义是"**没有**匹配任何忽略规则"）。实测 `git add -A`
+#      会带入 5 个文件，故在此显式忽略。
+/.agent-teams/
+
+# deepsec 扫描快照：每次扫描都重新生成，且是**当时那一刻**的过时视图，
+# 入库后易被后审误读为当前状态（真实门禁以 pre-commit hook 实时扫描为准）。
+/deepsec-report.json
