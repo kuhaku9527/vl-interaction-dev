@@ -138,11 +138,19 @@
 
 | 文档 | 状态 | 用途 |
 | --- | --- | --- |
-| [`standards/webui-design-standards.md`](standards/webui-design-standards.md) | ✅ **新建 2026-09-18** | **WebUI 设计规范**：卡片契约 / 按钮尺寸 / i18n 纪律 / 主题 token / 批量改界面的结构守恒自检 / 删除元素纪律 |
+| [`standards/webui-design-standards.md`](standards/webui-design-standards.md) | ✅ **2026-09-19 大幅扩充**（896 行） | **WebUI 设计规范**：卡片契约 / 按钮尺寸（§4）/ i18n 纪律（§5）/ 主题 token（§3）/ 批量改界面的结构守恒自检（§6）/ **控件族契约（§7.5–7.7：勾选类、分段滑块、参数滑块、滚动条、厂商参数差异、输出去处）** / 删除元素纪律（§8）/ **工程纪律 §9.1–§9.13（13 条实测教训）** / 附录：契约速查 + 18 个自测脚本清单 |
 | [`standards/coding-standards.md`](standards/coding-standards.md) | ✅ | 编码规范 |
 | [`standards/code-review-checklist.md`](standards/code-review-checklist.md) | ✅ | 代码审查清单 |
 | [`standards/lint-baseline.md`](standards/lint-baseline.md) | ✅ | Lint 基线（ADR-0011 分阶段门禁） |
 | [`standards/workspace-isolation.md`](standards/workspace-isolation.md) | ✅ | 工作区隔离规范 |
+
+### 前端专题（`frontend/`）
+
+| 文档 | 状态 | 用途 |
+| --- | --- | --- |
+| [`frontend/idesign-wiring.md`](frontend/idesign-wiring.md) | ✅ **2026-09-19 补 §3.1** | 把真实 WebUI 接入 iPolloWork iDesign Studio 的接线步骤；**§3.1 同步纪律**（改完 `static/` 必须跑 `idesign-wire.mjs`） |
+| [`frontend/fullscreen-audit-2026-09-19.md`](frontend/fullscreen-audit-2026-09-19.md) | ✅ 事件型 | 全屏实现审计：三个根因（层叠囚禁 / DOM 搬家 / 72px 截断）+ 修复验证矩阵 + **§九 输出去处语义的准确定性** |
+| [`frontend/frontend-residue-audit-2026-09-19.md`](frontend/frontend-residue-audit-2026-09-19.md) | ✅ 事件型 | 前端残留审计：13 处「DOM 已删、JS 仍引用」的死引用 + 2 处静默失效 |
 
 ### 维护工具（跨目录引用）
 

@@ -310,6 +310,83 @@ const inv = {
 **前端没有任何唤醒词输入框**。换词 = 重新训练 KWS 模型 + 重采语料，**不是加个输入框能做的**。
 这是历史取舍，不要误以为"设置里有自定义唤醒词入口"。
 
+### 7.7 控件族契约：今天新增的 4 类控件（2026-09-19，改动前先读）
+
+这一节收录当天实测过的控件实现要点 —— 它们都有"看起来对、其实不生效"的坑。
+
+#### ① 分段滑块（云端/本地 `svc-seg`）—— 位移只能由 `data-mode` 驱动
+
+```html
+<div class="svc-seg" data-slot="tts">
+  <button class="svc-seg-btn on" data-mode="cloud">Cloud</button>
+  <button class="svc-seg-btn" data-mode="local">Local</button>
+  <span class="svc-seg-indicator"></span>   <!-- 滑块本体 -->
+</div>
+```
+
+- **位移真值源 = 行上的 `data-mode`**（由 `config_services.js` 写入）。
+- ❌ **不要**再写 `.svc-seg-btn.on ~ .svc-seg-indicator{translateX(100%)}` 这类
+  "按按钮状态"的规则 —— 它与 `[data-mode]` 规则**同特异性 (0,3,0)**，
+  且因为 HTML 里 cloud 按钮**初始就带 `.on`**，该条件**恒为真** →
+  滑块被永久钉在右侧（实测三态同位置 = 用户报的"点了没动态效果"）。
+- ❌ 也不要用 `:where()` 去压特异性 —— 它是 `(0,0,0)`，反而**输给**旧规则，属死代码。
+
+#### ② 勾选类：统一用 `.toggle-switch`（见 §7.5），不要裸 `<input type=checkbox>`
+
+#### ③ 参数滑块（语速/音调）—— 单位不统一，且**必须与后端对齐**
+
+```html
+<div class="tts-slider-row">
+  <input type="range" id="svc-tts-rate" min="-100" max="200" step="5">
+  <span class="tts-slider-val" id="svc-tts-rate-val">+0%</span>
+</div>
+```
+- **`rate` 用百分比，`pitch` 用 Hz** —— Edge TTS 实测：传 `+0%` 给 pitch 会被服务端拒绝
+  （`Invalid pitch '+0%'`）。见 `决策/服务-语音栈.md` D-2026-09-19-002。
+- 数值要**实时显示**在右侧（`<span>` 联动），否则用户拖完不知道值是多少。
+
+#### ④ 可滚动区域：**隐藏原生滚动条**，不要试图给它调色
+
+- 输入框（`.chat-prompt-input`）与聊天历史区**一律隐藏原生滚动条**
+  （`scrollbar-width:none` + `::-webkit-scrollbar{display:none}`），滚轮照常可滚。
+- ❌ **不要**去调 `::-webkit-scrollbar-track/thumb` 配色来"融进背景"：
+  实测（`scripts/test-scrollbar-isolate.mjs` 5 变体隔离对照）**上下三角箭头在
+  Chrome 152 下无法用 CSS 消除** —— `::-webkit-scrollbar-button{display:none}`
+  的计算值确实是 `none` 却仍被绘制（属 overlay scrollbar 原生装饰）。
+  同色 track + 去不掉的箭头 = 观感仍"缺一块"。
+- 根因背景：项目里**两套主题 token 并存**（旧 `--bg-secondary/--bg-tertiary`
+  vs 重设计 `--bg-input`），全局滚动条用的是旧那套，浅色下 `--bg-secondary`
+  **未被覆盖**故为近黑 → 浅色里出现"黑底竖条"。隐藏是最省事且彻底的解法。
+
+#### ⑤ 厂商参数不统一的处理（TTS provider 差异）
+
+- 当前落地：**能力表驱动显隐** —— 后端 `GET /api/tts/voices` 返回
+  `providers[].needs_api_key / needs_model / needs_api_base`，
+  前端据此**整组显隐**（Edge 下 Key/Model/Base 全部隐藏，因它是内置通道）。
+  **原则：不留无关控件、不留空控件。**
+- 演进路径（接入 ≥3 家大厂、差异成为负担时）：后端 **schema 驱动动态表单**；
+  `supports{voice,rate,pitch,emotion}` 即该路径的数据基础。
+- **试听必须保留** —— 音色/语速这类参数光看数字选不出来。
+- 厂商不支持的项**显式标注并置灰**，比"控件消失"更不易让人以为功能坏了。
+
+#### ⑥ 「输出去处」类设置：文案必须说清两端
+
+`#overlayPosition`（外观 → VLM 输出位置）**不是"字幕开关"**，而是
+**「VLM 输出放哪」的二选一**，且**与聊天框互斥**：
+
+| 取值 | 画面叠字 | 聊天框 |
+|---|---|---|
+| `none`（默认，= 显示在聊天框） | 隐藏 | **可见** |
+| `top` / `bottom`（= 显示在画面上方/下方） | **可见** | **隐藏** |
+
+- 旧文案「VLM Output on Camera View / 在视频画面上直接叠加文字」**只说了"叠字"这一半**，
+  隐去了"聊天框被隐藏" → 属命名欺骗，已改为「VLM 输出位置」+「显示在画面上时；聊天框会被隐藏」。
+- **全屏时该设置被忽略**（全屏字幕为唯一显示面）——
+  否则 `top` 会让同一轮推理显示两遍、`bottom` 会让文字被输入栏压住截断。
+  收口在 CSS：`.video-card.fullscreen .video-overlay{display:none!important}`。
+- **教训**：任何"二选一/互斥"的设置项，文案**必须把两端都说出来**，
+  只描述一端会让用户以为它是单向开关。
+
 ---
 
 ## 8. 删除元素的纪律（用户拍板）
@@ -793,8 +870,27 @@ Studio 渲染的是**内联快照**（`design/<session>/index.html`），不是�
 | `scripts/check-button-wrap.mjs` | 全部面板带文字按钮无竖排（实测几何） | 任何按钮/布局改动 |
 | `scripts/check-fullscreen-parity.mjs` | 全屏两态统一 + 布局 + 字幕（17 项） | 涉及输入栏 / 全屏 / 字幕 |
 | `scripts/check-advanced-relocation.mjs` | 卡片面板归属 + 实时按钮 + 开关形态（12 项） | 涉及设置面板归属 |
+| `scripts/check-topbar-fixes.mjs` | 顶栏 chip 红框语义 + 菜单边界（10 项） | 改顶栏 / mode-chip |
+| `scripts/check-cloud-local-slider.mjs` | 云/本地分段滑块三态位移（该 bug 曾静默存在） | 改 `svc-seg` / 设置面板 |
+| `scripts/check-overlay-ab.mjs` | 输出去处语义 + 全屏叠字禁用（18 项） | 改 `#overlayPosition` / 全屏 |
+| `scripts/check-tts-card.mjs` | TTS 卡片 provider/音色/滑块/试听（16 项） | 改 TTS 卡片 |
+| `scripts/test_tts_edge_e2e.py` | Edge TTS 后端真合成（18 项，含真出音频） | 改 `tts_edge.py` |
+| `scripts/test-scrollbar-isolate.mjs` | 滚动条 5 变体隔离对照（**证明箭头不可消除**） | 改滚动条策略前 |
+| `scripts/shot-scrollbar-final.mjs` | 可靠截图（CDP `insertText` + 溢出断言） | 需截图取证时 |
+| `scripts/check-idesign-mirror.mjs` | **直接渲染镜像**复验关键修复（6 项） | 视觉改动收尾（见 §9.13） |
+| `scripts/check-mobile-fullscreen.mjs` | 移动端 ≤768px 全屏（4 档视口 × 8 项） | 改全屏 / 响应式 |
+| `scripts/audit-api-contract.mjs` | 前后端路由双向比对（`BROKEN=0`） | 改端点 / 前端 fetch |
+| `scripts/audit-frontend-residue.mjs` | 死引用清零（运行时取证） | 删元素后 |
 | `scripts/webui-css-patch.mjs` | 补丁追加 + 大括号净差 + **标记恰好 1 份** | 改 `webui-css-patch.css` 后 |
 | `scripts/audit-css-loss.mjs` | **规则级**损失审计（比行数可靠） | 任何 CSS 去重/删除后 |
-| `scripts/inspect-fullscreen*.mjs` | 全屏结构 / 层叠命中 / 修复验证（取证用） | 排障 |
+| `scripts/inspect-*.mjs` | 结构 / 层叠命中 / 语义取证（排障用） | 排障 |
+
+**截图取证的可靠做法**（2026-09-19 实测踩坑）：
+用 CDP `Input.insertText` **真实键入**，并在截图前**断言 `scrollHeight > clientHeight`**。
+❌ 用 JS 设 `textarea.value` 会被页面自身的 input 处理重置 → 截图时已无溢出，
+出现"三张不同变体的截图字节完全相同（md5 一致）"的假象，导致误判"修复没生效"。
+
+> **CSS 计算值 ≠ 实际绘制**：`::-webkit-scrollbar-button{display:none}` 的计算值确是
+> `none` 却仍被绘制。涉及滚动条/伪元素的判断**必须看截图**，不能只看 computed style。
 
 ---
