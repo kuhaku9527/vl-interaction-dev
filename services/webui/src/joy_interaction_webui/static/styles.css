@@ -5699,16 +5699,106 @@ body.light-theme .video-card.fullscreen .fullscreen-prompt-overlay .chat-prompt-
     right: 18px;
     z-index: 104;
 }
+
+/* --- 25) 全屏按钮与「后置」按钮颜色统一（2026-09-19 用户反馈 a）--------
+   问题（实测四种状态）：
+     dark/normal   全屏 op=0.3  vs 后置 op=0.86   ❌
+     dark/fullscreen 全屏 bg=rgba(0,0,0,.62) op=1 vs 后置 var(--overlay-deep) op=0.86 ❌
+     light/normal  全屏 op=0.3  vs 后置 op=0.86   ❌
+     light/fullscreen 全屏 bg=rgba(0,0,0,.62) vs 后置 rgba(255,255,255,.78) ❌
+   用户原话：「在浅色模式下颜色深，全屏下更是看不见，像是被隐藏了一样。
+             调色应该跟旁边的后置按钮一样，这两个颜色不统一」。
+   根因：
+     ① 旧 .fullscreen-btn{opacity:.3}（来自早期"淡显"设计）没跟上同组按钮的统一；
+     ② 第 23 节把全屏态配色**写死成 rgba(0,0,0,.62)** —— 在浅色主题下与
+        走 token 的「后置」按钮（--overlay-deep 浅色=rgba(255,255,255,.78)）背道而驰，
+        正是"浅色下偏深、全屏下看不见"的直接原因。
+   修法：两者都用同一组 token，且透明度对齐 0.86（常态）/ 1（全屏悬停可读）。
+   注意：不用 var(--overlay-deep) 之外的硬编码色，浅深两套主题自动跟随。 */
+.video-tools .fullscreen-btn {
+    opacity: 0.86;
+}
 .video-card.fullscreen .fullscreen-btn {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.62);
-    border-color: rgba(255, 255, 255, 0.28);
+    background: var(--overlay-deep);
+    border-color: var(--border);
+}
+/* 全屏下「后置」也提到 1，保持同组一致（此前它停在 0.86） */
+.video-card.fullscreen .quick-camera-btn {
+    opacity: 1;
 }
 .video-card.fullscreen .fullscreen-btn:hover {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.85);
+    background: var(--overlay-deep);
     border-color: var(--brand-bright);
     transform: scale(1.06);
+}
+
+/* --- 26) 输入栏响应式：修「输入框被挤到不可用」（2026-09-19 用户反馈 b）--
+   用户原话：「比例兼容问题…其实输入框问题比较大，兼容性较差」。
+   实测（Chrome headless，CDP 量测 textarea 实际宽度）：
+     视口  1920  1600  1440  1280  1200  1128  1024   980   900   768   600   420
+     宽度   334   223   168   162   131   103    63    46    16   452   284   108
+   → **1024/980/900 三档不可用**（63/46/16px），900px 时占位符折成 3 行，
+     正是用户截图现象。
+   根因：`.main-content` 的 `grid-template-columns:1.9fr 1fr` 在 **>900px** 期间
+     一直保持两列，右列（聊天卡+输入栏）被压到 ~310px；而输入栏内有 5 个
+     定宽控件（54+54+42+38 + 4×8px gap = 220px），留给 textarea 的只剩个位数。
+   修法（实测对比 4 个候选后选定）：
+     提高堆叠断点 900 → 1200px（窄视口直接单列，输入栏获得整行全宽）
+     + 窄屏把那两个带文字的按钮收紧一档，进一步让出宽度。
+   ★ 实测的候选对比（最窄 textarea 宽度 / 是否出现 <100px）：
+       修复前        16px  @900   ❌ 1024/980/900 三档不可用
+       C2 minmax340  28px  @1024  ❌ 反而更差（grid 最小宽与 fr 冲突）
+       C1 断点1200  108px @420   ✅ 全部 ≥100px
+       C3 组合      124px @420   ✅ 全部 ≥100px（选定）
+   注：`min-width:0`（B1/B2）已测**无效** —— 溢出不是 flex 最小宽问题。 */
+@media (max-width: 1200px) {
+    .main-content {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+    }
+}
+@media (max-width: 1200px) {
+    .chat-prompt-action#camBtn,
+    .chat-prompt-action#liveModeBtn {
+        min-width: 46px;
+        padding: 6px 6px;
+    }
+    .chat-prompt-action#camBtn .ctrl-label,
+    .chat-prompt-action#liveModeBtn .ctrl-label {
+        font-size: 10px;
+    }
+}
+
+/* --- 27) 超窄屏（≤520px）输入栏：让 textarea 不至于被挤爆 ----------------
+   实测（Chrome headless，逐档量测 textarea 宽度）：
+     视口     430   400   380   360   340   320
+     修复前   130   104    84    64    44    24 ↕   ← 320px 时还折行
+   根因同 §26：5 个控件占 ~220px 定宽，超窄屏下留给输入框的极少。
+   候选实测对比（320px 处 textarea 宽度）：
+     D1 仅隐文字          32px
+     D3 隐文字+紧凑       56px
+     D2 紧凑按钮（选定）  60px  ← 最优，且消除折行
+   ★ 注意：收紧到 40px 方钮后，按钮内的双行文字（"视频"/"实时"）仍是横排
+     —— 已用 scripts/check-button-wrap.mjs 复验无竖排（§4.2 陷阱）。 */
+@media (max-width: 520px) {
+    .chat-prompt-action#camBtn,
+    .chat-prompt-action#liveModeBtn {
+        min-width: 40px;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+    }
+    .chat-prompt-shell {
+        gap: 5px;
+        padding: 8px;
+    }
+    .chat-prompt-action.speech,
+    .chat-prompt-action.send {
+        width: 38px;
+        height: 38px;
+    }
 }
 
 /* === END webui-css-patch === */
