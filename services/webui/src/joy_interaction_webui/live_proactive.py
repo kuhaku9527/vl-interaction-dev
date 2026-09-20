@@ -19,6 +19,13 @@ from typing import Any
 
 from .turn_controller import TurnState
 
+try:  # ADR-0014 event stream; reuse the fail-open wrapper from live_llm.
+    from .live_llm import _record_live_decision as _record_decision
+except Exception:  # pragma: no cover - import guard only
+
+    def _record_decision(**_kwargs: Any) -> None:
+        """Fail-open no-op when the shared event sink is unavailable."""
+
 #: Default seconds between proactive visual checks (env
 #: ``LIVE_PROACTIVE_INTERVAL_S`` overrides).
 _DEFAULT_PROACTIVE_INTERVAL_S: float = 5.0
@@ -151,6 +158,26 @@ async def send_proactive_prompt(
         decision,
         (response or "")[:80],
     )
+
+    # agentteams #146: record the proactive decision BEFORE either early
+    # return below. Proactive rounds never reached ``qa_history`` (that path
+    # needs non-empty user text) and produced no event, so an agent-initiated
+    # "should I speak?" decision left *no* trace anywhere — making the
+    # "真机验收主动搭话质量" requirement in live-visual-cb.md §1 impossible to
+    # evaluate offline. Both quiet paths (silence/not-for-me, and the
+    # race-guard skip) are decisions too, so the record must precede them.
+    _record_decision(
+        decision=decision,
+        text="",
+        response=response,
+        delegation_question=None,
+        session_id=None,
+        latency_ms=None,
+        logger=logger,
+        round_kind="proactive",
+        frames_n=len(frames),
+    )
+
     if decision != "response" or not (response or "").strip():
         # silence / not-for-me / empty: nothing worth saying; the
         # controller stays LISTENING untouched — wait for the next
