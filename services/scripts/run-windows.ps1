@@ -386,6 +386,12 @@ function Start-LlamaMain {
         "-c", "$ctx",
         "-ngl", "999",
         "--parallel", "1",
+        # -fit = fit-to-VRAM (adjust unset args to fit device memory), NOT flash
+        # attention. The real FA switch is -fa/--flash-attn (default: auto), which
+        # is therefore NOT disabled here. Kept as-is: measured 2026-09-20 on
+        # b10155, prompt eval was 453ms for a 768x576 image with no
+        # "CLIP graph uses unsupported" warning, so the upstream #21272 CLIP
+        # CPU-fallback does not reproduce on this box.
         "-fit", "off",
         "--jinja"
     )

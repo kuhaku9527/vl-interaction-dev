@@ -60,7 +60,7 @@ flowchart TB
 | 端口 | 服务 | 角色 | 说明 |
 | --- | --- | --- | --- |
 | **8070** | webinfer | 单入口网关（ADR0006） | 决策 token 编排 + 角色 prompt 注入；对外唯一 LLM 入口。**SPOF** |
-| **7060** | llama-server | VLM 推理主进程 | GGUF IQ4_NL，单卡 ~5.8GB VRAM。**唯一 SPOF**（挂=全瘫） |
+| **7060** | llama-server | VLM 推理主进程 | GGUF IQ4_NL + mmproj F16，**实测稳态 ≈ 9.3GB VRAM**（2026-09-20 实测 9,326 MiB；原记 "~5.8GB" 为错值，差 ~60%）。**唯一 SPOF**（挂=全瘫） |
 | **8099** | WebUI | 创作者交互端 | WebRTC + 进程内 sherpa-onnx |
 | **8985** | voice_clone API | 声音克隆注册 | MiniMax Rapid Clone 同步路径（ADR0001） |
 | ~~8991~~ | ~~本地 TTS 模型~~ | — | ❌ **已移除**（CosyVoice3 于 2026-07-12 从代码库删除；不在 `$PortMap`，永不启动） |
@@ -141,10 +141,12 @@ flowchart TB
 | 端到端延迟 P99 | ≤ 1.2s | 实时交互不掉线底线（当前 0.8–1.5s） |
 | 进程自愈 RTO | ≤ 30s（P99） | 崩溃 → 自动重启恢复 |
 | 数据 RPO | ≤ 5min | 记忆/会话持久化 |
-| VRAM 预算 | ≤ 11.5GB / 16GB | 预留 4.5GB 给游戏；超限告警降载 |
+| VRAM 预算 | ⚠️ **待重算**（原记 ≤ 11.5GB / 16GB） | 原预算按**已废弃的 11 进程方案**（含 summary llama 2.9GB / CosyVoice 1.1GB / whisper 0.7GB，均已不在启动计划）推算。**2026-09-20 实测：当前 6 进程方案下 llama-server 单进程即占 9,326 MiB**，权重 ~8.3GB 是大头，KV 仅 1GB 量级（"KV 吃满"的怀疑不成立）。真实可用余量 ≈ 16 − 9.0 = **7.0GB**，非原记的 10.2GB。**显存缺口量化与逐项分解见 issue #145 / #143** |
 | 可用性 | 进程自愈最佳努力 | 单用户本地，无对外 SLA、无多租户 |
 
 > **延迟瓶颈实测结论（issue #43，已 CLOSED）**：端到端延迟瓶颈在采集/编码链路（OBS/屏幕捕获 + `max_pixels` 偏小 + JPEG 有损），VLM 推理段稳态 <320ms（DRIFT-6 实测）非瓶颈；webui 已埋 `frame_seq` 测量环（PR #93）暴露采集/编码开销。指标边界与细节见 `决策/VLM架构与模型组成.md`「VLM 端到端延迟实测结论」。
+>
+> **VLM 推理段实测复现（2026-09-20，本机 RTX 5060 Ti 16GB，b10155 + IQ4_NL）**：768×576 图 = **448 prompt token**；`prompt eval` **453.64ms（987.56 tok/s）**；`eval` **76.92 tok/s**；稳态显存 **9,326 MiB**。`CLIP graph uses unsupported` 日志**零命中** → 上游 issue #21272 的「CLIP 回退 CPU、单图编码 27× 劣化」**在本机不存在**（`-fa` 保持默认 `auto` 即可）。第三方调研资产见 `doc/research/vlm-lightweight-2026-09.md`、`doc/research/upstream-delta-2026-09.md`。
 
 ## 9. 部署形态
 

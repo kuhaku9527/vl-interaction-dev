@@ -61,10 +61,23 @@ $args = @(
     "-c", "16384",             # 上下文窗口（见 D-027 / D-L1-006）
     "-ngl", "999",             # 全层 GPU offload
     "--parallel", "1",         # 并行槽位
-    "-fit", "off",             # flash attention off
+    "-fit", "off",             # ⚠️ fit-to-VRAM（显存自适应拟合），**不是** flash attention
     "--jinja"                  # Jinja 模板
 )
 ```
+
+> ⚠️ **注释勘误（2026-09-20 实机复核）**：本行原注释写作「flash attention off」——**语义错误**。
+> 在本机 `llama-server.exe`（b10155）上 `--help` 实测确认：
+> - `-fit, --fit [on|off]` = **fit-to-VRAM**（adjust unset arguments to fit in device memory），default `on`
+> - `-fa, --fa, --flash-attn [on|off|auto]` = **真正的 flash attention 开关**，default **`auto`**
+>
+> 后果：FA 停留在默认 `auto`，**并非团队以为的"已关闭"**。但因 `-c` / `-ngl` 均已显式指定，
+> `-fit off` 对显存拟合本身也近乎空操作。
+>
+> **实测结论：本机不受影响，无需改动**——768×576 图 `prompt eval` **453.64ms**（若 FA/CLIP 回退 CPU
+> 应为 13,495ms 级），且 `CLIP graph uses unsupported` 日志**零命中**
+> （上游 issue #21272 在 RTX 5060 Ti 上报告的 27× 劣化在本机**不存在**）。
+> **但注释必须修**——它曾导致「FA 已关闭」的错误认知，并一度让后续调研把 `-fa off` 误判为高收益动作。
 
 **关键点**：`--mmproj` 参数是 llama.cpp 组合双模型的唯一纽带。没有它，LLM 就是纯文本模式，无法处理图像。
 
