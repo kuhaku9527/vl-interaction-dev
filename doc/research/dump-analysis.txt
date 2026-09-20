@@ -1,0 +1,3 @@
+﻿=== Dump analysis 2026-09-20T17:49:29.3444348+08:00 ===
+Dump: C:\Windows\Minidump\092026-16046-01.dmp  (4270176 bytes, 09/20/2026 17:18:19)
+Debugger: C:\Program Files\WindowsApps\Microsoft.WinDbg_1.2606.22001.0_x64__8wekyb3d8bbwe\amd64\cdb.exe

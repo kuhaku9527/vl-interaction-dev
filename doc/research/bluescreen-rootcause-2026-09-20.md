@@ -1,7 +1,69 @@
 # 蓝屏根因分析（2026-09-20）
 
-> **结论：本次蓝屏与 JoyAI、显存、游戏压力均无直接因果关系。
-> 最可能的触发源是 SteelSeries GG 的 DTS 音频驱动（`dtstech64.dll`）引发的内核态故障。**
+> ## ⚠️⚠️ 本文结论已被推翻（同日更正，详见 §0）
+>
+> **原结论**：「最可能的触发源是 SteelSeries GG 的 DTS 音频驱动（`dtstech64.dll`）引发的内核态故障」
+>
+> **更正后结论**：**该因果链不成立，应降级为「时间邻接」。**
+> 蓝屏原因**未定**，现有线索更指向**虚拟化栈**（Hyper-V + VMware + Docker + WSL 多层，
+> 及加载失败的安全软件内核驱动）。
+>
+> **不要引用本文 §二 的根因判定。** 保留原文仅为留痕。
+
+## §0 更正（2026-09-20，检索端点提出 + 主理人独立复验）
+
+### 反驳证据（三条，主理人已逐条复验成立）
+
+**① 决定性天然对照：14:00 崩了 60 次，却没有蓝屏**
+
+主理人独立跑查（`Application` 日志 `id=1000`，13:30–16:00）：
+```
+13:47  x1
+14:00  x60     ← 60 次签名完全相同的 dtstech64.dll 崩溃
+15:36  x1
+15:41  x2
+```
+而同期 BugCheck 事件（`System` 日志 `id=1001`，**自 09-12 起完整保留**）**全天只有 1 条**（17:18:25）。
+
+**⇒ 若「DTS 崩溃 → 内核故障」成立，14:00 就该复现蓝屏。它没有。**
+
+**② 本机不存在任何 DTS 内核驱动**
+
+主理人复验：`C:\Windows\System32\drivers\` 下**零个** `*dts*.sys`。
+`dtstech64.dll` 由 **`audiodg.exe`（纯用户态、PPL 保护进程）** 加载，
+其 `0xc0000409`（STACK_BUFFER_OVERRUN / BEX64）是**用户态栈溢出**。
+⇒ **失败路径是「音频失效」/「反复重启服务」，不产生 bugcheck。**
+（原文所谓「内核侧组件与它紧耦合」的假设**与本机事实不符**。）
+
+**③ 时序上 bugcheck 是重启后才写入的**
+
+`id=6008` 原文：`上一次系统的 下午5:11:24 … 的关闭是意外的`。
+17:18:25 的 bugcheck 记录是**重启之后**的上报。
+
+### 另一处更正
+原文称「Windows 无法精确归因时会落到通用停止码」——
+**错误**。`0x00020001` 是**明确的 `HYPERVISOR_ERROR`**，不是通用兜底码。
+
+### 仍然成立的部分
+- **与 JoyAI / 显存 / 游戏无关**：无 TDR、无 `nvlddmkm` 事件、无 WHEA、显存未触顶、无游戏崩溃 ✅
+- **VBS/HVCI 已启用**：`VirtualizationBasedSecurityStatus=2` / `SecurityServicesRunning=2` ✅
+  （检索端点独立确证）
+
+### 现在的归因方向（**未定，待 dump 确证**）
+公开 `0x20001` 案例分布指向：**VBS/HVCI + 第三方 hypervisor + 电源空闲转换**。
+本机符合前两项且虚拟化栈层次多：
+`Hyper-V` + `VMware`(`vmx86`/`VMnetBridge`/`hcmon`) + `Docker Desktop` + `WSL2`，
+另有**加载失败的内核驱动**：`bootsafe` / `kavbootc` / `klim6`（`id=7026`）。
+
+### 唯一能定论的一步
+**管理员身份解析 dump** → 看 `!analyze -v` 的 `MODULE_NAME`：
+```powershell
+winget install Microsoft.WinDbg
+powershell -ExecutionPolicy Bypass -File scripts\analyze-dump.ps1
+```
+⚠️ **dump 会被轮转覆盖**，建议先复制保全。
+
+---
 
 ## 一、事实（全部来自 Windows 事件日志，可复查）
 
