@@ -1,3 +1,4 @@
+# ruff: noqa: RUF002 RUF003
 """ProviderRegistry 收敛层测试（N7）。
 
 覆盖注册表自身的契约：注册/重复注册、normalize（大小写/空白）、env 默认、

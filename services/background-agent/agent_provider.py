@@ -1,4 +1,5 @@
-"""AgentProvider 统一抽象：background-agent 的后端 agent 插件层（2026-08-14）。
+# ruff: noqa: RUF002 RUF003
+"""AgentProvider 统一抽象：background-agent 的后端 agent 插件层（2026-08-14）.
 
 设计（同 services/asr/jarvis/asr_provider.py 模式）：
   * AgentProvider ABC —— 统一 ``/v1/solve`` 契约（SolveRequest -> SolveResponse）。
@@ -15,17 +16,17 @@ from __future__ import annotations
 
 import logging
 import os
-from abc import ABC, abstractmethod
-from typing import Any, Literal
-
-import httpx
-from pydantic import BaseModel, Field
 
 # N7 provider 收敛：注册表（选择逻辑）在 services/provider_base.py，本模块只
 # 注册实现。跨服务共享需把仓库根注入 sys.path（本文件上溯 2 层到仓库根）——
 # 必须在 import services 之前完成（bootstrap，同 webui _ensure_repo_root_on_path 先例）。
 import sys as _sys
+from abc import ABC, abstractmethod
 from pathlib import Path as _Path
+from typing import Any, Literal
+
+import httpx
+from pydantic import BaseModel, Field
 
 _REPO_ROOT = _Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in _sys.path:
@@ -76,7 +77,7 @@ class SolveResponse(BaseModel):
 # AgentProvider 接口（插件契约）
 # ---------------------------------------------------------------------------
 class AgentProvider(ABC):
-    """后台 agent 插件。任何 agent（Codex/Hermes/未来）实现 solve+health 即插即用。
+    """后台 agent 插件。任何 agent（Codex/Hermes/未来）实现 solve+health 即插即用.
 
     契约：``POST /v1/solve``（SolveRequest -> SolveResponse）+ ``GET /health``。
     """
@@ -85,21 +86,21 @@ class AgentProvider(ABC):
 
     @abstractmethod
     async def solve(self, request: SolveRequest) -> SolveResponse:
-        """处理一次委派。必须返回 SolveResponse（不许 raise 到路由层）。"""
+        """处理一次委派。必须返回 SolveResponse（不许 raise 到路由层）."""
 
     @abstractmethod
     async def health(self) -> dict[str, Any]:
-        """探活。返回可 JSON 化的 dict（webui 只查 HTTP 200）。"""
+        """探活。返回可 JSON 化的 dict（webui 只查 HTTP 200）."""
 
     # -- 共享辅助（子类可覆盖，默认走公共实现） -------------------------
     async def enrich_with_memory(self, question: str) -> str:
-        """Local Wiki recall（D-049）。fail-open：任何错误返回 ""。"""
+        """Local Wiki recall（D-049）。fail-open：任何错误返回 ""."""
         return await _enrich_with_memory(question)
 
     def build_prompt(
         self, request: SolveRequest, max_subagents: int, *, local_wiki: str = ""
     ) -> str:
-        """构造委派 prompt（agent 名字可微调措辞）。"""
+        """构造委派 prompt（agent 名字可微调措辞）."""
         return _build_prompt(request, max_subagents, local_wiki=local_wiki)
 
 
@@ -126,7 +127,7 @@ _AGENT_REGISTRY.register("hermes", _lazy_hermes)
 
 
 def create_agent_provider(name: str | None = None) -> AgentProvider:
-    """按名字返回 agent provider 实现（注册表驱动，同 ASR/TTS 模式）。
+    """按名字返回 agent provider 实现（注册表驱动，同 ASR/TTS 模式）.
 
     未知名字 fail-loud（约法三章：禁静默 fallback）——配置错误必须炸出来，
     而不是悄悄退回某个默认后端。
@@ -144,7 +145,7 @@ def build_prompt_text(
     local_wiki: str = "",
     solver_label: str = "background solver",
 ) -> str:
-    """构造委派 prompt。原 codex_api 与 hermes_api 共用同一措辞，仅首行 agent 名不同。"""
+    """构造委派 prompt。原 codex_api 与 hermes_api 共用同一措辞，仅首行 agent 名不同."""
     frame_lines = []
     for index, frame in enumerate(request.frames, start=1):
         timestamp = frame.timestamp if frame.timestamp is not None else "unknown"
@@ -181,15 +182,13 @@ Recent frame metadata:
     return prompt
 
 
-def _build_prompt(
-    request: SolveRequest, max_subagents: int, *, local_wiki: str = ""
-) -> str:
-    """后向兼容别名：AgentProvider.build_prompt 默认实现。"""
+def _build_prompt(request: SolveRequest, max_subagents: int, *, local_wiki: str = "") -> str:
+    """后向兼容别名：AgentProvider.build_prompt 默认实现."""
     return build_prompt_text(request, max_subagents, local_wiki=local_wiki)
 
 
 async def _enrich_with_memory(question: str) -> str:
-    """Local Wiki recall（D-049 契约，同源实现）。
+    """Local Wiki recall（D-049 契约，同源实现）.
 
     Scoped to wiki namespaces (ADR-0012) so per-session conversation memory
     never pollutes the [Local Wiki] injection. Fails open: any error, empty
@@ -228,7 +227,7 @@ async def _enrich_with_memory(question: str) -> str:
                     line += f" (附图: {', '.join(images)})"
                 lines.append(line)
             return "\n".join(lines)
-    except Exception as exc:  # fail open: any recall error falls back to web search
+    except Exception as exc:  # noqa: BLE001 - fail open: any recall error falls back to web search
         logger.warning("local wiki recall failed, falling back to web search: %s", exc)
         return ""
 
@@ -241,9 +240,7 @@ def bounded_int(value: int | None, *, default: int, minimum: int, maximum: int) 
     return min(max(resolved, minimum), maximum)
 
 
-def bounded_float(
-    value: float | None, *, default: float, minimum: float, maximum: float
-) -> float:
+def bounded_float(value: float | None, *, default: float, minimum: float, maximum: float) -> float:
     try:
         resolved = float(value if value is not None else default)
     except (TypeError, ValueError):

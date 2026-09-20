@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# ruff: noqa: RUF002
 """AgentProvider 统一抽象 guard（插件化契约，2026-08-14）。
 
 锁定三件事：

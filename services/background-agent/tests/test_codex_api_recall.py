@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import logging
 
-import httpx
 import agent_provider
+import httpx
 from codex_api import main as capi
 
 LOGGER_NAME = "agent_provider"
@@ -30,7 +30,7 @@ class _BoomPostClient:
     def __init__(self, exc: Exception):
         self._exc = exc
 
-    async def __aenter__(self) -> "_BoomPostClient":
+    async def __aenter__(self) -> _BoomPostClient:
         return self
 
     async def __aexit__(self, *exc) -> bool:
@@ -43,7 +43,7 @@ class _BoomPostClient:
 class _BoomEnterClient:
     """Client whose async-enter raises -- simulates client construction failure."""
 
-    async def __aenter__(self) -> "_BoomEnterClient":
+    async def __aenter__(self) -> _BoomEnterClient:
         raise httpx.ConnectError("cannot open httpx client")
 
     async def __aexit__(self, *exc) -> bool:
@@ -69,7 +69,7 @@ class _OkPostClient:
         self._payload = payload
         self._status_code = status_code
 
-    async def __aenter__(self) -> "_OkPostClient":
+    async def __aenter__(self) -> _OkPostClient:
         return self
 
     async def __aexit__(self, *exc) -> bool:
@@ -121,7 +121,7 @@ async def test_enrich_returns_joined_blocks_on_success(monkeypatch):
     """Healthy recall returns block lines joined for prompt injection."""
     payload = {
         "blocks": [
-            {"content": "艾尔登法环 出血流配装：双曲剑+血焰刀刃"},
+            {"content": "艾尔登法环 出血流配装：双曲剑+血焰刀刃"},  # noqa: RUF001 (intentional Chinese fullwidth colon)
             {"content": "老头环 DLC 幽影树碎片位置", "images": ["img/a.png"]},
         ]
     }

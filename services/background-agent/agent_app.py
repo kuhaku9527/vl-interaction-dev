@@ -1,4 +1,5 @@
-"""background-agent 统一入口（AgentProvider 插件化，2026-08-14）。
+# ruff: noqa: RUF002 RUF003
+"""background-agent 统一入口（AgentProvider 插件化，2026-08-14）.
 
 单一 FastAPI app，按 ``BACKGROUND_AGENT_PROVIDER``（默认 codex）选择 provider 插件：
   * codex  -> CodexProvider（codex_api.main）
@@ -15,15 +16,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
 from agent_provider import (
     AgentProvider,
     SolveRequest,
     SolveResponse,
     create_agent_provider,
 )
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI(title="StreamingHarness Background-Agent (AgentProvider)", version="0.2.0")
 
@@ -32,7 +32,7 @@ _provider: AgentProvider | None = None
 
 
 class ProviderRouteRequest(BaseModel):
-    """``POST /v1/provider/route`` 请求体（N7.1 前端热切）。
+    """``POST /v1/provider/route`` 请求体（N7.1 前端热切）.
 
     ``provider`` 必须是已注册的 agent provider 名（codex | hermes），
     未知名 fail-loud -> HTTP 400（D-080，禁静默 fallback）。
@@ -65,13 +65,13 @@ async def solve(request: SolveRequest) -> SolveResponse:
 # ---------------------------------------------------------------------------
 @app.get("/v1/provider/route")
 async def get_provider_route() -> dict[str, Any]:
-    """读当前生效的 agent provider 名。"""
+    """读当前生效的 agent provider 名."""
     return {"provider": _get_provider().name}
 
 
 @app.post("/v1/provider/route")
 async def post_provider_route(req: ProviderRouteRequest) -> dict[str, Any]:
-    """热切 agent provider（重建进程级 _provider）。
+    """热切 agent provider（重建进程级 _provider）.
 
     未知名 fail-loud -> 400（D-080）；试构成功才替换，绝不留半状态。
     """
