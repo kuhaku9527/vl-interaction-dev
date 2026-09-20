@@ -266,7 +266,17 @@ jobs:
       matrix:
         service: [memory-store, background-agent, webinfer, webui, tts]
     steps:
+      # fetch-depth: 0 (full history) is REQUIRED by this job, not an
+      # optimization choice. `tests/test_qa_server_split_equivalence.py` pins the
+      # pre-split server.py by retrieving it from git history
+      # (`git show 5c0089e~1:...`), i.e. ~149 commits deep. The actions/checkout
+      # default is fetch-depth: 1, under which that object is simply absent and
+      # all 52 of its cases ERROR out ("invalid object name '5c0089e~1'") — a
+      # CI-only failure mode that cannot reproduce in a normal full clone.
+      # The repo pack is ~11 MiB, so a full fetch is cheap.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

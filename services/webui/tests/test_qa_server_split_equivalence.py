@@ -33,14 +33,35 @@ BASELINE = "5c0089e~1"
 
 
 def _git_show_server_baseline():
-    """Return the pre-split server.py source (via git show)."""
+    """Return the pre-split server.py source (via git show).
+
+    Fail-closed but with a legible reason: this needs the baseline commit to be
+    present in the local object database. A **shallow** clone (e.g.
+    ``actions/checkout``'s default ``fetch-depth: 1``) does not contain it, and
+    a bare ``check=True`` would surface that as 52 opaque
+    ``CalledProcessError: ... returned non-zero exit status 128`` ERRORs.
+
+    The ``pytest`` job in ``.github/workflows/quality.yml`` therefore sets
+    ``fetch-depth: 0``. This guard makes the failure mode explicit if that ever
+    regresses, instead of looking like a broken test.
+    """
     out = subprocess.run(
         ["git", "show", f"{BASELINE}:services/webui/src/joy_interaction_webui/server.py"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
-        check=True,
     )
+    if out.returncode != 0:
+        pytest.fail(
+            f"cannot obtain baseline {BASELINE} from git history "
+            f"({out.stderr.strip() or 'no stderr'}).\n"
+            "This suite compares the current source against a ~149-commit-old "
+            "snapshot, so it needs a NON-shallow checkout.\n"
+            "Fix: run with full history (CI sets `fetch-depth: 0` on the "
+            "actions/checkout step in the pytest job); locally: "
+            "`git fetch --unshallow` (or `git fetch --depth=200`).",
+            pytrace=False,
+        )
     return out.stdout
 
 
