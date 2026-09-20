@@ -1,0 +1,69 @@
+=== VMware uninstall reconnaissance 2026-09-20T18:50:15.1362066+08:00 ===
+
+--- 1. Full registry detail for the VMware entry (incl. hidden keys) ---
+  KEY: {0E992720-1330-4AB3-8155-255F79785535}
+      DisplayIcon = D:\VMware Workstation17\vmware.exe
+      ModifyPath = msiexec.exe /l{0E992720-1330-4AB3-8155-255F79785535}
+      AuthorizedCDFPrefix = 
+      Comments = 
+      Contact = 
+      DisplayVersion = 17.0.0
+      HelpLink = www.vmware.com/cn/support
+      HelpTelephone = 
+      InstallDate = 20221216
+      InstallLocation = 
+      InstallSource = C:\Program Files (x86)\Common Files\VMware\InstallerCache\
+      NoRemove = 1
+      NoRepair = 1
+      Publisher = VMware, Inc.
+      Readme = 
+      Size = 
+      EstimatedSize = 1105980
+      URLInfoAbout = 
+      URLUpdateInfo = 
+      VersionMajor = 17
+      VersionMinor = 0
+      WindowsInstaller = 1
+      Version = 285212672
+      Language = 2052
+      DisplayName = VMware Workstation
+
+
+--- 2. Find VMware install dirs / uninstallers on disk ---
+  DIR: C:\Program Files (x86)\VMware
+  (absent) C:\Program Files\VMware
+  DIR: C:\Program Files (x86)\Common Files\VMware
+      C:\Program Files (x86)\Common Files\VMware\USB\vmware-usbarbitrator.exe   849576   09/07/2022 09:10:36
+      C:\Program Files (x86)\Common Files\VMware\USB\vmware-usbarbitrator64.exe   1041208   09/07/2022 09:12:00
+  DIR: C:\Program Files\Common Files\VMware
+
+--- 3. Any vmware*.exe anywhere obvious ---
+    C:\Program Files (x86)\Common Files\VMware\USB\vmware-usbarbitrator.exe
+    C:\Program Files (x86)\Common Files\VMware\USB\vmware-usbarbitrator64.exe
+    C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\vmdemux.exe
+    C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\vmdemux.exe
+    C:\Program Files\Hyper-V\VMCreate.exe
+    C:\Program Files\Hyper-V\VMImport.exe
+    C:\Program Files\Hyper-V\6.2\vmconnect6.2.exe
+    C:\Program Files\Hyper-V\6.3\vmconnect6.3.exe
+
+--- 4. Installed MSI products matching VMware (via registry Installer) ---
+  ProductCode-ish key: 027299E003313BA4185552F597875553   ProductName: VMware Workstation
+
+--- 5. Download cache / original installer present? ---
+
+--- 6. Network adapters installed by VMware ---
+
+Name                          InterfaceDescription                       Status
+----                          --------------------                       ------
+VMware Network Adapter VMnet8 VMware Virtual Ethernet Adapter for VMnet8 Not Present
+VMware Network Adapter VMnet1 VMware Virtual Ethernet Adapter for VMnet1 Not Present
+
+
+--- 7. Windows Installer cache entries for VMware ---
+    C:\Windows\Installer\126902.msi
+    C:\Windows\Installer\126963.msi
+    C:\Windows\Installer\1bea9.msi
+    C:\Windows\Installer\1e1d4be.msi
+    C:\Windows\Installer\218f9c7.msi
+  (Windows Installer cache is ACL-protected; listing may be empty)

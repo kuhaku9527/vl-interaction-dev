@@ -6,6 +6,54 @@
 
 ---
 
+## ⚠️⚠️ 自查更正（同日，主理人自检；`scripts/selfcheck-bsod-claim.py`）
+
+**本文初版有一处实质性的过度断言，现更正。以本节为准。**
+
+### 原文错误
+初版写「**是 hypervisor 层自身发生致命错误**」，并据 `vmx86` / `hcmon` 出现在模块表中，
+判定「VMware 与 Hyper-V 抢占冲突」为**高置信主因**。
+
+### 更正
+`HvlSkCrashdumpCallbackRoutine` 是**崩溃上报路径**，不是崩溃原因。栈自下而上读：
+
+```
+KiIdleLoop                      ← 系统空闲
+PoIdle / PpmIdleExecuteTransition / PpmIdleGuestExecute
+KiNmiInterrupt                  ← ★ NMI 到达（这才是"事件"）
+KiProcessNMI
+HvlSkCrashdumpCallbackRoutine   ← ★ NMI 处理程序决定 bugcheck
+KeBugCheckEx                    ← 触发 bugcheck
+```
+
+**栈能证明**：✅ NMI 在 CPU 空闲时到达，Windows 崩溃转储回调由此触发 `HYPERVISOR_ERROR`。
+**栈不能证明**：❌ hypervisor **为何**发出该 NMI——hypervisor 内部状态
+（`hvix64` 自身内存）**不在这份内核 triage dump 里**。
+
+### 第二处更正：模块「已加载」≠「是原因」
+自检逐项核对：
+
+| 模块 | 状态 |
+|---|---|
+| `vmx86` / `hcmon` / `vmnetbridge` / `VMNET` / `vmnetuserif` | **已加载，均不在栈上** |
+| `sysdiag` / `hrdevmon` / `hrndis6` / `hrwfpdrv` | **已加载，均不在栈上** |
+| `ndisrd` / `nvlddmkm` / `RTKVHD64` | **已加载，均不在栈上** |
+
+**⇒ 初版把「模块已加载」当作「导致崩溃」的证据，属过度推断。**
+
+### 更正后的置信度
+| 结论 | 初版 | **更正后** |
+|---|---|---|
+| hypervisor 层致命错误（非第三方驱动崩溃） | 确证 | ✅ **确证**（栈确实不经由任何第三方驱动） |
+| 崩溃发生在空闲/电源转换时 | 确证 | ✅ **确证** |
+| **具体是哪个第三方模块导致** | 高（指向 VMware） | ⚠️ **未确定**（已加载 ≠ 因果） |
+| VMware + Hyper-V 共存为主因 | 高 | ⚠️ **合理假设，须受控实验验证** |
+| `Arg1=0x26` 的含义 | 未查明 | ⚠️ **未查明**（公开案例见 `0x32` 等其他值，无字典） |
+
+**⇒ 唯一能定论的方式是「受控移除实验」**（见 §五）。
+
+---
+
 ## 一、★ dump 给出的权威事实
 
 ### 崩溃标识
@@ -168,3 +216,56 @@ winget uninstall VMware.WorkstationPlayer   # 或从"应用"里卸载
 | `Arg1=0x26` 的含义 | **未查明** | 微软文档标 Reserved，无公开字典 |
 | DTS / 显卡 / 游戏 / JoyAI | **已排除** | dump 栈与模块表 |
 | 内存/CPU 硬件 | **未证伪** | 无 WHEA，但未跑 MemTest |
+
+---
+
+## 七、自查发现的证据边界（重要）
+
+自查确认：**本机现有材料无法进一步定论**。
+
+| 能定论的证据 | 状态 |
+|---|---|
+| 完整内存转储 `C:\Windows\MEMORY.DMP`（含 hypervisor 状态） | ❌ **不存在**（只生成了 triage minidump） |
+| Hyper-V 操作日志 `Microsoft-Windows-Hyper-V-Hypervisor-Operational` | ❌ **该通道不存在**（默认未启用） |
+| `LiveKernelReports` | ❌ 空 |
+| `Hyper-V-VmSwitch-Operational` | ✅ 存在（1579 条）但只记网络虚拟交换机，不含 hypervisor 内部错误 |
+
+**⇒ hypervisor 为何发出 NMI，本机证据链到此为止。**
+
+**要拿到那一步的证据，需要主动准备**（下次复现前做）：
+```powershell
+# 启用 hypervisor 操作日志（需管理员）
+wevtutil sl Microsoft-Windows-Hyper-V-Hypervisor-Operational /e:true
+
+# 让下次崩溃生成完整内存转储（而非 triage）
+# 系统属性 → 高级 → 启动和故障恢复 → 写入调试信息：完整内存转储
+# 或注册表：
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v CrashDumpEnabled /t REG_DWORD /d 1 /f
+# 注意：完整转储需要 ≥ 物理内存大小的磁盘空间（32GB → 预留 40GB）
+```
+
+## 八、因此，行动方案的依据是「假设」而非「定论」
+
+**必须诚实说明**：§五的三条路径**都是基于假设的排查**，不是基于已证原因的修复。
+
+**唯一能把假设变成定论的，是受控实验**：
+1. 建还原点
+2. **一次只移除一个变量**（先 VMware，因为它是唯一与 Hyper-V 同层的组件）
+3. 运行 **≥48h 且覆盖空闲时段**（本次崩溃就在空闲时发生）
+4. 复现 → 回退，换下一变量
+
+**判据**：48 小时内不再出现 `0x20001` = 该变量是原因（概率性结论，非绝对）。
+
+**若三条路径都试过仍复现** → 转向硬件侧（BIOS/微码、MemTest86 ≥4 轮、关闭 XMP）。
+
+## 九、本次蓝屏与项目的关系（最终确认）
+
+| 项 | 结论 |
+|---|---|
+| **JoyAI / 显存** | ❌ 无关。栈显示系统在**空闲**时崩溃；显存 8GB/16GB 未触顶 |
+| **游戏** | ❌ 无关。无游戏进程在栈上 |
+| **NVIDIA / 显卡驱动** | ❌ 无关。`nvlddmkm` 已加载但**不在栈上**，且无任何 TDR 事件 |
+| **DTS 音频 / SteelSeries** | ❌ 无关。**不在内核模块表**；14:00 崩 60 次无蓝屏 |
+| **我们做的工作** | ❌ **无因果**。蓝屏在 17:11，我们的实测在此之前已结束且显存正常 |
+
+**⇒ 这次蓝屏不是我们实验导致的，也不是硬件带不动。是一场独立的基础设施层故障。**

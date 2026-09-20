@@ -1,0 +1,108 @@
+=== VMware post-uninstall state 2026-09-20T18:52:43.0221657+08:00 ===
+
+--- 1. Uninstall still running? ---
+
+  Id StartTime MemMB
+  -- --------- -----
+2804           26.40
+
+
+--- 2. Uninstall log ---
+  log EXISTS: 1151818 bytes, modified 09/20/2026 18:51:35
+  --- last 40 lines ---
+Property(S): ROOTDRIVE = E:\
+Property(S): CostingComplete = 1
+Property(S): OutOfDiskSpace = 0
+Property(S): OutOfNoRbDiskSpace = 0
+Property(S): PrimaryVolumeSpaceAvailable = 0
+Property(S): PrimaryVolumeSpaceRequired = 0
+Property(S): PrimaryVolumeSpaceRemaining = 0
+Property(S): INSTALLLEVEL = 1
+Property(S): PARPORT_EXISTS = 0
+Property(S): SupportFilesDir = **********
+Property(S): SupportFilesData = **********
+MSI (s) (F4:A4) [18:51:35:951]: Note: 1: 1724 
+MSI (s) (F4:A4) [18:51:35:953]: Transforming table Error.
+
+MSI (s) (F4:A4) [18:51:35:955]: Transforming table Error.
+
+MSI (s) (F4:A4) [18:51:35:955]: 产品: VMware Workstation -- 删除已成功完成。
+
+MSI (s) (F4:A4) [18:51:35:955]: Windows Installer 已删除产品。产品名称: VMware Workstation。产品版本: 17.0.0。产品语言: 2052。制造商: VMware, Inc.。删除成功或错误状态: 0。
+
+MSI (s) (F4:A4) [18:51:35:957]: Deferring clean up of packages/files, if any exist
+MSI (s) (F4:A4) [18:51:35:958]: MainEngineThread is returning 0
+=== 记录停止: 2026/9/20  18:51:35 ===
+MSI (s) (F4:D4) [18:51:35:960]: User policy value 'DisableRollback' is 0
+MSI (s) (F4:D4) [18:51:35:960]: Machine policy value 'DisableRollback' is 0
+MSI (s) (F4:D4) [18:51:35:960]: Incrementing counter to disable shutdown. Counter after increment: 0
+MSI (s) (F4:D4) [18:51:35:960]: Note: 1: 1402 2: HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Installer\Rollback\Scripts 3: 2 
+MSI (s) (F4:D4) [18:51:35:962]: Note: 1: 2265 2:  3: -2147287035 
+MSI (s) (F4:D4) [18:51:35:962]: Note: 1: 1402 2: HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Installer\Rollback\Scripts 3: 2 
+MSI (s) (F4:D4) [18:51:35:963]: Decrementing counter to disable shutdown. If counter >= 0, shutdown will be denied.  Counter after decrement: -1
+MSI (s) (F4:D4) [18:51:35:963]: Post-install cleanup: removing installer file 'C:\Windows\Installer\349fd.msi'
+MSI (s) (F4:D4) [18:51:35:964]: Post-install cleanup: removing installer file 'C:\Windows\Installer\{0E992720-1330-4AB3-8155-255F79785535}\_generic.ico'
+MSI (s) (F4:D4) [18:51:35:965]: Post-install cleanup: removing installer folder 'C:\Windows\Installer\{0E992720-1330-4AB3-8155-255F79785535}\' (if empty)
+MSI (s) (F4:D4) [18:51:35:965]: Note: 1: 2318 2:  
+MSI (s) (F4:D4) [18:51:35:967]: Destroying RemoteAPI object.
+MSI (s) (F4:1C) [18:51:35:967]: Custom Action Manager thread ending.
+MSI (c) (2C:A0) [18:51:35:969]: Decrementing counter to disable shutdown. If counter >= 0, shutdown will be denied.  Counter after decrement: -1
+MSI (c) (2C:A0) [18:51:35:969]: MainEngineThread is returning 0
+=== Verbose logging stopped: 2026/9/20  18:51:35 ===
+
+  --- key result lines ---
+
+--- 3. Driver FILES: VMware vs Microsoft Hyper-V ---
+  [3a] VMware drivers (should disappear after uninstall):
+    STILL PRESENT  vmx86.sys   11/16/2022 01:10:10
+    gone           hcmon.sys
+    STILL PRESENT  vmnet.sys   11/16/2022 01:15:14
+    STILL PRESENT  vmnetadapter.sys   11/16/2022 01:15:14
+    STILL PRESENT  vmnetbridge.sys   11/16/2022 01:15:14
+    STILL PRESENT  vmnetuserif.sys   11/16/2022 01:15:14
+    gone           vmci.sys
+    gone           vmkbd.sys
+    gone           vmusb.sys
+  [3b] Microsoft Hyper-V drivers (MUST stay -- do not touch):
+    intact         vmbkmcl.sys
+    intact         vmbkmclr.sys
+    intact         vmswitch.sys
+    intact         vmstorfl.sys
+    intact         vmsvcext.sys
+    intact         VmsProxy.sys
+    intact         VmsProxyHNic.sys
+    intact         vmgencounter.sys
+    intact         vms3cap.sys
+
+--- 4. VMware service registry keys ---
+    PRESENT  vmx86   Start=2
+    PRESENT  hcmon   Start=
+    gone     vmnet
+    PRESENT  vmnetadapter   Start=3
+    PRESENT  vmnetbridge   Start=2
+    PRESENT  vmnetuserif   Start=2
+    gone     vmci
+    gone     vmkbd
+    gone     vmusb
+    PRESENT  VMnetDHCP   Start=3
+    PRESENT  VMware NAT Service   Start=3
+    gone     VMUSBArbService
+    PRESENT  VMnetuserif   Start=2
+
+--- 5. MSI product still registered? ---
+  Uninstall key (64-bit view): False
+  Uninstall key (32-bit view): False
+  Installer\Products entry: gone
+
+--- 6. MSI cache still present? ---
+  C:\Program Files (x86)\Common Files\VMware\InstallerCache\{0E992720-1330-4AB3-8155-255F79785535}.msi : False
+
+--- 7. Driver LOAD state right now (loaded vs not) ---
+    vmx86 : SERVICE_NAME: vmx86  |         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 4  RUNNING  |                                 (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+    hcmon : [SC] EnumQueryServicesStatus:OpenService 失败 1060: |  | 指定的服务未安装。
+    vmci : [SC] EnumQueryServicesStatus:OpenService 失败 1060: |  | 指定的服务未安装。
+    vmnetbridge : SERVICE_NAME: vmnetbridge  |         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 4  RUNNING  |                                 (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+    vmnetuserif : SERVICE_NAME: vmnetuserif  |         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 4  RUNNING  |                                 (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+
+--- 8. VMware processes ---
+    none running

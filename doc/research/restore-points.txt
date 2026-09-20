@@ -1,0 +1,22 @@
+﻿=== Restore point inventory 2026-09-20T18:47:41.3832286+08:00 ===
+
+--- 1. System Protection status per drive ---
+  SystemRestore class not reachable: 拒绝访问 
+vssadmin 1.1 - 卷影复制服务管理命令行工具
+(C) 版权所有 2001-2013 Microsoft Corp.
+
+错误:  你没有正确的权限，无法运行这个命令。请从具有提升管理员权限的命令
+窗口运行此实用程序。
+ 
+
+--- 2. Existing restore points (Get-ComputerRestorePoint) ---
+  NONE FOUND (or cmdlet unavailable)
+
+--- 3. SystemRestorePointCreationFrequency setting ---
+  not set -> default 1440 minutes
+
+--- 4. Last restore point age check ---
+  no restore points -> the refusal was misleading
+
+--- 5. BCD export status (independent of restore points) ---
+  bcd-backup exists: False
