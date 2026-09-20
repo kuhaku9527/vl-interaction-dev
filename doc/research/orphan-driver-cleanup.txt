@@ -1,4 +1,26 @@
-﻿=== Orphan driver key cleanup 2026-09-20T19:48:13.4054277+08:00 ===
-admin = False
-WhatIfOnly = True
-ERROR: not elevated
+﻿=== Orphan driver key cleanup 2026-09-20T19:54:28.9103970+08:00 ===
+admin = True
+WhatIfOnly = False
+backed up: HKLM:\SYSTEM\CurrentControlSet\Services\dam -> D:\AI\workspace\JoyAI-VL-Interaction-main\scripts\..\.cache\driver-key-backup\dam.reg
+backed up: HKLM:\SYSTEM\CurrentControlSet\Services\hvsocketcontrol -> D:\AI\workspace\JoyAI-VL-Interaction-main\scripts\..\.cache\driver-key-backup\hvsocketcontrol.reg
+backed up: HKLM:\SYSTEM\CurrentControlSet\Services\hcmon -> D:\AI\workspace\JoyAI-VL-Interaction-main\scripts\..\.cache\driver-key-backup\hcmon.reg
+backed up: HKLM:\SYSTEM\CurrentControlSet\Services\sysdiag -> D:\AI\workspace\JoyAI-VL-Interaction-main\scripts\..\.cache\driver-key-backup\sysdiag.reg
+
+--- BEFORE ---
+  bootsafe : (no key)
+  e : (no key)
+  kavbootc : (no key)
+  klim6 : (no key)
+
+--- DELETE ---
+  already gone: bootsafe
+  already gone: e
+  already gone: kavbootc
+  already gone: klim6
+
+--- AFTER ---
+  bootsafe : gone
+  e : gone
+  kavbootc : gone
+  klim6 : gone
+  dam : STILL PRESENT
