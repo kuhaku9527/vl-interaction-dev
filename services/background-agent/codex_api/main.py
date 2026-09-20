@@ -1,4 +1,5 @@
-"""Local Codex CLI provider for StreamingHarness background tasks（AgentProvider 插件）。
+# ruff: noqa: RUF002 RUF003
+"""Local Codex CLI provider for StreamingHarness background tasks（AgentProvider 插件）.
 
 2026-08-14 重构：契约层（SolveRequest/SolveResponse/recall/prompt/工具）已抽到
 ``agent_provider.py``（AgentProvider 统一抽象）；本模块保留 Codex 特有的
@@ -23,8 +24,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-
 from agent_provider import (
     AgentProvider,
     FrameInput,
@@ -35,6 +34,7 @@ from agent_provider import (
     decode_data_url,
     limit_frames,
 )
+from fastapi import FastAPI, HTTPException
 
 logger = logging.getLogger("codex_api")
 
@@ -61,17 +61,8 @@ STREAM_READER_LIMIT_BYTES = int(
 )
 
 # 后向兼容 re-export（tests / webui 引用 agent_provider 的符号走这两个包名）
-from agent_provider import (  # noqa: E402
-    FrameInput as FrameInput,
-    SolveRequest as SolveRequest,
-    SolveResponse as SolveResponse,
-)
-from agent_provider import build_prompt_text as build_prompt_text  # noqa: E402
 from agent_provider import _enrich_with_memory as _enrich_with_memory  # noqa: E402
-from agent_provider import bounded_float as _bounded_float  # noqa: E402
-from agent_provider import bounded_int as _bounded_int  # noqa: E402
-from agent_provider import limit_frames as _limit_frames  # noqa: E402
-from agent_provider import decode_data_url as _decode_data_url  # noqa: E402
+from agent_provider import build_prompt_text as build_prompt_text  # noqa: E402
 
 
 @dataclass
@@ -127,7 +118,7 @@ class JsonlState:
 
 
 class CodexProvider(AgentProvider):
-    """后台 agent 插件：系统 codex CLI 子进程（exec --search --json --ephemeral）。"""
+    """后台 agent 插件：系统 codex CLI 子进程（exec --search --json --ephemeral）."""
 
     name = "codex"
 
@@ -189,7 +180,9 @@ class CodexProvider(AgentProvider):
         )
         started = time.perf_counter()
         with tempfile.TemporaryDirectory(prefix="streamingharness-codex-") as tmpdir:
-            image_paths = _write_frame_images(limit_frames(request.frames, DEFAULT_MAX_FRAMES), Path(tmpdir))
+            image_paths = _write_frame_images(
+                limit_frames(request.frames, DEFAULT_MAX_FRAMES), Path(tmpdir)
+            )
             argv = _build_codex_argv(
                 codex_path=codex_path,
                 workspace=DEFAULT_WORKSPACE,

@@ -14,8 +14,8 @@ Run with:  python -m pytest services/background-agent/tests -o asyncio_mode=auto
 
 from __future__ import annotations
 
-import httpx
 import agent_provider
+import httpx
 import pytest
 from hermes_api import main as hapi
 

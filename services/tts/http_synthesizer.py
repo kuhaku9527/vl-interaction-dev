@@ -1,3 +1,4 @@
+# ruff: noqa: RUF002
 """MiniMax Speech 2.8 cloud TTS streaming synthesizer.
 
 Plugs into tts_adapter.py as the primary cloud TTS backend.
@@ -25,7 +26,6 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 import httpx
-
 from tts_provider import TTSSynthesizer
 
 logger = logging.getLogger("joyai.tts.minimax")
@@ -59,7 +59,7 @@ class MiniMaxTTSConfig:
 
 
 class MiniMaxTTSSynthesizer(TTSSynthesizer):
-    """Stream TTS via MiniMax Speech 2.8 SSE API（TTS_PROVIDER=minimax 插件实现）。"""
+    """Stream TTS via MiniMax Speech 2.8 SSE API（TTS_PROVIDER=minimax 插件实现）."""
 
     name = "minimax"
 
