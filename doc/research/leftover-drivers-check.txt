@@ -1,0 +1,80 @@
+﻿=== Leftover driver services check 2026-09-20T19:18:50.3542337+08:00 ===
+
+--- 1. Registry entries ---
+
+
+Name        : bootsafe
+Start       : 1
+Type        : 1
+ImagePath   : system32\drivers\bootsafe64_ev.sys
+FileExists  : False
+File        : C:\Windows\system32\drivers\bootsafe64_ev.sys
+DisplayName : bootsafe
+
+Name        : dam
+Start       : 1
+Type        : 1
+ImagePath   : system32\drivers\dam.sys
+FileExists  : True
+File        : C:\Windows\system32\drivers\dam.sys
+DisplayName : @%SystemRoot%\system32\drivers\dam.sys,-100
+
+Name        : e
+Start       : 1
+Type        : 1
+ImagePath   : E
+FileExists  : False
+File        : E
+DisplayName : e
+
+Name        : kavbootc
+Start       : 0
+Type        : 1
+ImagePath   : system32\drivers\kavbootc64.sys
+FileExists  : False
+File        : C:\Windows\system32\drivers\kavbootc64.sys
+DisplayName : kavbootc
+
+Name        : klim6
+Start       : 1
+Type        : 1
+ImagePath   : \SystemRoot\system32\DRIVERS\klim6.sys
+FileExists  : False
+File        : C:\Windows\system32\DRIVERS\klim6.sys
+DisplayName : @oem65.inf,%KLIM6_Desc%;Kaspersky Anti-Virus NDIS 6 Filter
+
+
+
+
+--- 2. Summary table ---
+
+Name     Start Type FileExists ImagePath                             
+----     ----- ---- ---------- ---------                             
+bootsafe     1    1      False system32\drivers\bootsafe64_ev.sys    
+dam          1    1       True system32\drivers\dam.sys              
+e            1    1      False E                                     
+kavbootc     0    1      False system32\drivers\kavbootc64.sys       
+klim6        1    1      False \SystemRoot\system32\DRIVERS\klim6.sys
+
+
+
+--- 3. sc.exe query (current driver state) ---
+  bootsafe :         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 1  STOPPED 
+  dam :         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 1  STOPPED 
+  e :         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 1  STOPPED 
+  kavbootc :         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 1  STOPPED 
+  klim6 :         TYPE               : 1  KERNEL_DRIVER   |         STATE              : 1  STOPPED 
+
+--- 4. Any vendor files left on disk ---
+  dam.sys  102320 bytes  (03/12/2025 10:36:01)
+  (empty above = no vendor driver files found)
+
+--- 5. Uninstall entries mentioning Kaspersky / security ---
+  (empty above = no matching uninstall entries)
+
+--- 6. Services still present (hcmon/vmnet/vsock after deletion attempt) ---
+  hcmon : STILL REGISTERED
+  VMnetBridge : STILL REGISTERED
+  vsock : STILL REGISTERED
+  hvsocketcontrol : STILL REGISTERED
+  vmx86 : gone
