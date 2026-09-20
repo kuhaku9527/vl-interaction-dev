@@ -1,0 +1,23 @@
+{
+  "torch": "2.12.0.dev20260408+cu128",
+  "cuda": "12.8",
+  "capability": [
+    12,
+    0
+  ],
+  "steps": {
+    "4bit_backward": {
+      "ok": true,
+      "grad_norm": 0.010437
+    },
+    "peft_lora_4bit": {
+      "ok": false,
+      "error": "element 0 of tensors does not require grad and does not have a grad_fn"
+    },
+    "adamw8bit": {
+      "ok": true
+    }
+  },
+  "bitsandbytes": "0.50.2",
+  "all_passed": false
+}

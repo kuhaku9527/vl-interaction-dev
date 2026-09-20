@@ -1,0 +1,131 @@
+{
+  "label": "kv_q8",
+  "port": 7060,
+  "rounds": 12,
+  "prompt_ms": {
+    "median": 260.5,
+    "min": 258.9,
+    "max": 264.4
+  },
+  "wall_ms": {
+    "median": 575.8,
+    "min": 472.2,
+    "max": 600.7
+  },
+  "vram_mib": {
+    "start": 8311,
+    "end": 8211,
+    "median": 8215
+  },
+  "prompt_n": 448,
+  "rows": [
+    {
+      "i": 1,
+      "wall_ms": 726.0,
+      "prompt_ms": 409.3,
+      "prompt_n": 448,
+      "predicted_ms": 302.2,
+      "predicted_n": 24,
+      "vram_mib": 8311
+    },
+    {
+      "i": 2,
+      "wall_ms": 579.8,
+      "prompt_ms": 264.4,
+      "prompt_n": 438,
+      "predicted_ms": 294.4,
+      "predicted_n": 24,
+      "vram_mib": 8235
+    },
+    {
+      "i": 3,
+      "wall_ms": 575.7,
+      "prompt_ms": 260.6,
+      "prompt_n": 438,
+      "predicted_ms": 294.8,
+      "predicted_n": 24,
+      "vram_mib": 8222
+    },
+    {
+      "i": 4,
+      "wall_ms": 600.7,
+      "prompt_ms": 260.5,
+      "prompt_n": 438,
+      "predicted_ms": 296.2,
+      "predicted_n": 24,
+      "vram_mib": 8222
+    },
+    {
+      "i": 5,
+      "wall_ms": 575.8,
+      "prompt_ms": 260.7,
+      "prompt_n": 438,
+      "predicted_ms": 294.7,
+      "predicted_n": 24,
+      "vram_mib": 8222
+    },
+    {
+      "i": 6,
+      "wall_ms": 575.9,
+      "prompt_ms": 259.7,
+      "prompt_n": 438,
+      "predicted_ms": 295.5,
+      "predicted_n": 24,
+      "vram_mib": 8220
+    },
+    {
+      "i": 7,
+      "wall_ms": 573.8,
+      "prompt_ms": 259.2,
+      "prompt_n": 438,
+      "predicted_ms": 294.1,
+      "predicted_n": 24,
+      "vram_mib": 8211
+    },
+    {
+      "i": 8,
+      "wall_ms": 472.2,
+      "prompt_ms": 258.9,
+      "prompt_n": 438,
+      "predicted_ms": 169.6,
+      "predicted_n": 14,
+      "vram_mib": 8211
+    },
+    {
+      "i": 9,
+      "wall_ms": 597.2,
+      "prompt_ms": 259.8,
+      "prompt_n": 438,
+      "predicted_ms": 295.0,
+      "predicted_n": 24,
+      "vram_mib": 8211
+    },
+    {
+      "i": 10,
+      "wall_ms": 575.5,
+      "prompt_ms": 260.6,
+      "prompt_n": 438,
+      "predicted_ms": 294.3,
+      "predicted_n": 24,
+      "vram_mib": 8211
+    },
+    {
+      "i": 11,
+      "wall_ms": 499.8,
+      "prompt_ms": 259.4,
+      "prompt_n": 438,
+      "predicted_ms": 219.9,
+      "predicted_n": 18,
+      "vram_mib": 8211
+    },
+    {
+      "i": 12,
+      "wall_ms": 576.5,
+      "prompt_ms": 260.5,
+      "prompt_n": 438,
+      "predicted_ms": 295.7,
+      "predicted_n": 24,
+      "vram_mib": 8211
+    }
+  ]
+}
