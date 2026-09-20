@@ -35,8 +35,6 @@ from infer_loop import (  # noqa: E402
     build_stream_frames,
 )
 from response_format import parse_model_decision  # noqa: E402
-from stream_protocol import _find_first_decision_marker  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # 1. is_forced_silence — mode x force-toggle matrix
@@ -187,7 +185,7 @@ class TestBuildStreamFramesConsistency:
         assert len(frames) == 1
         assert frames[0]["type"] == "decision"
         assert frames[0]["decision"] == "delegation"
-        full, _, q = parse_model_decision("</response> OK </delegation> should I continue?")
+        _, _, q = parse_model_decision("</response> OK </delegation> should I continue?")
         assert frames[0]["delegation_question"] == q
         # no content frames -> question never spoken as TTS
         assert all(f["type"] == "decision" for f in frames)
@@ -205,7 +203,7 @@ class TestBuildStreamFramesConsistency:
         frames = build_stream_frames(deltas)
         assert len(frames) == 1
         assert frames[0]["decision"] == "delegation"
-        full, _, q = parse_model_decision("<delegation>Can you help?")
+        _, _, q = parse_model_decision("<delegation>Can you help?")
         assert frames[0]["delegation_question"] == q
         assert frames[0]["delegation_question"] == "Can you help?"
 

@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 """Summarizer-routing mixin: hot-swap endpoint, chunk flush, mid/long-term summary build/compress, async summary commit.
 
 Defines :class:`SummarizerRoutingMixin`, which carries the summarizer
@@ -75,7 +76,7 @@ class SummarizerRoutingMixin:
                     state.turn_count,
                     non_blocking=False,
                 )
-            except Exception as exc:  # noqa: BLE001 - fail open
+            except Exception as exc:
                 LOGGER.warning(
                     "[%s] async summary commit failed (fail-open, skipped): %s",
                     state.session_id,
@@ -88,7 +89,7 @@ class SummarizerRoutingMixin:
                     state,
                     copy.deepcopy(current_chunk),
                 )
-            except Exception as exc:  # noqa: BLE001 - fail open
+            except Exception as exc:
                 LOGGER.warning(
                     "[%s] mid-term summary failed (fail-open, skipped): %s",
                     state.session_id,
@@ -109,7 +110,7 @@ class SummarizerRoutingMixin:
             if len(state.mid_term_summaries) >= self.config.compress_every_n_chunks:
                 try:
                     await asyncio.to_thread(self._compress_mid_terms, state)
-                except Exception as exc:  # noqa: BLE001 - fail open
+                except Exception as exc:
                     LOGGER.warning(
                         "[%s] mid-term compression failed (fail-open, skipped): %s",
                         state.session_id,

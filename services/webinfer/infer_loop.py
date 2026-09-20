@@ -518,8 +518,12 @@ class InferLoopMixin:
                     await stream_resp.write(
                         (json.dumps(error_frame, ensure_ascii=False) + "\n").encode("utf-8")
                     )
-                except Exception:
-                    pass
+                except Exception as write_exc:
+                    LOGGER.warning(
+                        "[%s] failed to write error frame to stream: %s",
+                        session_id,
+                        write_exc,
+                    )
         await stream_resp.write_eof()
         emit_event(
             "webinfer",
