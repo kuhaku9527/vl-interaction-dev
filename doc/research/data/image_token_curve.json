@@ -1,0 +1,81 @@
+{
+  "cases": [
+    {
+      "case": "800x450",
+      "w": 800,
+      "h": 450,
+      "pixels": 360000,
+      "note": "纸飞机 captureBtFrameB64 targetW=800 -> 实际产物",
+      "prompt_tokens": 367,
+      "prompt_ms": 360.5,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 1.0194
+    },
+    {
+      "case": "768x576",
+      "w": 768,
+      "h": 576,
+      "pixels": 442368,
+      "note": "此前 SSOT 记录的 448 token 归属待核",
+      "prompt_tokens": 449,
+      "prompt_ms": 308.2,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 1.015
+    },
+    {
+      "case": "960x540",
+      "w": 960,
+      "h": 540,
+      "pixels": 518400,
+      "note": "getDisplayMedia ideal（当前采集端）",
+      "prompt_tokens": 527,
+      "prompt_ms": 379.7,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 1.0166
+    },
+    {
+      "case": "1280x720",
+      "w": 1280,
+      "h": 720,
+      "pixels": 921600,
+      "note": "建议的采集端目标",
+      "prompt_tokens": 937,
+      "prompt_ms": 783.2,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 1.0167
+    },
+    {
+      "case": "1365x768",
+      "w": 1365,
+      "h": 768,
+      "pixels": 1048320,
+      "note": "max_pixels 削后上限（1080p/1440p 共同落点）",
+      "prompt_tokens": 1049,
+      "prompt_ms": 924.5,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 1.0006
+    },
+    {
+      "case": "1920x1080",
+      "w": 1920,
+      "h": 1080,
+      "pixels": 2073600,
+      "note": "1080p 原始",
+      "prompt_tokens": 2057,
+      "prompt_ms": 2412.5,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 0.992
+    },
+    {
+      "case": "2560x1440",
+      "w": 2560,
+      "h": 1440,
+      "pixels": 3686400,
+      "note": "1440p 原始",
+      "prompt_tokens": 3617,
+      "prompt_ms": 5974.6,
+      "predicted_n": 3,
+      "tokens_per_1k_px": 0.9812
+    }
+  ]
+}
