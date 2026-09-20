@@ -8,6 +8,19 @@
 
 JoyAI-VL-Interaction 是一个 **8B 规模、Apache 2.0 全开源**的实时视觉-语言交互系统。核心模型 **JoyAI-VL-8B** 每秒自主决策「说话 / 沉默 / 委派」（`silence` / `response` / `delegate`），外围由可插拔服务组成，覆盖实时看护提醒、游戏实时解说、菜谱步骤引导、直播弹幕评论四类场景。
 
+> ⚠️ **本 fork 的实时性现状（2026-09-20 实测认定，务必先读）**：上面这句描述的是**上游原版架构**，
+> **不是本 fork 的当前行为**。本 fork 因单卡 16GB 算力预算，把持续决策**收敛为稀疏触发**：
+> - **1 Hz 决策循环在代码里存在但未被构造** —— `VideoProcessorTrack`（`video_processor.py`）
+>   带完整 1 Hz 闸门（`process_interval_seconds = 1.0` / `need_conversion = time_since_last >= interval_sec`），
+>   但该 track 在 `services/webui/src/` 下**零构造点**，且它走 `process_frame` 拿**自由文本、不解析决策 token**。
+> - **主动循环默认关闭**：`LIVE_PROACTIVE_ENABLED` 默认 `False`，间隔 `LIVE_PROACTIVE_INTERVAL_S` 默认 **5.0 秒**（非 1 秒）。
+> - ⇒ **真正的四态决策当前只在「用户说话提交后」与「proactive 轮（默认关）」发生。**
+>
+> **依据与完整认定**：`doc/research/upstream-realtime-loop-2026-09-20.md`（上游机制认定：确为 1 Hz 持续决策）、
+> `doc/research/realtime-claim-drift-audit-2026-09-20.md`（本文档漂移审计）。
+> **上游 16GB 档配置是 `1×16GB 主 + 3×16GB`（共 4 张卡）**，单卡 16GB 跑 1 Hz 决策**不是上游的既定配置**。
+> 本 fork 的收敛是**算力预算决定的取舍**，非能力丢失。详见 issue **#148**。
+
 - **部署形态**：消费级单卡 Windows 本地运行，数据不出本机（核心 VL 推理 100% 本地化）。
 - **定位**：完全开源 + 本地优先；不引入闭源云 API（如 OpenAI Realtime）作为主路径。
 - **复用立场**：在已有冻结架构（D4 + ADR0001~0008）之上补齐下游设计，不推倒重来。
@@ -51,7 +64,11 @@ flowchart TB
     M3 -.->|可选 ASR/TTS/克隆| B6
 ```
 
-**主链路**：采集（U2/U3）→ VLM 推理 + 决策 token（M1/M2 → B1）→ `[response]` 语音播报（M3）/ `[silence]` 静默 / `[delegate]` Hermes 委派（M4 → B7）→ 用户感知（字幕 / HUD / 语音，U1）→ 会话沉淀（记忆 B3 + 每 100 帧中期摘要）。
+**主链路**：采集（U2/U3）→ VLM 推理 + 决策 token（M1/M2 → B1）→ `[response]` 语音播报（M3）/ `[silence]` 静默 / `[delegate]` Hermes 委派（M4 → B7）→ 用户感知（字幕 / HUD / 语音，U1）→ 会话沉淀（记忆 B3 + 每 **200 轮**中期摘要）。
+
+> ⚠️ 原写「每 100 帧中期摘要」**数值与单位双错**：实际是 `adapter_types.py` 的 `chunk: int = 200`，
+> 且触发条件是 `current_chunk["turn_count"] >= chunk` —— **单位是「轮」不是「帧」，数值是 200 不是 100**。
+> （2026-09-20 审计更正，见 `doc/research/realtime-claim-drift-audit-2026-09-20.md`）
 
 **常驻语音模式（Jarvis）**：麦克风经 sherpa-onnx KWS 唤醒后进入常驻交互（U3），由 webui 内的 `jarvis_mode` / `jarvis_routes` 编排、hybrid-wake 自动恢复。设计细节见 [`doc/subsystems/jarvis-mode.md`](doc/subsystems/jarvis-mode.md)。
 
@@ -76,10 +93,11 @@ flowchart TB
 
 ## 4. 决策 Token
 
-每秒由 webinfer 产出，送 TTS 前剥离：
+由 webinfer 产出（**触发时机见上方 §1 警告——本 fork 并非每秒产出**），送 TTS 前剥离：
 
 - `silence` — 静默等待，不打断用户。
 - `response` — 正常语音播报（走 TTS）。
+- `not-for-me` — live 模式第四态：这段话不是对 AI 说的（自言自语 / 对旁人 / 回应他人）。
 - `delegate` — 交给 Hermes 智能委派（代码执行/工具调用），主对话继续；委派失败不影响主链路。
 
 ## 5. 模块边界（12 个）
@@ -105,7 +123,7 @@ flowchart TB
 
 | 维度 | 选型 | 理由 |
 | --- | --- | --- |
-| VLM 引擎 | llama.cpp / llama-server（GGUF IQ4_NL） | 单卡消费级 GPU 友好、MIT 免费、OpenAI 兼容、~5.8GB VRAM；vLLM 运行时重、Windows 单卡不友好 |
+| VLM 引擎 | llama.cpp / llama-server（GGUF IQ4_NL） | 单卡消费级 GPU 友好、MIT 免费、OpenAI 兼容、**实测稳态 ≈ 9.3GB VRAM**（见 §3；原记 "~5.8GB" 为错值）；vLLM 运行时重、Windows 单卡不友好 |
 | 流式传输 | WebRTC（浏览器）+ 进程内 sherpa-onnx | 不推翻 webinfer 单入口（ADR0006），仅借鉴模式 |
 | TTS / 克隆 | MiniMax Speech 2.8 / Rapid Clone | 质量优先；本地 CozyVoice 作 fallback |
 | 委派框架 | Hermes（gateway 8642 + shim 8079） | 人格/记忆/Skills/Provider 独立、故障隔离 |
@@ -138,7 +156,7 @@ flowchart TB
 
 | 指标 | 目标 | 说明 |
 | --- | --- | --- |
-| 端到端延迟 P99 | ≤ 1.2s | 实时交互不掉线底线（当前 0.8–1.5s） |
+| 端到端延迟 P99 | ≤ 1.2s ⚠️ **前提与来源待重估** | 原记「当前 0.8–1.5s」**无可追溯的端到端实测来源**，继承自已废弃的 2026-07 交付稿；且其前提是**单次交互**，**非「每秒一次」**。本机现有实测仅覆盖 **VLM 推理段**（prompt eval 453.64ms + decode 520ms ≈ 0.97s，2026-09-20）。**端到端 P99 从未实测**（含采集/编码链路）。见 `doc/research/realtime-claim-drift-audit-2026-09-20.md` |
 | 进程自愈 RTO | ≤ 30s（P99） | 崩溃 → 自动重启恢复 |
 | 数据 RPO | ≤ 5min | 记忆/会话持久化 |
 | VRAM 预算 | ⚠️ **待重算**（原记 ≤ 11.5GB / 16GB） | 原预算按**已废弃的 11 进程方案**（含 summary llama 2.9GB / CosyVoice 1.1GB / whisper 0.7GB，均已不在启动计划）推算。**2026-09-20 实测：当前 6 进程方案下 llama-server 单进程即占 9,326 MiB**，权重 ~8.3GB 是大头，KV 仅 1GB 量级（"KV 吃满"的怀疑不成立）。真实可用余量 ≈ 16 − 9.0 = **7.0GB**，非原记的 10.2GB。**显存缺口量化与逐项分解见 issue #145 / #143** |
