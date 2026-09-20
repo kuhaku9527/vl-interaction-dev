@@ -336,30 +336,12 @@ def test_session_callback_reads_sm_current_turn_epoch():
 # ---------------------------------------------------------------------------
 
 INDEX_HTML = REPO / "services" / "webui" / "src" / "joy_interaction_webui" / "static" / "index.html"
-# Batch-3 split: index.html's inline script#2 was extracted into standalone JS
-# files (same dependency order as the <script src> tags). Combined sources keep
-# the static-contract assertions pointing at the moved code with unchanged
-# semantics.
-_SPLIT_JS = (
-    "app_boot.js",
-    "app_main.js",
-    "sidebar_toggle.js",
-    "incremental_wiring.js",
-    "vlm_history.js",
-    "llm_reply_ui.js",
-    "ws_dispatcher.js",
-    "vlm_render.js",
-    "background_rich.js",
-    "tts_player.js",
-    "speech_input.js",
-    "live_ui.js",
-    "llm_reply_audio.js",
-    "status_poll.js",
-)
-_JS = "\n".join(
-    [INDEX_HTML.read_text(encoding="utf-8")]
-    + [(INDEX_HTML.parent / name).read_text(encoding="utf-8") for name in _SPLIT_JS]
-)
+# The split-module list is DERIVED from index.html by tests/_frontend_corpus.py,
+# not hardcoded here. A hardcoded copy went stale twice (see that module's
+# docstring and doc/standards/webui-design-standards.md 9.7).
+from tests._frontend_corpus import index_html_plus_split_js  # noqa: E402
+
+_JS = index_html_plus_split_js()
 
 
 def test_frontend_llm_reply_branch_has_epoch_guard():
@@ -368,7 +350,7 @@ def test_frontend_llm_reply_branch_has_epoch_guard():
     assert idx != -1
     llm_branch = _JS[idx:]
     assert "data.type === 'llm_reply'" in llm_branch
-    assert "data.reply_epoch < llmReplyGeneration" in llm_branch
+    assert "data.reply_epoch < window.JoyState.llmReplyGeneration" in llm_branch
     # Discard path skips render + play.
     assert "stale reply_epoch=" in llm_branch
     # Accept path still renders + plays.
@@ -376,7 +358,7 @@ def test_frontend_llm_reply_branch_has_epoch_guard():
     assert "playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' })" in llm_branch
     assert llm_branch.index("appendJarvisToResult") < llm_branch.index("playLlmReplyAudio")
     # The guard must appear BEFORE the render/play calls.
-    assert llm_branch.index("data.reply_epoch < llmReplyGeneration") < accept_idx
+    assert llm_branch.index("data.reply_epoch < window.JoyState.llmReplyGeneration") < accept_idx
 
 
 def test_frontend_adopts_epoch_from_asr_partial_and_pilot():
@@ -385,7 +367,7 @@ def test_frontend_adopts_epoch_from_asr_partial_and_pilot():
     assert idx != -1
     handler = _JS[idx:]
     assert "data.type === 'asr_partial'" in handler
-    assert "data.reply_epoch > llmReplyGeneration" in handler
+    assert "data.reply_epoch > window.JoyState.llmReplyGeneration" in handler
     assert "data.type === 'pilot_utterance'" in handler
     # Both branches still stop the reply audio first (P0 barge-in intact).
     assert handler.count("stopLlmReplyAudio()") >= 2
@@ -393,7 +375,7 @@ def test_frontend_adopts_epoch_from_asr_partial_and_pilot():
 
 def test_frontend_llm_reply_generation_is_declared():
     """llmReplyGeneration is a distinct declaration from llmReplyEpoch."""
-    assert "let llmReplyGeneration = 0;" in _JS
+    assert "llmReplyGeneration: 0," in _JS
     # The TTS playback epoch keeps its single-writer contract.
     import re
 

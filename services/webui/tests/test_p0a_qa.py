@@ -386,30 +386,12 @@ async def test_qa_stop_tts_cancels_epoch_guard_like_pause():
 # ---------------------------------------------------------------------------
 
 INDEX_HTML = REPO / "services" / "webui" / "src" / "joy_interaction_webui" / "static" / "index.html"
-# Batch-3 split: index.html's inline script#2 was extracted into standalone JS
-# files (same dependency order as the <script src> tags). Combined sources keep
-# the static-contract assertions pointing at the moved code with unchanged
-# semantics.
-_SPLIT_JS = (
-    "app_boot.js",
-    "app_main.js",
-    "sidebar_toggle.js",
-    "incremental_wiring.js",
-    "vlm_history.js",
-    "llm_reply_ui.js",
-    "ws_dispatcher.js",
-    "vlm_render.js",
-    "background_rich.js",
-    "tts_player.js",
-    "speech_input.js",
-    "live_ui.js",
-    "llm_reply_audio.js",
-    "status_poll.js",
-)
-_JS = "\n".join(
-    [INDEX_HTML.read_text(encoding="utf-8")]
-    + [(INDEX_HTML.parent / name).read_text(encoding="utf-8") for name in _SPLIT_JS]
-)
+# The split-module list is DERIVED from index.html by tests/_frontend_corpus.py,
+# not hardcoded here. A hardcoded copy went stale twice (see that module's
+# docstring and doc/standards/webui-design-standards.md 9.7).
+from tests._frontend_corpus import index_html_plus_split_js  # noqa: E402
+
+_JS = index_html_plus_split_js()
 
 
 def test_qa_frontend_out_of_order_skipped_never_hangs():

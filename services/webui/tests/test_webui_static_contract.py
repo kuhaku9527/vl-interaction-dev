@@ -12,33 +12,14 @@ INDEX_HTML = WEBUI_ROOT / "src" / "joy_interaction_webui" / "static" / "index.ht
 STYLES_CSS = WEBUI_ROOT / "src" / "joy_interaction_webui" / "static" / "styles.css"
 
 
-# Batch-3 split: the former single inline script#2 was extracted into these
-# standalone JS files (same dependency order as the <script src> tags in
-# index.html). Contract assertions run against the combined sources so the
-# moved code is still checked with unchanged semantics.
-SPLIT_JS = (
-    "app_boot.js",
-    "app_main.js",
-    "sidebar_toggle.js",
-    "incremental_wiring.js",
-    "vlm_history.js",
-    "llm_reply_ui.js",
-    "ws_dispatcher.js",
-    "vlm_render.js",
-    "background_rich.js",
-    "tts_player.js",
-    "speech_input.js",
-    "live_ui.js",
-    "llm_reply_audio.js",
-    "status_poll.js",
-)
+# The split-module list is DERIVED from index.html by tests/_frontend_corpus.py,
+# not hardcoded here. A hardcoded copy went stale twice (see that module's
+# docstring and doc/standards/webui-design-standards.md 9.7).
+from tests._frontend_corpus import index_html_plus_split_js  # noqa: E402
 
 
 def _index_html() -> str:
-    parts = [INDEX_HTML.read_text(encoding="utf-8")]
-    for name in SPLIT_JS:
-        parts.append((INDEX_HTML.parent / name).read_text(encoding="utf-8"))
-    return "\n".join(parts)
+    return index_html_plus_split_js()
 
 
 def _styles_css() -> str:
@@ -212,7 +193,12 @@ def test_manual_prompt_edit_resets_asr_transcript_state():
 def test_bt_latency_hud_is_rendered_in_result_header():
     html = _index_html()
 
-    assert 'id="btLatencyInline"' in html
+    # The HUD was relocated out of the result card into the top-bar capsule +
+    # popover (179961b): the container is now #latencyMenu (same aria-label,
+    # "BT chain latency"), opened by #latencyPill. The chips and the two
+    # functions below are unchanged, so the HUD contract stays pinned here.
+    assert 'id="latencyMenu"' in html
+    assert 'id="latencyPill"' in html
     assert 'id="btAsrLatencyValue"' in html
     assert 'id="btLlmLatencyValue"' in html
     assert 'id="btTtsLatencyValue"' in html

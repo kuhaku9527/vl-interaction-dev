@@ -33,30 +33,12 @@ from joy_interaction_webui.jarvis_session import JarvisSessionManager  # noqa: E
 from joy_interaction_webui.turn_streaming import StreamingTurnConsumer  # noqa: E402
 
 INDEX_HTML = REPO / "services" / "webui" / "src" / "joy_interaction_webui" / "static" / "index.html"
-# Batch-3 split: index.html's inline script#2 was extracted into standalone JS
-# files (same dependency order as the <script src> tags). Combined sources keep
-# the static-contract assertions pointing at the moved code with unchanged
-# semantics.
-_SPLIT_JS = (
-    "app_boot.js",
-    "app_main.js",
-    "sidebar_toggle.js",
-    "incremental_wiring.js",
-    "vlm_history.js",
-    "llm_reply_ui.js",
-    "ws_dispatcher.js",
-    "vlm_render.js",
-    "background_rich.js",
-    "tts_player.js",
-    "speech_input.js",
-    "live_ui.js",
-    "llm_reply_audio.js",
-    "status_poll.js",
-)
-_JS = "\n".join(
-    [INDEX_HTML.read_text(encoding="utf-8")]
-    + [(INDEX_HTML.parent / name).read_text(encoding="utf-8") for name in _SPLIT_JS]
-)
+# The split-module list is DERIVED from index.html by tests/_frontend_corpus.py,
+# not hardcoded here. A hardcoded copy went stale twice (see that module's
+# docstring and doc/standards/webui-design-standards.md 9.7).
+from tests._frontend_corpus import index_html_plus_split_js  # noqa: E402
+
+_JS = index_html_plus_split_js()
 
 
 # ---------------------------------------------------------------------------
@@ -487,10 +469,12 @@ def test_llm_reply_generation_has_no_local_self_increment():
     """llmReplyGeneration must NEVER be self-incremented locally (no drift)."""
     # No +=, -=, ++, -- on llmReplyGeneration anywhere.
     assert not re.search(r"llmReplyGeneration\s*(\+=|-=|\+\+|--)", _JS)
-    # Every write is `= 0` (init) or `= data.reply_epoch` (backend payload).
+    # The single init is the window.JoyState property literal (joy_state.js);
+    # S2 moved it off a top-level `let`, so the old `= 0` form no longer exists.
+    assert _JS.count("llmReplyGeneration: 0") == 1
+    # Every remaining assignment is a backend-payload adopt: `= data.reply_epoch`.
     writes = re.findall(r"llmReplyGeneration\s*=\s*([^;]*)", _JS)
-    assert writes.count("0") == 1, f"exactly one init write, got {writes}"
-    assert all(w == "data.reply_epoch" for w in writes if w != "0"), writes
+    assert all(w == "data.reply_epoch" for w in writes), writes
     # Exactly 3 backend-payload adopt sites: llm_reply accept, asr_partial, pilot.
     assert writes.count("data.reply_epoch") == 3, writes
 
@@ -500,7 +484,7 @@ def test_llm_reply_guard_precedes_render_and_play():
     idx = _JS.find("function installLlmReplyHandler")
     assert idx != -1
     llm_branch = _JS[idx:]
-    guard_idx = llm_branch.index("data.reply_epoch < llmReplyGeneration")
+    guard_idx = llm_branch.index("data.reply_epoch < window.JoyState.llmReplyGeneration")
     render_idx = llm_branch.index("appendJarvisToResult(data.text || '', data.source || 'jarvis')")
     play_idx = llm_branch.index(
         "playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' })"
