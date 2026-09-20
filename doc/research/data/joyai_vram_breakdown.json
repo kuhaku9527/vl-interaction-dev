@@ -1,0 +1,253 @@
+{
+  "desktop_baseline_mib": {
+    "median": 890,
+    "min": 887,
+    "max": 904,
+    "samples": [
+      890,
+      887,
+      887,
+      904,
+      904
+    ]
+  },
+  "gpu_total_mib": 16311,
+  "variants": {
+    "base_16384": {
+      "desc": "基线：n_ctx=16384，全层 GPU（当前生产配置）",
+      "overrides": {},
+      "args": [
+        "-m",
+        "D:\\AI\\models\\main\\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\\joyai-vl-interaction-preview-iq4_nl-imat.gguf",
+        "--mmproj",
+        "D:\\AI\\models\\main\\mmproj\\mmproj-joyai-vl-interaction-preview-f16.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7060",
+        "-c",
+        "16384",
+        "-ngl",
+        "999",
+        "--parallel",
+        "1",
+        "-fit",
+        "off",
+        "--jinja"
+      ],
+      "steady": {
+        "median": 9177,
+        "min": 9177,
+        "max": 9177,
+        "samples": [
+          9177,
+          9177,
+          9177,
+          9177,
+          9177
+        ]
+      },
+      "delta_vs_desktop_mib": 8287,
+      "n_ctx": 16384,
+      "vision": true
+    },
+    "ctx_8192": {
+      "desc": "上下文减半",
+      "overrides": {
+        "-c": "8192"
+      },
+      "args": [
+        "-m",
+        "D:\\AI\\models\\main\\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\\joyai-vl-interaction-preview-iq4_nl-imat.gguf",
+        "--mmproj",
+        "D:\\AI\\models\\main\\mmproj\\mmproj-joyai-vl-interaction-preview-f16.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7060",
+        "-c",
+        "8192",
+        "-ngl",
+        "999",
+        "--parallel",
+        "1",
+        "-fit",
+        "off",
+        "--jinja"
+      ],
+      "steady": {
+        "median": 8017,
+        "min": 8016,
+        "max": 8019,
+        "samples": [
+          8017,
+          8017,
+          8016,
+          8019,
+          8019
+        ]
+      },
+      "delta_vs_desktop_mib": 7127,
+      "n_ctx": 8192,
+      "vision": true
+    },
+    "ctx_4096": {
+      "desc": "上下文 1/4",
+      "overrides": {
+        "-c": "4096"
+      },
+      "args": [
+        "-m",
+        "D:\\AI\\models\\main\\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\\joyai-vl-interaction-preview-iq4_nl-imat.gguf",
+        "--mmproj",
+        "D:\\AI\\models\\main\\mmproj\\mmproj-joyai-vl-interaction-preview-f16.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7060",
+        "-c",
+        "4096",
+        "-ngl",
+        "999",
+        "--parallel",
+        "1",
+        "-fit",
+        "off",
+        "--jinja"
+      ],
+      "steady": {
+        "median": 7436,
+        "min": 7436,
+        "max": 7440,
+        "samples": [
+          7436,
+          7436,
+          7436,
+          7440,
+          7438
+        ]
+      },
+      "delta_vs_desktop_mib": 6546,
+      "n_ctx": 4096,
+      "vision": true
+    },
+    "no_mmproj": {
+      "desc": "纯文本模式：去掉视觉投影器 F16",
+      "overrides": {
+        "__mmproj__": "None"
+      },
+      "args": [
+        "-m",
+        "D:\\AI\\models\\main\\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\\joyai-vl-interaction-preview-iq4_nl-imat.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7060",
+        "-c",
+        "16384",
+        "-ngl",
+        "999",
+        "--parallel",
+        "1",
+        "-fit",
+        "off",
+        "--jinja"
+      ],
+      "steady": {
+        "median": 7694,
+        "min": 7694,
+        "max": 7695,
+        "samples": [
+          7695,
+          7694,
+          7694,
+          7694,
+          7694
+        ]
+      },
+      "delta_vs_desktop_mib": 6804,
+      "n_ctx": 16384,
+      "vision": false
+    },
+    "ngl_24": {
+      "desc": "24/37 层上 GPU，其余 CPU",
+      "overrides": {
+        "-ngl": "24"
+      },
+      "args": [
+        "-m",
+        "D:\\AI\\models\\main\\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\\joyai-vl-interaction-preview-iq4_nl-imat.gguf",
+        "--mmproj",
+        "D:\\AI\\models\\main\\mmproj\\mmproj-joyai-vl-interaction-preview-f16.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7060",
+        "-c",
+        "16384",
+        "-ngl",
+        "24",
+        "--parallel",
+        "1",
+        "-fit",
+        "off",
+        "--jinja"
+      ],
+      "steady": {
+        "median": 7026,
+        "min": 7024,
+        "max": 7026,
+        "samples": [
+          7026,
+          7026,
+          7026,
+          7024,
+          7024
+        ]
+      },
+      "delta_vs_desktop_mib": 6136,
+      "n_ctx": 16384,
+      "vision": true
+    },
+    "ngl_16": {
+      "desc": "16/37 层上 GPU",
+      "overrides": {
+        "-ngl": "16"
+      },
+      "args": [
+        "-m",
+        "D:\\AI\\models\\main\\JoyAI-VL-Interaction-Preview-IQ4_NL-GGUF\\joyai-vl-interaction-preview-iq4_nl-imat.gguf",
+        "--mmproj",
+        "D:\\AI\\models\\main\\mmproj\\mmproj-joyai-vl-interaction-preview-f16.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "7060",
+        "-c",
+        "16384",
+        "-ngl",
+        "16",
+        "--parallel",
+        "1",
+        "-fit",
+        "off",
+        "--jinja"
+      ],
+      "steady": {
+        "median": 5694,
+        "min": 5686,
+        "max": 5695,
+        "samples": [
+          5695,
+          5694,
+          5692,
+          5694,
+          5686
+        ]
+      },
+      "delta_vs_desktop_mib": 4804,
+      "n_ctx": 16384,
+      "vision": true
+    }
+  }
+}
