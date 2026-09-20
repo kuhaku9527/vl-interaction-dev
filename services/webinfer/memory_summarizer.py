@@ -435,14 +435,14 @@ class SummarizerModel:
             extra_body["top_k"] = top_k
         if repetition_penalty != 1.0:
             extra_body["repetition_penalty"] = repetition_penalty
-        kwargs = dict(
-            model=model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            presence_penalty=presence_penalty,
-        )
+        kwargs = {
+            "model": model_name,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "presence_penalty": presence_penalty,
+        }
         if extra_body:
             kwargs["extra_body"] = extra_body
         response = client.chat.completions.create(**kwargs)

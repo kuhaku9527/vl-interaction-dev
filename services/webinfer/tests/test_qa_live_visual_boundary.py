@@ -55,7 +55,9 @@ def _frame(index: int = 0, *, ts: float = 1000.0, b64: str | None = None) -> dic
 
 
 def test_parse_frames_exactly_max_accepted():
-    frames = _parse_live_frames({"frames": [_frame(i, ts=float(i)) for i in range(_LIVE_FRAMES_MAX)]})
+    frames = _parse_live_frames(
+        {"frames": [_frame(i, ts=float(i)) for i in range(_LIVE_FRAMES_MAX)]}
+    )
     assert len(frames) == _LIVE_FRAMES_MAX == 6
     assert [f["ts_ms"] for f in frames] == [float(i) for i in range(_LIVE_FRAMES_MAX)]
     assert all(f["image_b64"] for f in frames)
@@ -90,9 +92,7 @@ def test_parse_frames_data_uri_prefix_stripped():
 def test_parse_frames_data_uri_non_base64_rejected():
     """A data URI without a base64 payload marker is an explicit 400."""
     with pytest.raises(web.HTTPBadRequest) as exc_info:
-        _parse_live_frames(
-            {"frames": [{"image_b64": "data:image/jpeg;plain,abc", "ts_ms": 1}]}
-        )
+        _parse_live_frames({"frames": [{"image_b64": "data:image/jpeg;plain,abc", "ts_ms": 1}]})
     assert exc_info.value.status_code == 400
     assert "must be base64" in exc_info.value.text
 
@@ -100,9 +100,7 @@ def test_parse_frames_data_uri_non_base64_rejected():
 def test_parse_frames_data_uri_empty_payload_rejected():
     """A data URI with an empty base64 payload is an explicit 400."""
     with pytest.raises(web.HTTPBadRequest) as exc_info:
-        _parse_live_frames(
-            {"frames": [{"image_b64": "data:image/jpeg;base64,", "ts_ms": 1}]}
-        )
+        _parse_live_frames({"frames": [{"image_b64": "data:image/jpeg;base64,", "ts_ms": 1}]})
     assert exc_info.value.status_code == 400
     assert "no base64 payload" in exc_info.value.text
 

@@ -221,9 +221,7 @@ def _post_chat_completions(adapter: Any, body: dict[str, Any], session_id: str) 
     )
     stream.feed_data(raw)
     stream.feed_eof()
-    request = make_mocked_request(
-        "POST", "/v1/chat/completions", headers=headers, payload=stream
-    )
+    request = make_mocked_request("POST", "/v1/chat/completions", headers=headers, payload=stream)
 
     async def _run():
         return await adapter.handle_chat_completions(request)

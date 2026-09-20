@@ -265,9 +265,7 @@ async def test_live_visual_list_content_text_reaches_model():
     adapter, stub = _make_adapter(scripted=["</response> 屏幕上是一张地图。"])
     body = {
         "model": "joyai-vl-interaction-preview",
-        "messages": [
-            {"role": "user", "content": [{"type": "text", "text": "屏幕上是什么?"}]}
-        ],
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "屏幕上是什么?"}]}],
         "interaction_mode": "live",
         "frames": [_frame_dict(0), _frame_dict(1)],
     }

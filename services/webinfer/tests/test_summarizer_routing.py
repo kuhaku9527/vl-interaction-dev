@@ -1,3 +1,4 @@
+# ruff: noqa: RUF002 RUF003
 """Tests for the v3.42 live summarizer routing endpoints.
 
 The webui sidebar panel POSTs `/api/webinfer/summarizer/route` -> webui
@@ -215,6 +216,7 @@ def test_post_returns_new_snapshot():
 # ---------------------------------------------------------------------------
 # 2026-08-15: _flush_chunk fail-open guard（云端摘要化的必要兜底）
 # ---------------------------------------------------------------------------
+
 
 def test_flush_chunk_fail_open_when_summary_raises(monkeypatch):
     """摘要模型抛异常时 _flush_chunk 必须 WARNING + 跳过，不向调用方传播。

@@ -17,7 +17,6 @@ asserting ``create`` is called without ``stream`` when the payload omits it).
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sys
 from dataclasses import dataclass, field
@@ -36,7 +35,6 @@ from infer_loop import (  # noqa: E402
     build_stream_frames,
 )
 from response_format import parse_model_decision  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Pure frame-builder tests (no HTTP / no model)
@@ -240,15 +238,14 @@ class _AsyncStream:
 
     def __init__(self, deltas: list[str]) -> None:
         self._chunks: list[_StubStreamChunk] = []
-        for i, delta in enumerate(deltas):
-            is_last = i == len(deltas) - 1
+        for delta in deltas:
             self._chunks.append(
                 _StubStreamChunk(choices=[_StubStreamChoice(delta=_StubDelta(content=delta))])
             )
         if self._chunks:
             self._chunks[-1].usage = _StubUsage()
 
-    def __aiter__(self) -> "_AsyncStream":
+    def __aiter__(self) -> _AsyncStream:
         self._it = iter(self._chunks)
         return self
 
@@ -256,7 +253,7 @@ class _AsyncStream:
         try:
             return next(self._it)
         except StopIteration:
-            raise StopAsyncIteration
+            raise StopAsyncIteration from None
 
 
 def _make_adapter(scripted_deltas: list[list[str]] | None = None):
@@ -315,9 +312,7 @@ def _parse_ndjson(text: str) -> list[dict[str, Any]]:
 @pytest.mark.asyncio
 async def test_streaming_http_decision_first_content_stream():
     """HTTP seam: decision frame first, then content, then done."""
-    adapter, stub = _make_adapter(
-        scripted_deltas=[["</response>", " Hello", " world!"]]
-    )
+    adapter, stub = _make_adapter(scripted_deltas=[["</response>", " Hello", " world!"]])
     status, text = await _post_streaming(
         adapter,
         {
@@ -341,7 +336,7 @@ async def test_streaming_http_decision_first_content_stream():
 
 @pytest.mark.asyncio
 async def test_streaming_http_silence_skips_content():
-    adapter, stub = _make_adapter(scripted_deltas=[["</silence>"]])
+    adapter, _ = _make_adapter(scripted_deltas=[["</silence>"]])
     status, text = await _post_streaming(
         adapter,
         {
@@ -358,7 +353,7 @@ async def test_streaming_http_silence_skips_content():
 
 @pytest.mark.asyncio
 async def test_streaming_http_delegation_question_in_decision_frame():
-    adapter, stub = _make_adapter(
+    adapter, _ = _make_adapter(
         scripted_deltas=[["Looking that up.", "</delegation> 查 RTX 5060 Ti 价格"]]
     )
     status, text = await _post_streaming(

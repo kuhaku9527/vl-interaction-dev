@@ -108,7 +108,7 @@ def test_structure_system_visual_context_history_visual_user():
     image_urls = [
         p["image_url"]["url"] for p in parts if isinstance(p, dict) and p.get("type") == "image_url"
     ]
-    assert image_urls == [f"data:image/jpeg;base64,EEEE"]
+    assert image_urls == ["data:image/jpeg;base64,EEEE"]
 
 
 def test_empty_frames_still_builds_text_only_user():
