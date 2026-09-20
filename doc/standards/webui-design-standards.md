@@ -630,15 +630,38 @@ def _index_html() -> str:
 1. **这是"读取范围"问题，不是"断言错误"** —— 修法是**补全文件列表**，
    **绝不允许改断言本体、删测试、或加 skip/xfail 迁就**。
    判据：断言是 `in`（存在性）而非 `assertNotIn`（禁止性）时才可补列表。
+
+   > **★ 2026-09-20 更新：不要再"补列表"了 —— 列表已改为派生，硬编码已被淘汰。**
+   > 硬编码列表**陈旧过两次**（第一次：内联外移成 14 个模块；第二次 `joy_state.js` /
+   > `radio_silence.js` 加入后没人补）⇒ 已新增 **`services/webui/tests/_frontend_corpus.py`**
+   > 作为唯一真值源，12 个测试文件全部改为
+   > `from tests._frontend_corpus import index_html_plus_split_js`，**零硬编码文件名**。
+   >
+   > 派生式 = `(index.html 加载的 script，按加载序) − PRE_EXISTING_MODULES(冻结 9 名)`。
+   > - **为什么不是 `glob('*.js')`**：语料从来不是"index.html + 所有 .js"，而是
+   >   "index.html + **从它拆出去的**模块"。天真 glob 会多纳入 9 个既有模块，
+   >   **实测引入 22 处假红**（如 `test_webui_mode_radio_contract` 断言
+   >   `"setInterval" not in select_live`，而 `radio_silence.js`/`screen_capture.js` 含 `setInterval`）。
+   > - **fail-closed**：index.html 引用不存在的脚本、或派生结果为空 → **import 即抛**
+   >   （`refusing to silently shrink the corpus`），不静默缩小。
+   > - 派生结果实测 = **16 个 = 旧 14 + `joy_state.js` + `radio_silence.js`**，无多无少。
+   >
+   > ⇒ **今后新增模块不会再造成本类失败**（只要它在 index.html 里真被加载）。
+   > 本条的"补列表"判据保留作历史与判据说明；**新增场景请走派生机制**。
 2. **搬迁类改动必须同时跑三层检查**：
    - 门禁扫描（§9.6：搬家会改变代码被哪些检查器看见）
    - **pytest 静态契约测试**（本节：会改变测试的读取范围）
    - 运行时可达性（classic script 共享全局词法环境）
    只跑其中一层，就会漏掉另外两层的假失败/假成功。
 3. **留意命名不一致**：`SPLIT_JS` vs `_SPLIT_JS` —— 批量改前先 `grep -rln`。
+   （**2026-09-20 起两者都已消失**，统一由 `_frontend_corpus.SPLIT_JS` 提供。）
 4. **既有失败与新增失败要分离**：本例基线本身有 10 个失败（与本次无关的历史遗留），
-   终态要求是「**新增失败 = 0** 且与基线 diff 逐条相同」，**不是"全部通过"**。
+   终态要求是「**新增失败 = 0**」且与基线 diff 逐条相同，**不是"全部通过"**。
    不要顺手去修那 10 个（属另一个任务，会污染本次改动范围）。
+   > **2026-09-20 补充**：★ **"文件列表缺项"与"断言形态过时"是两类故障，不要因现象相邻就合并归因。**
+   > 实测教训：12 个文件补上 `joy_state.js`/`radio_silence.js` 后**仍然 10 failed，一个都没修好**——
+   > 真病根是 `28c90ec`（S2）把状态移到 `window.JoyState` 后**断言停在旧字面量**
+   > （`let llmReplyGeneration = 0;` 全仓零命中）。先按假设改完就宣布修好，会误判。
 
 ## 9.8 后台轮询 vs 固定等待：写测试时最容易自伤的竞争（2026-09-19 实测）
 
@@ -725,7 +748,9 @@ app_main.js:1019 同一语句                          : 1   ← 代码其实在
    从 `index.html` 的 `<script src="./*.js">` **动态提取**文件清单
    （本例发现 25 个），并**在文件缺失时 `exit 2` 拒绝继续** ——
    防止"列表过期 → 扫描范围悄悄缩小 → 假绿"。
-   （硬编码列表正是 §9.7 的病根：`SPLIT_JS` 漏了 4 个新文件。）
+   （硬编码列表正是 §9.7 的病根：`SPLIT_JS` 漏了新文件。
+   **2026-09-20：§9.7 的 `SPLIT_JS` 也已按本条的思路改为派生** ——
+   见 `services/webui/tests/_frontend_corpus.py`，同样 fail-closed。）
 3. **给"覆盖面"本身加指标**。本例新增 `split_js_files` / `split_js_lines`，
    一旦扫描范围变化就会显式报警，而不是无声地少看几个文件。
 4. **不要用"声明 delta"掩盖失联**。`--expect` 是为"已确认的真实变化"准备的通道，

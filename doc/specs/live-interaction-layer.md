@@ -44,7 +44,17 @@
 ### 3.1 模式互斥 UI（用户决策 2026-08-12 18:5x，已实现 00a84eb+2f3ec43）
 
 - **用户明确**：不需要 jarvis+live 双开（"没这个需求"）；UI 上**区分与限制**（显式单选）；**不要自动切换**（"自动切换是空需求，人类没有这个操作习惯"）。
-- **实现**：btListenBtn + liveModeBtn 包进 `role="radiogroup"` 单选组（role=radio/aria-checked）；`selectLiveMode`/`selectBtListenMode`：点击 A 若 B 激活先停 B 再启 A（用户主动点击导致的切换 = 单选固有语义）；**无任何自动切换路径**（无 timer/state watcher）；快速来回点击竞态用 re-check guard（await stop-other 后重查另一模式 active/starting）修复。
+- **实现**：btListenBtn + liveModeBtn **各带一个 `role="radiogroup"` 容器**（各自 `aria-label` 说明与对方互斥），按钮本体 `role=radio`/`aria-checked`；`selectLiveMode`/`selectBtListenMode`：点击 A 若 B 激活先停 B 再启 A（用户主动点击导致的切换 = 单选固有语义）；**无任何自动切换路径**（无 timer/state watcher）；快速来回点击竞态用 re-check guard（await stop-other 后重查另一模式 active/starting）修复。
+  > **⚠️ 2026-09-20 修正**：原记「两个按钮**包进** `role="radiogroup"` 单选组」（单一容器）。
+  > 自 **2026-09-19** 起两按钮**分处两个 UI 区域** —— `btListenBtn` 落到设置页
+  > 「高级 → Live 常驻模式」(`#liveModeSeg`)、`liveModeBtn` 回到聊天输入栏
+  > —— 单一共享容器在结构上已不可能。
+  > 而 `483fd88` 删容器时**没删按钮上的 `role="radio"`**，造成 **WAI-ARIA 违规**
+  > （radio 必须有 radiogroup 祖先），并使 2 个契约测试长期红。
+  > **2026-09-20 已修**：改为**每区域各一个** `.mode-group[role="radiogroup"]`，
+  > 既消除违规又不回退这两次拍板。**勿为"合并成一个容器"而回退用户决定**
+  > （详见 `styles.css` 的 `.mode-group` 注释）。
+  > 三条不变：互斥语义（先停 B 再启 A）/ 无自动切换 / ID 与 JS 绑定零改动 —— 均未受影响。
 - **后端双开能力保留**（create_session mode 参数 + _live_sessions dict 不动）——仅前端 UI 层限制。
 
 ### 3.2 2026-08-12 已落地决策留痕（含 commit）

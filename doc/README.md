@@ -308,9 +308,11 @@ JoyAI-VL-Interaction-main/
 
 ---
 
-## 🧪 测试现状（2026-09-14 首次全量跑，**重要的新发现**）
+## 🧪 测试现状（2026-09-14 首次全量跑；**2026-09-20 收口**）
 
-> **背景**：本轮文档收口共 6 个提交、改了约 60 个文件，但**全程未跑测试**。用户追问"还有没注意的点吗"后才跑 —— 结果发现 **9 个失败**。经 git worktree 二分确认：**这 9 个在我改动之前（`3a282ef`）就存在**，是历史遗留，非本轮引入。
+> **背景**：2026-09-14 本轮文档收口共 6 个提交、改了约 60 个文件，但**全程未跑测试**。用户追问"还有没注意的点吗"后才跑 —— 结果发现 **9 个失败**。经 git worktree 二分确认：**这 9 个在我改动之前（`3a282ef`）就存在**，是历史遗留，非本轮引入。
+>
+> **2026-09-20 更新**：用户批准开修，**那 9 个已全部修完**（详见下节）。本节数字为收口后实测。
 
 ### 各套件实测结果
 
@@ -320,28 +322,67 @@ JoyAI-VL-Interaction-main/
 | **tts** | ✅ 28 passed | — |
 | **voice-clone** | ✅ 11 passed | — |
 | **asr** | ✅ 2 passed | — |
-| **webui** | 🔴 **9 failed / 862 passed**（2 skipped） | 详见下 |
+| **webui** | ✅ **0 failed**（2026-09-20 修复；详见下） | 见 §webui 失败收口 |
 
-### webui 的 9 个失败（历史遗留，**已决定暂不修**）
+### ✅ webui 的 9 个失败 —— 已于 2026-09-20 全部修完
 
-**根因**：`28c90ec`（S2 重构）把跨模块全局移到 `window.JoyState`（新文件 `joy_state.js`），但**测试的 `_SPLIT_JS` 文件列表没同步**（12 个测试文件全缺 `joy_state.js`），且断言停留在旧的字符串形态。
+> 本节原记「**已决定暂不修**」（用户 2026-09-14 拍板）。
+> **2026-09-20 用户批准开修并已全部落地**，故本节状态由「暂不修」改为「已修复」。
+> 保留原本的根因分析以存证据链，**接手者不要再把它当"已知未修"的技术债**。
 
-**回归根因**：`483fd88`（v6-lite.23 输入栏回滚）删掉了 `<div class="mode-group" role="radiogroup">` 容器，但
+**根因 A（8 个失败）**：`28c90ec`（S2 重构）把跨模块全局移到 `window.JoyState`（新文件 `joy_state.js`），
+但测试的 `_SPLIT_JS` 文件列表没同步，且断言停留在旧的字符串形态。
+
+**根因 B（1 个失败）**：`483fd88`（v6-lite.23 输入栏回滚）删掉了 `<div class="mode-group" role="radiogroup">` 容器，但
 - 两个按钮**仍带 `role="radio"`**（孤立 —— WAI-ARIA 要求 `role=radio` 必须在 `radiogroup` 内）
 - `styles.css` 里**还留着 7 处 `.mode-group` 规则**（悬空）
 
-| # | 失败用例 | 性质 |
-|---|---|---|
-| 1-3 | `test_reply_epoch_guard.py`（epoch guard / adopt epoch / declaration） | 断言形态未跟上 S2 |
-| 4-5 | `test_qa_phase_c_edges.py`（no local self-increment / guard precedes render） | 同上 |
-| 6 | `test_live_frontend_contract.py` | 同上 |
-| 7 | `test_live_mode_qa_boundary.py` | 同上 |
-| 8 | `test_live_visual_frontend_contract.py` | 同上 |
-| 9 | `test_webui_mode_radio_contract.py` | **真回归**：radiogroup 容器缺失 + CSS 悬空 |
+| # | 原失败用例 | 性质 | 处置 |
+|---|---|---|---|
+| 1-3 | `test_reply_epoch_guard.py`（epoch guard / adopt epoch / declaration） | 断言形态未跟上 S2 | ✅ 已重锚到 `window.JoyState` |
+| 4-5 | `test_qa_phase_c_edges.py`（no local self-increment / guard precedes render） | 同上 | ✅ 同上 |
+| 6 | `test_live_frontend_contract.py` | 同上 | ✅ 同上 |
+| 7 | `test_live_mode_qa_boundary.py` | 同上 | ✅ 同上 |
+| 8 | `test_live_visual_frontend_contract.py` | 同上 +（末条）radiogroup | ✅ 同上 + radiogroup |
+| 9 | `test_webui_mode_radio_contract.py` | **真回归**：radiogroup 容器缺失 | ✅ 已补回 |
 
-> **用户决定（2026-09-14）**：**暂不修**。原话："先不动 ui，那是一大块屎山代码，很多坑还没填上。"
-> 故本轮**未改任何 webui 测试或 UI 代码**（曾试图适配后又全部回退，工作树保持干净）。
-> **接手者注意**：这 9 个失败是**已知的、有意保留的**技术债，不是新问题。修 UI 时一并处理。
+#### 修法（2026-09-20）
+
+**A. 语料陈旧 → 改为派生（治本，杜绝第三次失同步）**
+新增 `services/webui/tests/_frontend_corpus.py` 作为唯一真值源，12 个测试文件改为
+`from tests._frontend_corpus import index_html_plus_split_js`，**零硬编码文件名**。
+派生式 = `(index.html 加载的 script，按加载序) − PRE_EXISTING_MODULES(冻结 9 名)`。
+- 保住「仅拆分产物」语义：天真 `glob('*.js')` 会多纳入 9 个模块，**实测引入 22 处假红**
+  （如某测试断言 `"setInterval" not in select_live`，而 radio_silence/screen_capture 含 `setInterval`）。
+- **fail-closed**：index.html 引用不存在的脚本、或派生结果为空 → **import 即抛**
+  （`refusing to silently shrink the corpus`），不静默缩小。
+- 派生结果实测 = **16 个 = 旧 14 + `joy_state.js` + `radio_silence.js`**，无多无少。
+
+**B. radiogroup（真 ARIA 违规）→ 两个区域各一个容器**
+⚠️ **不是「把旧容器原样加回来」** —— 旧形态是**一个**容器包住两个按钮，但那与**用户两次拍板**冲突：
+- **2026-09-19**：`btListenBtn` 真删出输入栏、落到设置页（旧隐藏作用域在全屏时会失效，控件集体复活）；
+  `liveModeBtn` 按用户要求回聊天栏「方便直接开启」。
+- **2026-08-12**：两者必须是**互斥 radio**，不是两个独立开关。
+
+⇒ 两按钮**分处两个 UI 区域**，一个共享容器在结构上不可能。
+⇒ 正解：**每个区域各一个 `.mode-group[role="radiogroup"]`**，各带 `aria-label` 说明与对方互斥。
+既消除 ARIA 违规，又**不回退任何一次拍板**。`#liveModeSeg` 复用既有 id ⇒ id 集合 zero-diff。
+两处（`index.html` / `styles.css` 的 `.mode-group` 注释）都写明了这些出处与
+**「勿为『合并成一个容器』回退这两次拍板」**的告诫。
+
+**验证**：目标测试全绿；全量 webui 套件仅剩 `test_qa_server_split_runtime.py` 的 10 个
+**本地路径 bug**（CI 里不出现，见下节，另案）；
+布局未退化 —— `check-advanced-relocation` **12-0**（含「实时」双行 **54x52**）、
+`check-fullscreen-parity` **17-0**、`check-button-wrap` 全绿、`check-topbar-fixes` **10-0**、
+`check-idesign-mirror` **6-0**；`webui-invariants` id 新增 0/删除 0、div 配平。
+
+### 另发现：`test_qa_server_split_runtime.py` 的本地路径 bug（**未修，另案**）
+
+该文件 `WEBUI_ROOT = Path(__file__).resolve().parents[2]` 解析到 `services/`（应为 `parents[1]`
+= `services/webui`），于是 `SRC = services/src` **不存在** ⇒ 裸跑 `pytest services/webui/tests`
+时 10 个用例因 `ModuleNotFoundError` 失败。
+**CI 不报**：CI 在该目录内 `pip install -e ".[dev]"`，包已可导入。
+⇒ 属**测试自身缺陷**（在裸跑路径下失效），不在 CI 失败名单内，**建议另立工单**。
 
 ### 另发现两个 webinfer 的"假通过"测试（子代理诊断）
 
