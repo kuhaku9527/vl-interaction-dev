@@ -1,0 +1,4 @@
+﻿=== Orphan driver key cleanup 2026-09-20T19:48:13.4054277+08:00 ===
+admin = False
+WhatIfOnly = True
+ERROR: not elevated
