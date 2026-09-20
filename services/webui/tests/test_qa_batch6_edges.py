@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """QA batch-6 edge tests (independent regression additions).
 
 Targets the four moved-pure-logic modules' boundary semantics:
@@ -7,15 +6,13 @@ Targets the four moved-pure-logic modules' boundary semantics:
   3. exit_word_detected consistency with EXIT_WORDS
   4. send_to_llm_streaming cancelled branch: no broadcast, seq still advances
 """
+
 import asyncio
 from collections import deque
 from types import SimpleNamespace
 
-import pytest
-
 from joy_interaction_webui import jarvis_dialog, jarvis_kws, jarvis_llm
 from joy_interaction_webui.jarvis_config import EXIT_WORDS, JarvisConfig
-from joy_interaction_webui.jarvis_state import JarvisState
 
 
 # ---------------------------------------------------------------------------
@@ -68,11 +65,14 @@ class TestCommitVerdictShortCircuit:
         assert calls == ["garbage", "smart"]
 
     def test_sent_when_all_clear(self):
-        assert jarvis_dialog.commit_verdict(
-            "帮我查一下天气",
-            lambda t: False,
-            lambda t: True,
-        ) == "sent"
+        assert (
+            jarvis_dialog.commit_verdict(
+                "帮我查一下天气",
+                lambda t: False,
+                lambda t: True,
+            )
+            == "sent"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ def _pcm_with_peak(target_peak: float, n_samples: int = 1600) -> bytes:
     """Build int16 PCM whose max sample is within one LSB of target_peak."""
     import array
 
-    amp = int(round(target_peak * 32768.0))
+    amp = round(target_peak * 32768.0)
     samples = array.array("h", [0] * n_samples)
     samples[0] = amp
     return samples.tobytes()
@@ -147,7 +147,7 @@ class TestProbeEnergyGate:
         kws = _NoHitKWS()
         # peak = 164/32768 = 0.0050048... >= 0.005 -> probe proceeds
         pcm = _pcm_with_peak(0.005)
-        hit, ts = asyncio.run(self._probe(cfg, pcm, kws))
+        hit, _ = asyncio.run(self._probe(cfg, pcm, kws))
         assert kws.calls == 1, "energy gate passes; detect_in_pcm called"
         assert hit is False  # no hit from KWS
 
@@ -160,7 +160,7 @@ class TestProbeEnergyGate:
         async def direct_wake(**kw):
             woke.append(kw)
 
-        hit, ts = asyncio.run(self._probe(cfg, pcm, kws, direct_wake=direct_wake))
+        hit, _ = asyncio.run(self._probe(cfg, pcm, kws, direct_wake=direct_wake))
         assert hit is True
         assert woke == [{"source": "fresh-window-kws"}]
         assert kws.calls == 1
@@ -175,7 +175,7 @@ class TestProbeEnergyGate:
         async def direct_wake(**kw):
             woke.append(kw)
 
-        hit, ts = asyncio.run(self._probe(cfg, pcm, kws, direct_wake=direct_wake))
+        hit, _ = asyncio.run(self._probe(cfg, pcm, kws, direct_wake=direct_wake))
         assert hit is False
         assert woke == [], "direct-wake flag off must suppress wake"
         assert kws.calls == 1
@@ -185,7 +185,7 @@ class TestProbeEnergyGate:
         cfg.kws_fresh_window_probe_enabled = False
         kws = _NoHitKWS()
         pcm = _pcm_with_peak(0.02)
-        hit, ts = asyncio.run(self._probe(cfg, pcm, kws))
+        hit, _ = asyncio.run(self._probe(cfg, pcm, kws))
         assert hit is False
         assert kws.calls == 0
 
@@ -207,7 +207,9 @@ class TestExitWordDetected:
         # endswith is suffix-based, NOT substring: "明白了" does not end with "明白"
         assert jarvis_dialog.exit_word_detected("明白") is True
         assert jarvis_dialog.exit_word_detected("明白了") is False
-        assert jarvis_dialog.exit_word_detected("好的吧") is False  # "吧" suffix breaks exact endswith
+        assert (
+            jarvis_dialog.exit_word_detected("好的吧") is False
+        )  # "吧" suffix breaks exact endswith
         assert jarvis_dialog.exit_word_detected("好的，那就这样") is False  # word not at end
 
     def test_non_exit_word_not_detected(self):
@@ -260,8 +262,10 @@ class TestSendToLlmStreamingEdges:
                 interaction_mode="jarvis",
                 reply_epoch=7,
                 config=SimpleNamespace(
-                    llm_api_url="http://x", llm_text_path="/text/chat",
-                    llm_model="m", llm_system_prompt="s",
+                    llm_api_url="http://x",
+                    llm_text_path="/text/chat",
+                    llm_model="m",
+                    llm_system_prompt="s",
                 ),
                 conv_history=deque(),
                 max_history_turns=10,

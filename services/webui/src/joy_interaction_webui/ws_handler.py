@@ -269,9 +269,7 @@ async def websocket_handler(request):
                         else:
                             try:
                                 config = background_service.update_config(
-                                    enabled=bool(
-                                        data.get("enabled", background_service.enabled)
-                                    ),
+                                    enabled=bool(data.get("enabled", background_service.enabled)),
                                     frame_multiplier=data.get("frame_multiplier"),
                                     max_frames=data.get("max_frames"),
                                 )

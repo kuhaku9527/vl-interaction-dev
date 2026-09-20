@@ -147,7 +147,9 @@ def test_bt_listen_player_has_no_stop_audio_call():
     """
     html = _index_html()
     # Only the element lookup + existing WebRTC stream handling may mention it.
-    assert "btListenPlayer.pause()" not in html.replace("btListenPlayer.pause();\n                btListenPlayer.srcObject = null", "")
+    assert "btListenPlayer.pause()" not in html.replace(
+        "btListenPlayer.pause();\n                btListenPlayer.srcObject = null", ""
+    )
     stop_body = _function_body(html, "stopLlmReplyAudio")
     assert "getElementById('btListenPlayer')" not in stop_body
 

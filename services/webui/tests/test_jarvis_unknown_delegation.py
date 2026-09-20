@@ -27,8 +27,8 @@ for _p in (str(REPO), str(WEBUI_SRC)):
 
 from joy_interaction_webui.jarvis_config import looks_like_unknown_reply  # noqa: E402
 
-
 # --- looks_like_unknown_reply -------------------------------------------------
+
 
 def test_unknown_positive_patterns():
     assert looks_like_unknown_reply("我不知道今天几号")
@@ -48,6 +48,7 @@ def test_unknown_negative_patterns():
 
 
 # --- _send_to_llm_non_streaming rewrite ---------------------------------------
+
 
 def _make_sm(bg):
     """Build a minimal JarvisStateMachine-shaped object with _background_service."""

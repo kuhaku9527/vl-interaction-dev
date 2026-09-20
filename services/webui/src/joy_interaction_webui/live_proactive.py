@@ -26,6 +26,7 @@ except Exception:  # pragma: no cover - import guard only
     def _record_decision(**_kwargs: Any) -> None:
         """Fail-open no-op when the shared event sink is unavailable."""
 
+
 #: Default seconds between proactive visual checks (env
 #: ``LIVE_PROACTIVE_INTERVAL_S`` overrides).
 _DEFAULT_PROACTIVE_INTERVAL_S: float = 5.0

@@ -184,9 +184,7 @@ async def test_update_background_config_applies_fields():
             assert reply["background_model"]["max_frames"] == 60
             assert "error" not in reply
         # The service received exactly the frontend field mapping.
-        assert bg.update_calls == [
-            {"enabled": False, "frame_multiplier": 5, "max_frames": 60}
-        ]
+        assert bg.update_calls == [{"enabled": False, "frame_multiplier": 5, "max_frames": 60}]
     finally:
         await runner.cleanup()
 

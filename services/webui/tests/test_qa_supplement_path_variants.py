@@ -22,12 +22,12 @@ import sys
 from pathlib import Path
 
 import pytest
-from aiohttp import FormData, web
+from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from joy_interaction_webui.jarvis_routes import (  # noqa: E402
+from joy_interaction_webui.jarvis_routes import (
     _sanitize_diagnostic_filename,
     setup_jarvis_routes,
 )
@@ -61,21 +61,21 @@ def _raw_multipart(filename: str, payload: bytes) -> tuple[bytes, str]:
 @pytest.mark.parametrize(
     "variant",
     [
-        "%2e%2e/evil.wav",      # percent-encoded dot-dot, forward slash
-        "%2e%2e%2fevil.wav",    # fully percent-encoded ../  (no literal slash)
-        "%2e%2e%5cevil.wav",    # fully percent-encoded ..\  (no literal slash)
+        "%2e%2e/evil.wav",  # percent-encoded dot-dot, forward slash
+        "%2e%2e%2fevil.wav",  # fully percent-encoded ../  (no literal slash)
+        "%2e%2e%5cevil.wav",  # fully percent-encoded ..\  (no literal slash)
         "%252e%252e%252fevil.wav",  # double-encoded
-        "..//evil.wav",         # double slash
-        "a//b.wav",             # double slash inside name
-        "evil.wav/../../x",     # traversal mid-name
+        "..//evil.wav",  # double slash
+        "a//b.wav",  # double slash inside name
+        "evil.wav/../../x",  # traversal mid-name
         "..\u2215..\u2215evil.wav",  # U+2215 division slash lookalike
-        "..\uFF0Fevil.wav",     # U+FF0F fullwidth solidus lookalike
-        "..\u2216evil.wav",     # U+2216 set minus lookalike
-        "/",                    # bare separator
-        "\\",                   # bare backslash
-        "CON",                  # Windows reserved device name
-        "mic.wav.",             # trailing dot (Windows strips it)
-        "...",                  # dots-only
+        "..\uff0fevil.wav",  # U+FF0F fullwidth solidus lookalike
+        "..\u2216evil.wav",  # U+2216 set minus lookalike
+        "/",  # bare separator
+        "\\",  # bare backslash
+        "CON",  # Windows reserved device name
+        "mic.wav.",  # trailing dot (Windows strips it)
+        "...",  # dots-only
         ".. ",
     ],
 )
@@ -96,11 +96,11 @@ def test_sanitizer_rejects_or_reduces_to_basename(variant):
 @pytest.mark.parametrize(
     "variant",
     [
-        "%2e%2e%2fevil.wav",   # encoded traversal, no literal slash
+        "%2e%2e%2fevil.wav",  # encoded traversal, no literal slash
         "%2e%2e%5cevil.wav",
         "..//evil.wav",
         "..\u2215..\u2215evil.wav",
-        "..\uFF0Fevil.wav",
+        "..\uff0fevil.wav",
     ],
 )
 async def test_save_wav_hostile_variants_never_escape(tmp_path, monkeypatch, variant):

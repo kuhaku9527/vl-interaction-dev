@@ -180,9 +180,7 @@ async def test_ws_frame_ts_fallback_timestamp_then_wallclock(monkeypatch):
     try:
         # No ts but a timestamp -> falls back to timestamp.
         async with aiohttp.ClientSession() as session, session.ws_connect(url) as ws:
-            await ws.send_json(
-                {"type": "frame", "data": B64_GARBAGE, "timestamp": 777}
-            )
+            await ws.send_json({"type": "frame", "data": B64_GARBAGE, "timestamp": 777})
             await asyncio_sleep(0.1)
         assert live.frames == [(B64_GARBAGE, 777.0)]
 

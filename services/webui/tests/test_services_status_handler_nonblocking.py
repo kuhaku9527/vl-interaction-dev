@@ -71,9 +71,7 @@ def test_services_status_runs_probes_in_parallel(monkeypatch):
     monkeypatch.setattr(server, "_probe_asr", slow_asr)
     # N7.1: agent/embedding 探活是 async 直连 8079/8997，测试环境无后端——
     # 打桩为快速 OK（不真连网）。
-    monkeypatch.setattr(
-        "joy_interaction_webui.admin_endpoints._probe_agent_route", fast_agent
-    )
+    monkeypatch.setattr("joy_interaction_webui.admin_endpoints._probe_agent_route", fast_agent)
     monkeypatch.setattr(
         "joy_interaction_webui.admin_endpoints._probe_embedding_health", fast_embedding
     )
@@ -123,9 +121,7 @@ def test_services_status_surfaces_probe_errors(monkeypatch):
     monkeypatch.setattr(server, "_probe_summary", ok_summary)
     monkeypatch.setattr(server, "_probe_tts", ok_tts)
     monkeypatch.setattr(server, "_probe_asr", ok_asr)
-    monkeypatch.setattr(
-        "joy_interaction_webui.admin_endpoints._probe_agent_route", fast_agent
-    )
+    monkeypatch.setattr("joy_interaction_webui.admin_endpoints._probe_agent_route", fast_agent)
     monkeypatch.setattr(
         "joy_interaction_webui.admin_endpoints._probe_embedding_health", fast_embedding
     )

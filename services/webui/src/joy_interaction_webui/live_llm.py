@@ -40,9 +40,7 @@ def emit_event(*args: Any, **kwargs: Any) -> None:
     try:
         _emit_event(*args, **kwargs)
     except Exception:
-        logging.getLogger(__name__).warning(
-            "live_decision event emit failed", exc_info=True
-        )
+        logging.getLogger(__name__).warning("live_decision event emit failed", exc_info=True)
 
 
 def _text_fingerprint(text: str | None) -> tuple[int, str]:

@@ -323,7 +323,9 @@ async def _make_endpoint_env(monkeypatch, *, enabled_env: bool = True):
 
     manager = SimpleNamespace(
         get_live_session=lambda sid: (
-            holder["session"] if sid == "s1" else (BoomSession(holder["session"]) if sid == "boom" else None)
+            holder["session"]
+            if sid == "s1"
+            else (BoomSession(holder["session"]) if sid == "boom" else None)
         )
     )
     app = web.Application()
@@ -462,8 +464,12 @@ def test_camera_frame_format_matches_screen_capture():
     )
     assert screen_payload, "screen_capture frame send payload not found"
 
-    camera_keys = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*):", camera_payload.group("body"), re.M))
-    screen_keys = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*):", screen_payload.group("body"), re.M))
+    camera_keys = set(
+        re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*):", camera_payload.group("body"), re.M)
+    )
+    screen_keys = set(
+        re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*):", screen_payload.group("body"), re.M)
+    )
 
     expected = {"type", "format", "width", "height", "data", "timestamp", "source", "frame_seq"}
     assert camera_keys == expected, f"camera frame keys mismatch: {camera_keys}"
@@ -480,8 +486,14 @@ def test_live_video_controls_disabled_until_live_active():
     and setLiveModeActive(active) flips them together."""
     html = _index_html()
     # Initial markup: disabled by default.
-    assert 'id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled' in html
-    assert 'id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled' in html
+    assert (
+        'id="liveVideoBtn" title="打开画面（屏幕/摄像头，1fps 帧推送）" type="button" aria-label="打开画面" disabled'
+        in html
+    )
+    assert (
+        'id="liveVideoSource" title="画面来源（屏幕 / 摄像头，单选）" aria-label="画面来源" disabled'
+        in html
+    )
 
     body = _function_body(html, "setLiveModeActive")
     assert "liveVideoBtn.disabled = !liveModeActive" in body

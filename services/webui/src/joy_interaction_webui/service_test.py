@@ -297,6 +297,7 @@ async def _run_asr_test(api_base: str, api_key: str | None) -> dict:
 #   - api_key 只用于本次请求的 Authorization，不落盘、不记日志
 # ============================================================================
 
+
 async def _fetch_openai_models(api_base: str, api_key: str | None) -> dict:
     """GET ``{api_base}/models`` and return the model ids.
 
@@ -315,13 +316,21 @@ async def _fetch_openai_models(api_base: str, api_key: str | None) -> dict:
         ):
             if resp.status >= 400:
                 reason = (await resp.text(errors="replace"))[:_REASON_MAX_CHARS].strip()
-                return {"ok": False, "models": [], "status": resp.status,
-                        "reason": reason or ("HTTP %d" % resp.status)}
+                return {
+                    "ok": False,
+                    "models": [],
+                    "status": resp.status,
+                    "reason": reason or ("HTTP %d" % resp.status),
+                }
             try:
                 body = await resp.json(content_type=None)
             except Exception as exc:  # 上游返回非 JSON
-                return {"ok": False, "models": [], "status": resp.status,
-                        "reason": "invalid json: %s" % str(exc)[:120]}
+                return {
+                    "ok": False,
+                    "models": [],
+                    "status": resp.status,
+                    "reason": "invalid json: %s" % str(exc)[:120],
+                }
             # OpenAI 兼容格式：{"data": [{"id": "..."}]}
             # 少数实现直接返回 {"models": [...]} 或裸数组，这里都兼容。
             rows = None
@@ -341,8 +350,12 @@ async def _fetch_openai_models(api_base: str, api_key: str | None) -> dict:
                     elif isinstance(m, str) and m:
                         ids.append(m)
             ids = sorted(set(ids))
-            return {"ok": True, "models": ids, "status": resp.status,
-                    "reason": "" if ids else "upstream returned no model ids"}
+            return {
+                "ok": True,
+                "models": ids,
+                "status": resp.status,
+                "reason": "" if ids else "upstream returned no model ids",
+            }
     except Exception as exc:
         return {"ok": False, "models": [], "status": 0, "reason": str(exc)[:120]}
 
@@ -372,6 +385,8 @@ async def _services_list_models_handler(request: web.Request) -> web.Response:
     result = await _fetch_openai_models(api_base.strip(), api_key or None)
     logger.info(
         "POST /api/services/list-models base=%s ok=%s n=%s",
-        api_base.strip(), result.get("ok"), len(result.get("models") or []),
+        api_base.strip(),
+        result.get("ok"),
+        len(result.get("models") or []),
     )
     return web.json_response(result)

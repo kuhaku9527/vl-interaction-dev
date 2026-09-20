@@ -37,7 +37,6 @@ SERVER_PY = WEBUI_SRC / "joy_interaction_webui" / "server.py"
 from joy_interaction_webui.server import _is_heartbeat_path  # noqa: E402
 from joy_interaction_webui.turn_controller import SentenceBuffer  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -159,7 +158,9 @@ def test_radio_aria_checked_matches_active_state_everywhere():
             snippet = src[start : m.end()]
             if re.search(r"\blet\s+$", src[max(0, m.start() - 8) : m.start()]):
                 continue  # initial declaration
-            assert body_name in snippet, f"direct {flag} assignment outside {body_name}: ...{snippet}"
+            assert body_name in snippet, (
+                f"direct {flag} assignment outside {body_name}: ...{snippet}"
+            )
 
 
 def test_radio_rapid_toggle_race_recheck_after_await():
@@ -237,8 +238,14 @@ def test_middleware_routing_table_status_semantics():
     """The middleware routes heartbeat+success(<400) to DEBUG; everything else
     (including heartbeat FAILURE >=400) to INFO. Evaluate the same predicate
     the middleware uses, against the real classifier."""
-    for path in ("/api/jarvis/status", "/api/llm/status", "/api/live/status",
-                 "/api/services/extended-status", "/health", "/v1/models"):
+    for path in (
+        "/api/jarvis/status",
+        "/api/llm/status",
+        "/api/live/status",
+        "/api/services/extended-status",
+        "/health",
+        "/v1/models",
+    ):
         # Heartbeat + success -> DEBUG
         assert _is_heartbeat_path(path) and 200 < 400
         # Heartbeat + failure (500) -> NOT debug -> INFO (errors stay visible)

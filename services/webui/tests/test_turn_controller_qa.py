@@ -72,7 +72,9 @@ def _drive_to_speaking(ctrl: TurnController, clock: FakeClock, conf: float = 0.8
     ctrl.on_tts_started()  # -> SPEAKING
 
 
-def _drive_to_speaking_mid_sentence(ctrl: TurnController, clock: FakeClock, conf: float = 0.8) -> None:
+def _drive_to_speaking_mid_sentence(
+    ctrl: TurnController, clock: FakeClock, conf: float = 0.8
+) -> None:
     """Drive to SPEAKING with an un-flushed buffer (mid-sentence proxy)."""
     if ctrl.state == TurnState.LISTENING:
         ctrl.on_speech_started(conf)
@@ -82,9 +84,7 @@ def _drive_to_speaking_mid_sentence(ctrl: TurnController, clock: FakeClock, conf
     ctrl.on_tts_started()  # -> SPEAKING
 
 
-def _drive_to_hard_interrupted(
-    ctrl: TurnController, clock: FakeClock, conf: float = 0.9
-) -> None:
+def _drive_to_hard_interrupted(ctrl: TurnController, clock: FakeClock, conf: float = 0.9) -> None:
     _drive_to_speaking(ctrl, clock, conf)
     ctrl.on_speech_started(conf)  # >= barge_in_threshold -> HARD_INTERRUPTED
 
@@ -391,7 +391,9 @@ def test_preset_matrix_values_within_spec_ranges():
     assert 0.4 <= conv.vad_threshold <= 0.6
     assert 400 <= conv.silence_timeout_ms <= 700
     # scenario tags
-    assert live.scenario == "live" and jarvis.scenario == "jarvis" and conv.scenario == "conversation"
+    assert (
+        live.scenario == "live" and jarvis.scenario == "jarvis" and conv.scenario == "conversation"
+    )
 
 
 # ---------------------------------------------------------------------------

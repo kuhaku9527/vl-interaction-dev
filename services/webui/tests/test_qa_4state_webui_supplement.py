@@ -182,6 +182,7 @@ async def _drive_turn(sm, vad, asr, clock, text: str):
 async def test_live_not_for_me_vs_silence_equivalent_but_distinct_log(monkeypatch, caplog):
     """not-for-me and silence both: zero TTS, empty broadcast, back to
     LISTENING — but only not-for-me logs ``[addressee] semantic not-for-me``."""
+
     async def run_case(decision: str) -> dict:
         clock = FakeClock(1000.0)
         sm, vad, asr = build_live(controller=_live_controller(clock))

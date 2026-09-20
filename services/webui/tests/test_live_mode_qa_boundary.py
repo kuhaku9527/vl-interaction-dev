@@ -744,9 +744,7 @@ def test_offer_live_branch_precedes_jarvis_branch():
 # ---------------------------------------------------------------------------
 
 
-_WEBUI_STATIC = (
-    Path(__file__).resolve().parents[1] / "src" / "joy_interaction_webui" / "static"
-)
+_WEBUI_STATIC = Path(__file__).resolve().parents[1] / "src" / "joy_interaction_webui" / "static"
 # Batch-3 split: index.html's inline script#2 was extracted into standalone JS
 # files (same dependency order as the <script src> tags). Assertions run against
 # the combined sources so moved code keeps its contract with unchanged semantics.

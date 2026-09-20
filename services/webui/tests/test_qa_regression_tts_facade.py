@@ -32,9 +32,9 @@ for _p in (str(REPO), str(WEBUI_SRC)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from joy_interaction_webui import tts_turn_common  # noqa: E402
 from joy_interaction_webui.jarvis_mode import JarvisConfig, JarvisStateMachine  # noqa: E402
 from joy_interaction_webui.live_mode import LiveStateMachine  # noqa: E402
-from joy_interaction_webui import tts_turn_common  # noqa: E402
 
 
 def _jarvis_config(**overrides) -> JarvisConfig:

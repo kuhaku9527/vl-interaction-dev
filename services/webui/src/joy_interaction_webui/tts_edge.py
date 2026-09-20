@@ -34,15 +34,60 @@ logger = logging.getLogger(__name__)
 #: 这里固定列出中文可用项 + 少量英语，作为**免费测试集**。
 #: 用户拍板「这个表单也是固定的，因为免费的好像就那一两家，方便我们测试」。
 _EDGE_VOICES: tuple[dict, ...] = (
-    {"id": "zh-CN-YunxiNeural", "label": "云希 · 男声（青年）", "gender": "Male", "locale": "zh-CN"},
-    {"id": "zh-CN-YunjianNeural", "label": "云健 · 男声（浑厚）", "gender": "Male", "locale": "zh-CN"},
-    {"id": "zh-CN-YunyangNeural", "label": "云扬 · 男声（播报）", "gender": "Male", "locale": "zh-CN"},
-    {"id": "zh-CN-YunxiaNeural", "label": "云夏 · 男声（少年）", "gender": "Male", "locale": "zh-CN"},
-    {"id": "zh-CN-XiaoxiaoNeural", "label": "晓晓 · 女声（通用）", "gender": "Female", "locale": "zh-CN"},
-    {"id": "zh-CN-XiaoyiNeural", "label": "晓伊 · 女声（活泼）", "gender": "Female", "locale": "zh-CN"},
-    {"id": "zh-CN-liaoning-XiaobeiNeural", "label": "晓北 · 女声（东北）", "gender": "Female", "locale": "zh-CN"},
-    {"id": "zh-CN-shaanxi-XiaoniNeural", "label": "晓妮 · 女声（陕西）", "gender": "Female", "locale": "zh-CN"},
-    {"id": "en-US-AriaNeural", "label": "Aria · English (US)", "gender": "Female", "locale": "en-US"},
+    {
+        "id": "zh-CN-YunxiNeural",
+        "label": "云希 · 男声（青年）",
+        "gender": "Male",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-YunjianNeural",
+        "label": "云健 · 男声（浑厚）",
+        "gender": "Male",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-YunyangNeural",
+        "label": "云扬 · 男声（播报）",
+        "gender": "Male",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-YunxiaNeural",
+        "label": "云夏 · 男声（少年）",
+        "gender": "Male",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-XiaoxiaoNeural",
+        "label": "晓晓 · 女声（通用）",
+        "gender": "Female",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-XiaoyiNeural",
+        "label": "晓伊 · 女声（活泼）",
+        "gender": "Female",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-liaoning-XiaobeiNeural",
+        "label": "晓北 · 女声（东北）",
+        "gender": "Female",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "zh-CN-shaanxi-XiaoniNeural",
+        "label": "晓妮 · 女声（陕西）",
+        "gender": "Female",
+        "locale": "zh-CN",
+    },
+    {
+        "id": "en-US-AriaNeural",
+        "label": "Aria · English (US)",
+        "gender": "Female",
+        "locale": "en-US",
+    },
     {"id": "en-US-GuyNeural", "label": "Guy · English (US)", "gender": "Male", "locale": "en-US"},
 )
 
@@ -54,7 +99,7 @@ DEFAULT_EDGE_VOICE = "zh-CN-YunxiNeural"
 #:   pitch —— **Hz 不是百分比**（Edge 默认 "+0Hz"，实测传 "+0%" 会报
 #:            ``Invalid pitch '+0%'``；见 communicate.py:334 的签名默认值）
 #:   volume—— 百分比（本次未暴露给前端，保留常量备用）
-_RATE_MIN, _RATE_MAX = -100, 200      # 百分比
+_RATE_MIN, _RATE_MAX = -100, 200  # 百分比
 _PITCH_MIN_HZ, _PITCH_MAX_HZ = -100, 100  # Hz
 _VOLUME_MIN, _VOLUME_MAX = -100, 100  # 百分比
 

@@ -21,7 +21,6 @@ Run: python -m pytest tests/test_proactive_decision_event.py -q
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 from pathlib import Path
@@ -35,11 +34,9 @@ for _p in (str(REPO), str(WEBUI_SRC), str(TESTS_DIR)):
         sys.path.insert(0, _p)
 
 import pytest  # noqa: E402
+from test_live_proactive import B64, build_live  # noqa: E402
 
 from joy_interaction_webui import live_proactive as proactive_module  # noqa: E402
-from joy_interaction_webui.turn_controller import TurnState  # noqa: E402
-
-from test_live_proactive import B64, build_live  # noqa: E402
 
 
 def _capture() -> tuple[list[dict], object]:
@@ -86,9 +83,7 @@ async def test_proactive_response_records_decision(monkeypatch):
 
     captured, patcher = _capture()
     with patcher:
-        await sm._send_proactive_prompt(
-            frames=sm._frames_payload([sm.recent_frames[-1]])
-        )
+        await sm._send_proactive_prompt(frames=sm._frames_payload([sm.recent_frames[-1]]))
 
     assert len(captured) == 1, f"expected exactly one record, got {captured}"
     rec = captured[0]
@@ -119,9 +114,7 @@ async def test_proactive_silence_is_recorded(monkeypatch):
 
     captured, patcher = _capture()
     with patcher:
-        await sm._send_proactive_prompt(
-            frames=sm._frames_payload([sm.recent_frames[-1]])
-        )
+        await sm._send_proactive_prompt(frames=sm._frames_payload([sm.recent_frames[-1]]))
 
     assert len(captured) == 1
     assert captured[0]["decision"] == "silence"
@@ -145,9 +138,7 @@ async def test_proactive_not_for_me_recorded_separately(monkeypatch):
 
     captured, patcher = _capture()
     with patcher:
-        await sm._send_proactive_prompt(
-            frames=sm._frames_payload([sm.recent_frames[-1]])
-        )
+        await sm._send_proactive_prompt(frames=sm._frames_payload([sm.recent_frames[-1]]))
 
     assert len(captured) == 1
     assert captured[0]["decision"] == "not-for-me", (
@@ -184,16 +175,11 @@ async def test_proactive_race_guard_skip_is_still_recorded(monkeypatch, caplog):
     monkeypatch.setattr(sm, "_call_proactive_vlm", fake_vlm)
 
     captured, patcher = _capture()
-    with caplog.at_level(logging.INFO):
-        with patcher:
-            await sm._send_proactive_prompt(
-                frames=sm._frames_payload([sm.recent_frames[-1]])
-            )
+    with caplog.at_level(logging.INFO), patcher:
+        await sm._send_proactive_prompt(frames=sm._frames_payload([sm.recent_frames[-1]]))
 
     # Proof the race guard fired (not merely "nothing was spoken").
-    assert _guard_logged(caplog), (
-        "race guard did not fire — test did not exercise the path"
-    )
+    assert _guard_logged(caplog), "race guard did not fire — test did not exercise the path"
 
     # ...and the decision is still recorded (it was a real model decision).
     assert len(captured) == 1
@@ -222,11 +208,8 @@ async def test_control_speaking_path_does_not_log_race_guard(monkeypatch, caplog
     monkeypatch.setattr(sm, "_call_proactive_vlm", fake_vlm)
 
     captured, patcher = _capture()
-    with caplog.at_level(logging.INFO):
-        with patcher:
-            await sm._send_proactive_prompt(
-                frames=sm._frames_payload([sm.recent_frames[-1]])
-            )
+    with caplog.at_level(logging.INFO), patcher:
+        await sm._send_proactive_prompt(frames=sm._frames_payload([sm.recent_frames[-1]]))
 
     assert not _guard_logged(caplog), (
         "control failed: the guard logged without a race, so the race-guard "
@@ -256,9 +239,7 @@ async def test_frames_n_matches_actual_frames(monkeypatch):
 
     captured, patcher = _capture()
     with patcher:
-        await sm._send_proactive_prompt(
-            frames=sm._frames_payload(list(sm.recent_frames))
-        )
+        await sm._send_proactive_prompt(frames=sm._frames_payload(list(sm.recent_frames)))
 
     assert len(captured) == 1
     assert captured[0]["frames_n"] == 2

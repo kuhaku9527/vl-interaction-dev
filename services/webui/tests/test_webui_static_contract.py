@@ -166,7 +166,7 @@ def test_tts_sentence_streaming_queue_exists_and_is_epoch_guarded():
     assert "audio/wav" in play_body
     assert "'/api/tts/synthesize'" in play_body  # fallback path
     assert "llmReplyEpoch !== playEpoch" in play_body
-    assert "addEventListener('ended'" in play_body or "addEventListener(\"ended\"" in play_body
+    assert "addEventListener('ended'" in play_body or 'addEventListener("ended"' in play_body
 
     # stopLlmReplyAudio clears the whole queue (epoch + queue reset).
     stop_body = _function_body(html, "stopLlmReplyAudio")

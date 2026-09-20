@@ -269,7 +269,9 @@ def test_two_turn_normal_order_is_not_over_suppressed():
     sm._ensure_tts_stream_state()
     guard = FrontendGuard()
     broadcasts: list = []
-    sm.on_llm_response = lambda text, source: broadcasts.append((sm._current_turn_reply_epoch, text))
+    sm.on_llm_response = lambda text, source: broadcasts.append(
+        (sm._current_turn_reply_epoch, text)
+    )
 
     async def fake_streaming(text, *, stream_tts, interaction_mode, reply_epoch):
         await sm._finish_llm_turn(
@@ -349,7 +351,9 @@ def test_call_mode_non_streaming_broadcast_carries_epoch():
     """interaction_mode='call' (non-streaming) also tags llm_reply with reply_epoch."""
     sm = _build_sm(llm_streaming_enabled=True)
     broadcasts: list = []
-    sm.on_llm_response = lambda text, source: broadcasts.append((sm._current_turn_reply_epoch, text))
+    sm.on_llm_response = lambda text, source: broadcasts.append(
+        (sm._current_turn_reply_epoch, text)
+    )
 
     class _FakePost:
         def raise_for_status(self):
@@ -498,7 +502,9 @@ def test_llm_reply_guard_precedes_render_and_play():
     llm_branch = _JS[idx:]
     guard_idx = llm_branch.index("data.reply_epoch < llmReplyGeneration")
     render_idx = llm_branch.index("appendJarvisToResult(data.text || '', data.source || 'jarvis')")
-    play_idx = llm_branch.index("playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' })")
+    play_idx = llm_branch.index(
+        "playLlmReplyAudio(data.text || '', { source: data.source || 'jarvis' })"
+    )
     assert guard_idx < render_idx < play_idx
 
 

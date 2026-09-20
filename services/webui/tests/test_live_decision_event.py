@@ -26,7 +26,6 @@ import asyncio
 import hashlib
 import logging
 from collections import deque
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -55,10 +54,10 @@ def _run_finish_turn(
     captured: list[dict] = []
 
     def fake_emit_event(service, event, level="info", **kwargs):
-        captured.append({"service": service, "event": event,
-                         "level": level, **kwargs})
+        captured.append({"service": service, "event": event, "level": level, **kwargs})
 
     with patch.object(live_llm, "emit_event", fake_emit_event, create=True):
+
         async def _go() -> None:
             await live_llm.finish_llm_turn(
                 text=text,
@@ -110,7 +109,7 @@ def test_delegation_recorded_as_delegation_not_silence():
         decision="delegation",
         delegation_question="明天的天气",
     )
-    rec = [e for e in events if e["event"] == "live_decision"][0]
+    rec = next(e for e in events if e["event"] == "live_decision")
     assert rec["extra"]["decision"] == "delegation", (
         "decision was rewritten to silence before being recorded — "
         "delegation would be permanently lost from the event stream"
@@ -126,7 +125,7 @@ def test_no_raw_text_in_event_only_len_and_hash():
     text = "玛尔基特怎么打？"
     response = "</response> 先打碎它身上的水晶。"
     events = _run_finish_turn(text=text, response=response)
-    rec = [e for e in events if e["event"] == "live_decision"][0]
+    rec = next(e for e in events if e["event"] == "live_decision")
     extra = rec["extra"]
 
     # No field may contain the raw utterance/reply
@@ -146,7 +145,7 @@ def test_no_raw_text_in_event_only_len_and_hash():
 
 def test_empty_model_output_is_distinguishable():
     events = _run_finish_turn(text="唉，好累", response="", decision="silence")
-    rec = [e for e in events if e["event"] == "live_decision"][0]
+    rec = next(e for e in events if e["event"] == "live_decision")
     assert rec["extra"]["raw_text_len"] == 0
     assert rec["extra"]["decision"] == "silence"
 
@@ -169,6 +168,7 @@ def test_broken_event_sink_does_not_break_turn():
 
     history: deque = deque(maxlen=12)
     with patch.object(live_llm, "_emit_event", boom):
+
         async def _go() -> None:
             await live_llm.finish_llm_turn(
                 text="hi",
@@ -205,6 +205,7 @@ def test_non_serializable_extra_does_not_break_turn():
 
     history: deque = deque(maxlen=12)
     with patch.object(live_llm, "_emit_event", boom):
+
         async def _go() -> None:
             await live_llm.finish_llm_turn(
                 text="hi",
@@ -236,6 +237,6 @@ def test_non_serializable_extra_does_not_break_turn():
 @pytest.mark.parametrize("decision", ["silence", "response", "not-for-me", "delegation"])
 def test_all_four_states_are_recorded_verbatim(decision):
     events = _run_finish_turn(decision=decision)
-    rec = [e for e in events if e["event"] == "live_decision"][0]
+    rec = next(e for e in events if e["event"] == "live_decision")
     expected = "delegation" if decision == "delegation" else decision
     assert rec["extra"]["decision"] == expected

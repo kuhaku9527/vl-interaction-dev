@@ -298,7 +298,7 @@ def test_feed_enroll_vad_max_three_overflow_ignored():
     seg = [SEGMENT_1S, SEGMENT_1S, SEGMENT_1S]
     cur = bytearray(SEGMENT_1S)
     in_seg = True
-    in_seg, cur, seg, prev = feed_enroll_vad(
+    in_seg, cur, seg, _ = feed_enroll_vad(
         pcm=b"\x00\x00",
         vad_speech=False,
         prev_vad_speech=True,
@@ -364,7 +364,9 @@ def test_switch_action_start():
 
 
 def test_switch_action_already_running():
-    assert proactive_switch_action(enabled=True, env_gate=True, task_running=True) == "already_running"
+    assert (
+        proactive_switch_action(enabled=True, env_gate=True, task_running=True) == "already_running"
+    )
 
 
 def test_switch_action_cancel():
@@ -372,7 +374,9 @@ def test_switch_action_cancel():
 
 
 def test_switch_action_already_off():
-    assert proactive_switch_action(enabled=False, env_gate=True, task_running=False) == "already_off"
+    assert (
+        proactive_switch_action(enabled=False, env_gate=True, task_running=False) == "already_off"
+    )
 
 
 def test_switch_action_string_coerced_to_bool():
@@ -414,7 +418,9 @@ async def test_send_to_llm_retry_branch_calls_non_streaming(monkeypatch):
 
     monkeypatch.setattr(sm, "_send_to_llm_non_streaming", fake_retry)
 
-    await sm._send_to_llm("你好", interaction_mode="live", stream=True, frames=[{"image_b64": "x", "ts_ms": 1.0}])
+    await sm._send_to_llm(
+        "你好", interaction_mode="live", stream=True, frames=[{"image_b64": "x", "ts_ms": 1.0}]
+    )
 
     assert len(retried) == 1
     assert retried[0][0] == "你好"
@@ -535,7 +541,9 @@ def test_finish_turn_delegation_routes_to_background_and_consumed_silent():
         {
             "enabled": True,
             "_closed": False,
-            "handle_foreground_response": lambda self, text, metrics=None: calls.append((text, metrics)),
+            "handle_foreground_response": lambda self, text, metrics=None: calls.append(
+                (text, metrics)
+            ),
         },
     )()
     ctrl, _h, broadcasts, _e, task = _run_finish(
@@ -561,7 +569,9 @@ def test_finish_turn_delegation_with_disabled_bg_not_routed():
         {
             "enabled": False,
             "_closed": False,
-            "handle_foreground_response": lambda self, text, metrics=None: (_ for _ in ()).throw(AssertionError("must not route")),
+            "handle_foreground_response": lambda self, text, metrics=None: (_ for _ in ()).throw(
+                AssertionError("must not route")
+            ),
         },
     )()
     ctrl, _h, broadcasts, _e, task = _run_finish(
@@ -583,9 +593,7 @@ def test_finish_turn_not_for_me_live_text_and_listening():
 
 
 def test_finish_turn_reply_epoch_none_defaults_to_live_epoch():
-    _ctrl, _h, _b, epoch, _t = _run_finish(
-        decision="silence", response="", reply_epoch=None
-    )
+    _ctrl, _h, _b, epoch, _t = _run_finish(decision="silence", response="", reply_epoch=None)
     assert epoch == 5  # llm_reply_epoch passed in
 
 

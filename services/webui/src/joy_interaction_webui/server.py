@@ -119,9 +119,10 @@ from .admin_endpoints import _proxy_to_memory_store as _proxy_to_memory_store  #
 from .admin_endpoints import _screen_latency_handler as _screen_latency_handler  # noqa: E402
 from .admin_endpoints import _services_config_handler as _services_config_handler  # noqa: E402
 from .admin_endpoints import _services_status_handler as _services_status_handler  # noqa: E402
-from .admin_endpoints import extended_status as extended_status  # noqa: E402
+
 # 2026-09-18: 命名连接列表（后端持久化，A2-b）
 from .admin_endpoints import connections_handler as connections_handler  # noqa: E402
+from .admin_endpoints import extended_status as extended_status  # noqa: E402
 from .asr import setup_asr_routes  # noqa: E402
 
 # Facade re-exports from asr_bridge (internal ASR bridge subprocess manager).
@@ -172,10 +173,13 @@ from .service_probe import (  # noqa: E402
 from .service_probe import llm_status as llm_status  # noqa: E402
 from .service_probe import tts_health as tts_health  # noqa: E402
 
+# 2026-09-18: 列出上游可用模型（供「模型」输入框做候选下拉）。
+from .service_test import (  # noqa: E402
+    _services_list_models_handler as _services_list_models_handler,
+)
+
 # Facade re-export from service_test (POST /api/services/test model-test button).
 from .service_test import _services_test_handler as _services_test_handler  # noqa: E402
-# 2026-09-18: 列出上游可用模型（供「模型」输入框做候选下拉）。
-from .service_test import _services_list_models_handler as _services_list_models_handler  # noqa: E402
 from .services_config import _SERVICES_CONFIG_DEFAULTS as _SERVICES_CONFIG_DEFAULTS  # noqa: E402
 from .services_config import _SERVICES_CONFIG_PATH as _SERVICES_CONFIG_PATH  # noqa: E402
 

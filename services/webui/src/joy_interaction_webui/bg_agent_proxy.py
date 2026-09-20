@@ -52,9 +52,7 @@ async def _bg_agent_provider_routing(agent_cfg: dict) -> dict:
                 applied = (body or {}).get("provider", provider)
                 return {"ok": True, "provider": applied}
             text = (await resp.text())[:200]
-            logger.warning(
-                "background-agent provider route rejected (%s): %s", resp.status, text
-            )
+            logger.warning("background-agent provider route rejected (%s): %s", resp.status, text)
             return {"ok": False, "reason": text, "status": resp.status}
     except Exception as exc:
         logger.warning("background-agent provider route push failed: %s", exc)

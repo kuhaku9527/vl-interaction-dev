@@ -43,6 +43,7 @@ async def _apply(slot: str, incoming: dict):
 
 # -- 默认值与白名单 --------------------------------------------------------
 
+
 def test_defaults_include_agent_and_embedding():
     assert "agent" in sc._SERVICES_CONFIG_DEFAULTS
     assert "embedding" in sc._SERVICES_CONFIG_DEFAULTS
@@ -53,6 +54,7 @@ def test_defaults_include_agent_and_embedding():
 
 
 # -- agent 槽位 ------------------------------------------------------------
+
 
 async def test_apply_agent_provider_switch():
     entry, applied = await _apply("agent", {"provider": "hermes"})
@@ -78,6 +80,7 @@ async def test_apply_agent_unknown_provider_rejected():
 
 # -- embedding 槽位 --------------------------------------------------------
 
+
 async def test_apply_embedding_provider_switch():
     entry, applied = await _apply("embedding", {"provider": "local"})
     assert entry is None and applied is True
@@ -93,6 +96,7 @@ async def test_apply_embedding_unknown_provider_rejected():
 
 # -- 不支持的槽位拒绝 provider 字段 ----------------------------------------
 
+
 async def test_llm_rejects_provider_field():
     entry, applied = await _apply("llm", {"provider": "x"})
     assert applied is False
@@ -107,6 +111,7 @@ async def test_unknown_slot_never_created():
 
 
 # -- summary 槽位（N8: provider minimax|openrouter）----------------------
+
 
 async def test_apply_summary_provider_switch():
     entry, applied = await _apply("summary", {"provider": "minimax"})

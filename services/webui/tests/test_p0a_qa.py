@@ -27,12 +27,10 @@ the delegation format the system prompt actually teaches.
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -43,10 +41,11 @@ for _p in (str(REPO), str(WEBUI_SRC), str(WEBINFER)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from joy_interaction_webui.jarvis_mode import JarvisConfig, JarvisStateMachine  # noqa: E402
-from joy_interaction_webui.turn_controller import SentenceBuffer  # noqa: E402
 from infer_loop import build_stream_frames  # noqa: E402
 from response_format import parse_model_decision  # noqa: E402
+
+from joy_interaction_webui.jarvis_mode import JarvisConfig, JarvisStateMachine  # noqa: E402
+from joy_interaction_webui.turn_controller import SentenceBuffer  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 1. Streaming frame protocol — multi-marker / delegation-taught format
@@ -142,7 +141,7 @@ def test_qa_sentence_buffer_max_chars_exact_boundary():
     """Exactly max_buffer_chars is force-flushed on the boundary token."""
     buf = SentenceBuffer(max_buffer_chars=10)
     out = None
-    for i in range(10):
+    for _ in range(10):
         out = buf.add_token("x")
     assert out is not None and out == "x" * 10
     assert buf.is_empty
@@ -319,7 +318,9 @@ async def test_qa_fail_open_mid_stream_flushes_remaining_sentence():
         await asyncio.gather(*list(sm._tts_sentence_tasks), return_exceptions=True)
     texts = [t for _, t in pushes]
     assert any("First sentence." in t for t in texts)
-    assert any("Second incomplete" in t for t in texts), "buffered remainder lost on mid-stream failure"
+    assert any("Second incomplete" in t for t in texts), (
+        "buffered remainder lost on mid-stream failure"
+    )
 
 
 # ---------------------------------------------------------------------------

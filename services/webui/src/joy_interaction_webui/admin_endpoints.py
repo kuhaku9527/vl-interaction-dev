@@ -556,9 +556,7 @@ async def _push_embedding_provider(embed_cfg: dict) -> None:
         ):
             if resp.status not in (200, 201):
                 text = (await resp.text())[:200]
-                logger.warning(
-                    "memory-store embedding route rejected (%s): %s", resp.status, text
-                )
+                logger.warning("memory-store embedding route rejected (%s): %s", resp.status, text)
     except Exception as exc:
         logger.warning("memory-store embedding route push failed: %s", exc)
 

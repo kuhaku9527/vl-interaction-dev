@@ -88,8 +88,7 @@ def test_create_session_without_background_service_keeps_none(monkeypatch):
 
 def test_llm_callback_does_not_double_route_delegation():
     """_make_llm_callback broadcasts the LLM reply only; delegation is handled in _send_to_llm."""
-    from joy_interaction_webui import server
-    from joy_interaction_webui import ws_notify
+    from joy_interaction_webui import server, ws_notify
 
     bg = SimpleNamespace(
         enabled=True,

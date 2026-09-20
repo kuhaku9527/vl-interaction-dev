@@ -326,6 +326,7 @@ async def _speech_burst(sm, vad, chunks: int = 6, chunk: bytes | None = None):
 @pytest.mark.asyncio
 async def test_vad_unavailable_gating_skipped():
     """VAD unavailable -> gating skipped, original streaming path (fail-open)."""
+
     class NoVAD(_FakeVAD):
         available = False
 
@@ -415,7 +416,9 @@ async def test_feed_enroll_pcm_overflow_ignored():
 # Real-model end-to-end (runs only when the CAM++ model is present)
 # ---------------------------------------------------------------------------
 
-REAL_MODEL = "D:/AI/models/sherpa-onnx/models/speaker/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx"
+REAL_MODEL = (
+    "D:/AI/models/sherpa-onnx/models/speaker/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx"
+)
 BT_REF = "D:/AI/workspace/bt-voice/ref_audio/bt_reference.wav"
 MIC_CAPTURES = "D:/AI/data/kws/mic_captures"
 
@@ -572,7 +575,7 @@ def test_frontend_enroll_button_exists_and_starts_disabled():
     assert 'id="liveEnrollBtn"' in html
     # Initially disabled: enrollment only makes sense inside an active live
     # session (and while not already enrolling).
-    assert "id=\"liveEnrollBtn\"" in html and "disabled" in html.split('id="liveEnrollBtn"')[1][:120]
+    assert 'id="liveEnrollBtn"' in html and "disabled" in html.split('id="liveEnrollBtn"')[1][:120]
     assert 'id="liveEnrollHint"' in html
     assert 'role="status"' in html and 'aria-live="polite"' in html
     assert "liveEnrollBtn.addEventListener('click', startLiveEnroll)" in html
