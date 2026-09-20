@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Start a local NousResearch hermes-agent HTTP gateway (default port 8642).
 

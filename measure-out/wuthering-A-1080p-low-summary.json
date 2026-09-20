@@ -1,0 +1,172 @@
+﻿{
+    "label":  "wuthering-A-1080p-low",
+    "mode":  "session",
+    "started":  "2026-09-20 17:09:22",
+    "duration_sec":  59.1,
+    "samples":  50,
+    "interval_ms":  1000,
+    "gpu_total_mib":  16311,
+    "gpu_reserved_mib":  261,
+    "wddm_budget_mib":  null,
+    "real_gpu_luid":  "luid_0x00000000_0x00015eea_phys_0",
+    "warmup_sec":  20,
+    "baseline":  {
+                     "n":  5,
+                     "min":  11585,
+                     "median":  11585,
+                     "p95":  11585,
+                     "max":  11585,
+                     "mean":  11585
+                 },
+    "overall":  {
+                    "n":  50,
+                    "min":  11584,
+                    "median":  11599,
+                    "p95":  11627,
+                    "max":  11627,
+                    "mean":  11597.8
+                },
+    "steady_state":  {
+                         "n":  33,
+                         "min":  11584,
+                         "median":  11599,
+                         "p95":  11627,
+                         "max":  11627,
+                         "mean":  11601.5
+                     },
+    "peak_total_mib":  11627,
+    "peak_at_sec":  55.15,
+    "game_match":  [
+
+                   ],
+    "game_peak_mib":  null,
+    "game_vram_by_pid":  [
+
+                         ],
+    "autodetected_game":  [
+
+                          ],
+    "top_processes":  [
+                          {
+                              "pid":  20584,
+                              "process":  "llama-server",
+                              "peak_mib":  7217.5,
+                              "first_mib":  7217.5,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  8292,
+                              "process":  "Client-Win64-Shipping",
+                              "peak_mib":  3483.7,
+                              "first_mib":  3442.4,
+                              "growth_mib":  41.3,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  1572,
+                              "process":  "dwm",
+                              "peak_mib":  345.9,
+                              "first_mib":  331.7,
+                              "growth_mib":  14.2,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  12436,
+                              "process":  "DSH Desktop",
+                              "peak_mib":  220.2,
+                              "first_mib":  220.2,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  22424,
+                              "process":  "chrome",
+                              "peak_mib":  104.9,
+                              "first_mib":  104.9,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  22232,
+                              "process":  "msedgewebview2",
+                              "peak_mib":  93,
+                              "first_mib":  93,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  1064,
+                              "process":  "csrss",
+                              "peak_mib":  76.1,
+                              "first_mib":  76.1,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  2044,
+                              "process":  "msedgewebview2",
+                              "peak_mib":  59.7,
+                              "first_mib":  59.7,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  14844,
+                              "process":  "WindowsTerminal",
+                              "peak_mib":  55.3,
+                              "first_mib":  55.3,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  6380,
+                              "process":  "explorer",
+                              "peak_mib":  45.8,
+                              "first_mib":  45.8,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  2268,
+                              "process":  "HipsDaemon",
+                              "peak_mib":  45.8,
+                              "first_mib":  45.8,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  5036,
+                              "process":  "launcher_main",
+                              "peak_mib":  26.6,
+                              "first_mib":  26.6,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  7552,
+                              "process":  "chrome",
+                              "peak_mib":  24.8,
+                              "first_mib":  24.8,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  16592,
+                              "process":  "SearchApp",
+                              "peak_mib":  24,
+                              "first_mib":  24,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          },
+                          {
+                              "pid":  13376,
+                              "process":  "TextInputHost",
+                              "peak_mib":  15.3,
+                              "first_mib":  15.3,
+                              "growth_mib":  0,
+                              "is_game_match":  false
+                          }
+                      ],
+    "note":  "nvidia-smi memory.used is absolute truth. per-PID dedicated counters over-count (committed vs resident); use them for attribution only."
+}

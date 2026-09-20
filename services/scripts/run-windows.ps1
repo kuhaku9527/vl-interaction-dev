@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
   One-shot orchestrator for the native Windows + RTX 5060 Ti JoyAI-VL-Interaction

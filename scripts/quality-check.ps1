@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+﻿# ---------------------------------------------------------------------------
 # quality-check.ps1 — Windows variant of scripts/quality-check.sh.
 # Runs locally (Git Bash / PowerShell) and inside any Windows CI runner.
 #
