@@ -1,0 +1,131 @@
+{
+  "label": "cpu",
+  "port": 7061,
+  "rounds": 12,
+  "prompt_ms": {
+    "median": 5887.2,
+    "min": 5859.4,
+    "max": 6328.4
+  },
+  "wall_ms": {
+    "median": 6236.6,
+    "min": 6189.8,
+    "max": 6727.5
+  },
+  "vram_mib": {
+    "start": 7965,
+    "end": 7965,
+    "median": 7965
+  },
+  "prompt_n": 448,
+  "rows": [
+    {
+      "i": 1,
+      "wall_ms": 6382.1,
+      "prompt_ms": 6009.5,
+      "prompt_n": 448,
+      "predicted_ms": 343.3,
+      "predicted_n": 24,
+      "vram_mib": 7965
+    },
+    {
+      "i": 2,
+      "wall_ms": 6727.5,
+      "prompt_ms": 6328.4,
+      "prompt_n": 438,
+      "predicted_ms": 345.1,
+      "predicted_n": 24,
+      "vram_mib": 7962
+    },
+    {
+      "i": 3,
+      "wall_ms": 6563.5,
+      "prompt_ms": 6205.8,
+      "prompt_n": 438,
+      "predicted_ms": 306.7,
+      "predicted_n": 24,
+      "vram_mib": 7962
+    },
+    {
+      "i": 4,
+      "wall_ms": 6211.8,
+      "prompt_ms": 5859.4,
+      "prompt_n": 438,
+      "predicted_ms": 300.1,
+      "predicted_n": 24,
+      "vram_mib": 7965
+    },
+    {
+      "i": 5,
+      "wall_ms": 6236.6,
+      "prompt_ms": 5874.3,
+      "prompt_n": 438,
+      "predicted_ms": 330.9,
+      "predicted_n": 24,
+      "vram_mib": 7962
+    },
+    {
+      "i": 6,
+      "wall_ms": 6196.4,
+      "prompt_ms": 5865.9,
+      "prompt_n": 438,
+      "predicted_ms": 299.4,
+      "predicted_n": 24,
+      "vram_mib": 7965
+    },
+    {
+      "i": 7,
+      "wall_ms": 6265.7,
+      "prompt_ms": 5882.7,
+      "prompt_n": 438,
+      "predicted_ms": 349.3,
+      "predicted_n": 24,
+      "vram_mib": 7965
+    },
+    {
+      "i": 8,
+      "wall_ms": 6233.8,
+      "prompt_ms": 5882.1,
+      "prompt_n": 438,
+      "predicted_ms": 300.5,
+      "predicted_n": 24,
+      "vram_mib": 7969
+    },
+    {
+      "i": 9,
+      "wall_ms": 6273.4,
+      "prompt_ms": 5889.9,
+      "prompt_n": 438,
+      "predicted_ms": 331.3,
+      "predicted_n": 24,
+      "vram_mib": 7966
+    },
+    {
+      "i": 10,
+      "wall_ms": 6217.7,
+      "prompt_ms": 5887.2,
+      "prompt_n": 438,
+      "predicted_ms": 298.8,
+      "predicted_n": 24,
+      "vram_mib": 7965
+    },
+    {
+      "i": 11,
+      "wall_ms": 6189.8,
+      "prompt_ms": 5901.0,
+      "prompt_n": 438,
+      "predicted_ms": 257.4,
+      "predicted_n": 18,
+      "vram_mib": 7965
+    },
+    {
+      "i": 12,
+      "wall_ms": 6257.8,
+      "prompt_ms": 5903.4,
+      "prompt_n": 438,
+      "predicted_ms": 302.1,
+      "predicted_n": 24,
+      "vram_mib": 7965
+    }
+  ]
+}
