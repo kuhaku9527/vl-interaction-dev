@@ -12,12 +12,92 @@ conversation history, broadcast), and the TTS-turn completion watcher.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .turn_controller import TurnState
+
+try:  # ADR-0014 event stream (services/common); optional in stripped checkouts.
+    from event_json import emit_event as _emit_event
+except Exception:  # pragma: no cover - import guard only
+
+    def _emit_event(*_args: Any, **_kwargs: Any) -> None:
+        """Fail-open no-op when the shared event sink is unavailable."""
+
+
+def emit_event(*args: Any, **kwargs: Any) -> None:
+    """Emit one ADR-0014 event, never raising into the business path.
+
+    Wrapped (rather than called directly) so the business turn can never be
+    aborted by a logging hiccup, and so tests can patch this module-level
+    symbol. ``emit_event`` itself documents that a non-serializable ``extra``
+    raises ``ValueError`` — we deliberately swallow that here: observability
+    is important, but a dropped event must not cost the user a turn.
+    """
+    try:
+        _emit_event(*args, **kwargs)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "live_decision event emit failed", exc_info=True
+        )
+
+
+def _text_fingerprint(text: str | None) -> tuple[int, str]:
+    """Return ``(len, short_sha256)`` for a model output.
+
+    ADR-0014 forbids PII in the ``extra`` payload, so the raw reply is never
+    recorded. The length is kept because ``len == 0`` is the single most
+    common false-silence mode (the model emitted nothing at all) and must stay
+    distinguishable from a deliberate ``</silence>``.
+    """
+    raw = text or ""
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    return len(raw), digest
+
+
+def _record_live_decision(
+    *,
+    decision: str,
+    text: str,
+    response: str,
+    delegation_question: str | None,
+    session_id: str | None,
+    latency_ms: int | None,
+    logger: logging.Logger,
+    interaction_mode: str = "live",
+    round_kind: str = "user",
+    frames_n: int | None = None,
+) -> None:
+    """Record one live-turn decision to the ADR-0014 JSONL event stream.
+
+    MUST be called BEFORE the caller rewrites ``delegation`` to ``silence`` —
+    otherwise delegation never appears in the record (see the ordering note in
+    ``finish_llm_turn``).
+    """
+    raw_len, raw_hash = _text_fingerprint(response)
+    extra: dict[str, Any] = {
+        "decision": decision,
+        "round_kind": round_kind,
+        "interaction_mode": interaction_mode,
+        "raw_text_len": raw_len,
+        "raw_text_sha256_16": raw_hash,
+        "response_chars": len((response or "").strip()),
+        "user_text_len": len(text or ""),
+        "delegation_question_len": len(delegation_question or ""),
+    }
+    if frames_n is not None:
+        extra["frames_n"] = frames_n
+    emit_event(
+        "webui",
+        "live_decision",
+        "info",
+        session_id=session_id,
+        latency_ms=latency_ms,
+        extra=extra,
+    )
 
 
 async def send_to_llm(
@@ -189,6 +269,23 @@ async def finish_llm_turn(
     applies them to its own state.
     """
     logger.info("[live-mode] LLM response (decision=%s): %r", decision, (response or "")[:120])
+
+    # agentteams #146: persist the decision to the machine-readable ADR-0014
+    # event stream. Evaluations ("was it the right moment to speak?") are
+    # impossible while decisions only live in memory / truncated text logs.
+    #
+    # ★ ORDERING IS LOAD-BEARING: the delegation branch below rewrites
+    # ``decision`` to ``"silence"``, so the record MUST happen first or
+    # delegation is permanently lost from the stream.
+    _record_live_decision(
+        decision=decision,
+        text=text,
+        response=response,
+        delegation_question=delegation_question,
+        session_id=None,
+        latency_ms=None,
+        logger=logger,
+    )
 
     # Feed the controller: PROCESSING -> THINKING (even for empty output).
     try:
