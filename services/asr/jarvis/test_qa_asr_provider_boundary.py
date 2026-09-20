@@ -28,7 +28,7 @@ import logging
 import sys
 from collections import deque
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -396,9 +396,7 @@ async def test_jarvis_failover_off_keeps_cloud_and_resets_buffer(monkeypatch, ca
     assert provider._pcm == bytearray()  # buffer reset -> next utterance retries
     assert provider._started is True  # provider restarted
     assert sm._last_speech_time == 0.0
-    assert any(
-        "[asr] cloud provider unreachable" in r.getMessage() for r in caplog.records
-    )
+    assert any("[asr] cloud provider unreachable" in r.getMessage() for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------

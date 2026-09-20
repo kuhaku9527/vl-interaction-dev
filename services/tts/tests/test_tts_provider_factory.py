@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# ruff: noqa: RUF002 RUF003
 """TTS 插件化 guard（N5，2026-08-14）：工厂 + ABC 契约。
 
 锁定：
@@ -54,7 +55,7 @@ def test_minimax_synthesizer_implements_abc_contract():
     import inspect
 
     synth = create_tts_provider("minimax", api_key="k", group_id="g", voice_id="v")
-    synth_method = getattr(type(synth), "synthesize")
-    ping_method = getattr(type(synth), "ping")
+    synth_method = type(synth).synthesize
+    ping_method = type(synth).ping
     assert inspect.iscoroutinefunction(synth_method) or inspect.isasyncgenfunction(synth_method)
     assert inspect.iscoroutinefunction(ping_method)

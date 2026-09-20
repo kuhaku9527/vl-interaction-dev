@@ -1,4 +1,5 @@
-"""Hermes-agent gateway provider for StreamingHarness background tasks（AgentProvider 插件）。
+# ruff: noqa: RUF002 RUF003
+"""Hermes-agent gateway provider for StreamingHarness background tasks（AgentProvider 插件）.
 
 2026-08-14 重构：契约层（SolveRequest/SolveResponse/recall/prompt/工具）已抽到
 ``agent_provider.py``（AgentProvider 统一抽象）；本模块保留 Hermes 特有的
@@ -19,14 +20,13 @@ import time
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException
-
 from agent_provider import (
     AgentProvider,
     FrameInput,
     SolveRequest,
     SolveResponse,
 )
+from fastapi import FastAPI, HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -47,16 +47,11 @@ HERMES_GATEWAY_PORT = int(os.environ.get("HERMES_GATEWAY_PORT", "8642"))
 HERMES_GATEWAY_URL = f"http://{HERMES_GATEWAY_HOST}:{HERMES_GATEWAY_PORT}"
 
 # 后向兼容 re-export（tests / webui 引用 agent_provider 的符号走这两个包名）
-from agent_provider import (  # noqa: E402
-    FrameInput as FrameInput,
-    SolveRequest as SolveRequest,
-    SolveResponse as SolveResponse,
-)
 from agent_provider import _enrich_with_memory as _enrich_with_memory  # noqa: E402
 
 
 class HermesProvider(AgentProvider):
-    """后台 agent 插件：本地 hermes-agent HTTP gateway（OpenAI 兼容 chat.completions）。"""
+    """后台 agent 插件：本地 hermes-agent HTTP gateway（OpenAI 兼容 chat.completions）."""
 
     name = "hermes"
 

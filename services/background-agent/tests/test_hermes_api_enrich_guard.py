@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import logging
 
-import httpx
 import agent_provider
+import httpx
 from hermes_api import main as hapi
 
 LOGGER_NAME = "agent_provider"

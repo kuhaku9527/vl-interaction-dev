@@ -1,14 +1,14 @@
+# ruff: noqa: RUF002 RUF003
 """agent_app /v1/provider/route 热切端点测试（N7.1）。
 
 GET 读当前 provider；POST 热切（重建进程级 _provider）；未知名 fail-loud
 -> 400（D-080）。测试间 _provider 为模块级缓存，按文件内顺序依赖。
 """
 
-import pytest
-from fastapi.testclient import TestClient
-
 import agent_app
+import pytest
 from agent_app import app
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
