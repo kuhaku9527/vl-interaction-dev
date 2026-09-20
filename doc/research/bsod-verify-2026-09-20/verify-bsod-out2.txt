@@ -1,0 +1,733 @@
+=== A. HB / Hypervisor binary versions ===
+hvix64.exe v10.0.19041.6456 (WinBuild.160101.0800)  10/16/2025 18:56:42
+hvax64.exe v10.0.19041.6456 (WinBuild.160101.0800)  10/16/2025 18:56:42
+securekernel.exe v10.0.19041.6456 (WinBuild.160101.0800)  10/16/2025 18:56:42
+ntoskrnl.exe v10.0.19041.6456 (WinBuild.160101.0800)  10/16/2025 18:56:27
+ci.dll v10.0.19041.5737 (WinBuild.160101.0800)  10/16/2025 18:56:24
+
+=== B. Recent Windows hotfixes (are we freshly patched?) ===
+KB5126256 | 09/20/2026 00:00:00 | Security Update
+KB5071959 | 05/14/2026 00:00:00 | Security Update
+KB5071982 | 05/09/2026 00:00:00 | Security Update
+KB5072653 | 11/23/2025 00:00:00 | Security Update
+KB5066130 | 10/16/2025 00:00:00 | Update
+KB5066790 | 10/16/2025 00:00:00 | Security Update
+KB5063979 | 09/10/2025 00:00:00 | Update
+KB5063261 | 08/14/2025 00:00:00 | Update
+KB5063706 | 07/09/2025 00:00:00 | Security Update
+KB5059504 | 06/11/2025 00:00:00 | Update
+KB5058526 | 05/16/2025 00:00:00 | Security Update
+KB5055663 | 05/10/2025 00:00:00 | Update
+KB5054682 | 04/09/2025 00:00:00 | Update
+KB5052916 | 03/12/2025 00:00:00 | Update
+KB5050111 | 02/12/2025 00:00:00 | Update
+
+=== C. .wslconfig content ===
+  [wsl2]
+  memory=12582912000
+  processors=8
+  swap=34359738368
+  localhostForwarding=true
+
+=== D. WSL / vmware / docker state right now ===
+  not running: vmware-vmx
+  RUNNING vmmem pid=12840 memMB=0 started=
+  not running: vmmemWSL
+  RUNNING wslservice pid=15776 memMB=5 started=
+  not running: Docker Desktop
+  not running: com.docker.backend
+  not running: vmware
+  not running: vmware-authd
+-- services --
+  vmx86 | Running | Automatic
+  VMnetDHCP | Stopped | Manual
+  VMware NAT Service | Stopped | Manual
+  service absent: VMAuthdService
+  LxssManager | Stopped | Manual
+  WslService | Running | Manual
+  com.docker.service | Stopped | Manual
+  HvHost | Running | Manual
+  vmcompute | Running | Manual
+
+=== E. WER reports for vmware / wsl / docker / docker / hyperv (ALL retained) ===
+-- all ReportArchive dirs grouped by prefix --
+  AppCrash_AUDIODG.EXE x498
+  AppCrash_QQ.exe x1
+  Kernel_20001 x1
+
+=== F. Application-log errors/hangs in the 3h BEFORE crash (14:00-17:12) ===
+17:09:21 id=1023 Microsoft-Windows-Perflib | Windows 无法加载可扩展计数器 DLL“D:\VMware Workstation17\vmPerfmon.dll”(Win32 错误代码 找不到指定的模块。)。
+16:41:06 id=1000 Application Error | 错误应用程序名称: QQ.exe，版本: 9.9.21.39038，时间戳: 0x678dff82 错误模块名称: QQNT.dll_unloaded，版本: 0.0.0.0，时间戳: 0x69c117ce 异常代码: 0xc0000005 错误偏移量: 0x00000000024e4880 错误进程 ID: 0x1b74 错误应用程序启
+16:40:23 id=1023 Microsoft-Windows-Perflib | Windows 无法加载可扩展计数器 DLL“D:\VMware Workstation17\vmPerfmon.dll”(Win32 错误代码 找不到指定的模块。)。
+16:18:43 id=1000 Application Error | 错误应用程序名称: wetype_renderer.exe，版本: 2.1.3.18，时间戳: 0x6a8fe8bd 错误模块名称: flutter_windows.dll，版本: 0.0.0.0，时间戳: 0x66e2d4a7 异常代码: 0xc0000409 错误偏移量: 0x0000000000d1cfe1 错误进程 ID: 0x3
+
+=== G. Hyper-V-VmSwitch events 16:00-17:12 (was a VM/switch active?) ===
+16:31:57 id=233 | The operation 'Delete' succeeded on nic 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 (Friendly Name: ).
+16:31:57 id=234 | NIC 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 successfully disconnected from port .
+16:30:41 id=102 | Networking driver in Virtual Machine is loaded and the protocol version is negotiated to the most recent version (Virtual machine ID 8D95DBBF-4874-4CC
+16:30:40 id=102 | Networking driver in Virtual Machine is loaded and the protocol version is negotiated to the most recent version (Virtual machine ID 8D95DBBF-4874-4CC
+16:30:40 id=232 | NIC 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 (Friendly Name: ) successfully connected to port 6527450B-41B9-4228-871
+16:30:40 id=233 | The operation 'Create' succeeded on nic 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 (Friendly Name: ).
+16:30:40 id=264 | Port 6527450B-41B9-4228-871B-394D33B1FB1E (Friendly Name: FB84AE7A-6231-4F4B-8296-9A7209774D25) successfully created on switch F0D1F64D-ADC1-4C3B-98A3
+16:26:11 id=233 | The operation 'Delete' succeeded on nic 740E61AD-2C7C-430F-90B9-4A79B37E8826--84A66B4A-82D1-4266-968A-262FECEAD12B (Friendly Name: ).
+16:26:11 id=234 | NIC 740E61AD-2C7C-430F-90B9-4A79B37E8826--84A66B4A-82D1-4266-968A-262FECEAD12B successfully disconnected from port .
+16:24:55 id=102 | Networking driver in Virtual Machine is loaded and the protocol version is negotiated to the most recent version (Virtual machine ID 740E61AD-2C7C-430
+16:24:55 id=102 | Networking driver in Virtual Machine is loaded and the protocol version is negotiated to the most recent version (Virtual machine ID 740E61AD-2C7C-430
+16:24:55 id=232 | NIC 740E61AD-2C7C-430F-90B9-4A79B37E8826--84A66B4A-82D1-4266-968A-262FECEAD12B (Friendly Name: ) successfully connected to port CD616F3F-84FB-4AFB-94C
+16:24:55 id=233 | The operation 'Create' succeeded on nic 740E61AD-2C7C-430F-90B9-4A79B37E8826--84A66B4A-82D1-4266-968A-262FECEAD12B (Friendly Name: ).
+16:24:55 id=264 | Port CD616F3F-84FB-4AFB-94CF-EF4ED9327BE1 (Friendly Name: 84A66B4A-82D1-4266-968A-262FECEAD12B) successfully created on switch F0D1F64D-ADC1-4C3B-98A3
+
+=== H. Kernel-ShimEngine / CodeIntegrity / DeviceGuard events last 2 days ===
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 15 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 14 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 13 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 12 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 11 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 10 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 9 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 8 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 7 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 6 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 5 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 4 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 3 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 2 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:46 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 1 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:21:45 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 0 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:14 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 15 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:14 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 14 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 13 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 12 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 11 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 10 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 9 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 8 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 7 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 6 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 5 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 4 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 3 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 2 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 1 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 17:18:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 0 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 15 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 14 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 13 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 12 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 11 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 10 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 9 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 8 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 7 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 6 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 5 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 4 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 3 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 2 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 1 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 13:32:13 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 0 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:28 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 15 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 14 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 13 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 12 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 11 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 10 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 9 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 8 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 7 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 6 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 5 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 4 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 3 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 2 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 1 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+09-20 09:43:27 Microsoft-Windows-Kernel-Processor-Power id=55 | 组 0 中的处理器 0 显示下列电源管理功能:  空闲状态类型: ACPI 空闲(C)状态 (2 状态)  性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+
+=== I. DRIVER VERIFIER / boot config ===
+指定的项类型无效。
+运行 "bcdedit /?" 获得命令行帮助。
+参数错误。
+verifier running: 验证程序标志: 0x00000000
+
+  标准标志:
+
+    [ ] 0x00000001 特殊池。
+    [ ] 0x00000002 强制 IRQL 检查。
+    [ ] 0x00000008 池跟踪。
+    [ ] 0x00000010 I/O 验证。
+    [ ] 0x00000020 死锁检测。
+    [ ] 0x00000080 DMA 检查。
+    [ ] 0x00000100 安全检查。
+    [ ] 0x00000800 杂项检查。
+    [ ] 0x00020000 DDI 兼容性检查。
+
+  其他标志:
+
+    [ ] 0x00000004 随机低资源模拟。
+    [ ] 0x00000200 强制挂起 I/O 请求。
+    [ ] 0x00000400 IRP 日志记录。
+    [ ] 0x00002000 堆栈的固定 MDL 检查。
+    [ ] 0x00004000 驱动程序的固定 MDL 检查。
+    [ ] 0x00008000 Power 框架延迟模糊处理。
+    [ ] 0x00010000 端口/微型端口接口检查。
+    [ ] 0x00040000 系统低资源模拟。
+    [ ] 0x00080000 DDI 兼容性检查(额外)。
+    [ ] 0x00200000 NDIS/WLAN 验证。
+    [ ] 0x00800000 内核同步延迟模糊处理。
+    [ ] 0x01000000 VM 开关验证。
+    [ ] 0x02000000 代码完整性检查。
+
+    [X] 指示标志已启用。
+
+  引导模式:
+
+    Persistent
+
+  规则:
+
+    所有规则都在使用默认设置
+
+  验证的驱动程序:
+
+    无
+
+=== J. Reliability: app-hang + unexpected shutdown records ===
+09-20 17:21:42 Kernel-Boot id=30 | 固件报告了启动指标。
+09-20 17:21:42 Kernel-Boot id=20 | 上一次关机的成功状态为“true”。上一次引导的成功状态为“true”。
+09-20 17:18:09 Kernel-Boot id=30 | 固件报告了启动指标。
+09-20 17:18:09 Kernel-Boot id=20 | 上一次关机的成功状态为“false”。上一次引导的成功状态为“true”。
+09-20 13:32:06 Kernel-Boot id=30 | 固件报告了启动指标。
+09-20 13:32:06 Kernel-Boot id=20 | 上一次关机的成功状态为“false”。上一次引导的成功状态为“true”。
+09-20 09:43:21 Kernel-Boot id=30 | 固件报告了启动指标。
+09-20 09:43:21 Kernel-Boot id=20 | 上一次关机的成功状态为“true”。上一次引导的成功状态为“true”。
+09-20 09:39:35 Kernel-Boot id=30 | 固件报告了启动指标。
+09-19 10:19:42 Kernel-Boot id=30 | 固件报告了启动指标。
+09-18 16:29:44 Kernel-Boot id=30 | 固件报告了启动指标。
+09-17 10:52:21 Kernel-Boot id=30 | 固件报告了启动指标。
+09-16 08:01:16 Kernel-Boot id=30 | 固件报告了启动指标。
+09-15 18:07:11 Kernel-Boot id=30 | 固件报告了启动指标。
+09-15 11:13:17 Kernel-Boot id=30 | 固件报告了启动指标。
+09-14 18:48:33 Kernel-Boot id=30 | 固件报告了启动指标。
+09-14 07:22:59 Kernel-Boot id=30 | 固件报告了启动指标。
+09-14 07:22:59 Kernel-Boot id=20 | 上一次关机的成功状态为“true”。上一次引导的成功状态为“true”。
+09-13 15:20:23 Kernel-Boot id=30 | 固件报告了启动指标。
+09-13 10:17:49 Kernel-Boot id=30 | 固件报告了启动指标。
+
+=== K. System log: EVERY event in the 70s window right before the crash (17:10:15 - 17:11:30) ===
+(if empty above => System log had NO events in that window)
+
+=== L. USB / hcmon / hrdevmon / HID driver events (Huorong USB monitor conflict?) ===
+09-20 17:21:59 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:21:59 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:21:51 BTHUSB id=18 | Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+09-20 17:18:28 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:18:28 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:18:18 BTHUSB id=18 | Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+09-20 13:32:24 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 13:32:24 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 13:32:23 BTHUSB id=18 | Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+09-20 09:43:41 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 09:43:41 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 09:43:32 BTHUSB id=18 | Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+09-20 09:39:37 BTHUSB id=18 | Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+09-19 10:19:45 BTHUSB id=18 | Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+
+=== M. Third-party kernel drivers loaded from non-standard paths (AppData/Temp/root) ===
+  1394ohci | state=Stopped | start=Manual | C:\Windows\system32\drivers\1394ohci.sys
+  3ware | state=Stopped | start=Manual | C:\Windows\system32\drivers\3ware.sys
+  ACPI | state=Running | start=Boot | C:\Windows\system32\drivers\ACPI.sys
+  AcpiBridge | state=Stopped | start=Manual | C:\Windows\system32\drivers\AcpiBridge.sys
+  AcpiDev | state=Stopped | start=Manual | C:\Windows\system32\drivers\AcpiDev.sys
+  acpiex | state=Running | start=Boot | C:\Windows\system32\Drivers\acpiex.sys
+  acpipagr | state=Stopped | start=Manual | C:\Windows\system32\drivers\acpipagr.sys
+  AcpiPmi | state=Stopped | start=Manual | C:\Windows\system32\drivers\acpipmi.sys
+  acpitime | state=Stopped | start=Manual | C:\Windows\system32\drivers\acpitime.sys
+  Acx01000 | state=Stopped | start=Manual | C:\Windows\system32\drivers\Acx01000.sys
+  ADP80XX | state=Stopped | start=Manual | C:\Windows\system32\drivers\ADP80XX.SYS
+  AFD | state=Running | start=System | C:\Windows\system32\drivers\afd.sys
+  afunix | state=Running | start=System | C:\Windows\system32\drivers\afunix.sys
+  ahcache | state=Running | start=System | C:\Windows\system32\DRIVERS\ahcache.sys
+  amdgpio2 | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\amdgpio2.inf_amd64_487ee5525dcee517\amdgpio2.sys
+  amdgpio3 | state=Running | start=Manual | C:\Windows\system32\drivers\amdgpio3.sys
+  amdi2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdi2c.sys
+  AmdK8 | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdk8.sys
+  AMDPCIDev | state=Running | start=Manual | C:\Windows\system32\drivers\AMDPCIDev.sys
+  AmdPPM | state=Running | start=Manual | C:\Windows\system32\drivers\amdppm.sys
+  amdpsp | state=Running | start=Boot | C:\Windows\system32\drivers\amdpsp.sys
+  amdsata | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdsata.sys
+  amdsbs | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdsbs.sys
+  amdxata | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdxata.sys
+  AppID | state=Stopped | start=Manual | C:\Windows\system32\drivers\appid.sys
+  applockerfltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\applockerfltr.sys
+  AppvStrm | state=Stopped | start=Manual | C:\Windows\system32\drivers\AppvStrm.sys
+  AppvVemgr | state=Stopped | start=Manual | C:\Windows\system32\drivers\AppvVemgr.sys
+  AppvVfs | state=Stopped | start=Manual | C:\Windows\system32\drivers\AppvVfs.sys
+  arcsas | state=Stopped | start=Manual | C:\Windows\system32\drivers\arcsas.sys
+  AsyncMac | state=Stopped | start=Manual | C:\Windows\system32\drivers\asyncmac.sys
+  atapi | state=Stopped | start=Manual | C:\Windows\system32\drivers\atapi.sys
+  AudioMirror | state=Stopped | start=Manual | C:\Windows\system32\drivers\AudioMirror.sys
+  b06bdrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\bxvbda.sys
+  bam | state=Running | start=System | C:\Windows\system32\drivers\bam.sys
+  BasicDisplay | state=Running | start=System | C:\Windows\system32\DriverStore\FileRepository\basicdisplay.inf_amd64_19e58b6267591a82\BasicDisplay.sys
+  BasicRender | state=Running | start=System | C:\Windows\system32\DriverStore\FileRepository\basicrender.inf_amd64_eebb5a8467eb88ec\BasicRender.sys
+  bcmfn2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\bcmfn2.sys
+  Beep | state=Running | start=System | C:\Windows\system32\drivers\Beep.sys
+  bindflt | state=Running | start=Auto | C:\Windows\system32\drivers\bindflt.sys
+  bowser | state=Running | start=Manual | C:\Windows\system32\DRIVERS\bowser.sys
+  BthA2dp | state=Running | start=Manual | C:\Windows\system32\drivers\BthA2dp.sys
+  BthEnum | state=Running | start=Manual | C:\Windows\system32\drivers\BthEnum.sys
+  BthHFAud | state=Running | start=Manual | C:\Windows\system32\drivers\BthHfAud.sys
+  BthHFEnum | state=Running | start=Manual | C:\Windows\system32\drivers\bthhfenum.sys
+  BthLEEnum | state=Running | start=Manual | C:\Windows\system32\drivers\Microsoft.Bluetooth.Legacy.LEEnumerator.sys
+  BthMini | state=Stopped | start=Manual | C:\Windows\system32\drivers\BTHMINI.sys
+  BTHMODEM | state=Running | start=Manual | C:\Windows\system32\drivers\bthmodem.sys
+  BthPan | state=Running | start=Manual | C:\Windows\system32\drivers\bthpan.sys
+  BTHPORT | state=Running | start=Manual | C:\Windows\system32\drivers\BTHport.sys
+  BTHUSB | state=Running | start=Manual | C:\Windows\system32\drivers\BTHUSB.sys
+  bttflt | state=Stopped | start=Manual | C:\Windows\system32\drivers\bttflt.sys
+  buttonconverter | state=Stopped | start=Manual | C:\Windows\system32\drivers\buttonconverter.sys
+  CAD | state=Running | start=Manual | C:\Windows\system32\drivers\CAD.sys
+  cdfs | state=Stopped | start=Disabled | C:\Windows\system32\DRIVERS\cdfs.sys
+  cdrom | state=Running | start=System | C:\Windows\system32\drivers\cdrom.sys
+  CH341SER_A64 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\CH341S64.SYS
+  cht4iscsi | state=Stopped | start=Manual | C:\Windows\system32\drivers\cht4sx64.sys
+  cht4vbd | state=Stopped | start=Manual | C:\Windows\system32\drivers\cht4vx64.sys
+  CimFS | state=Running | start=System | C:\Windows\system32\drivers\CimFS.sys
+  circlass | state=Stopped | start=Manual | C:\Windows\system32\drivers\circlass.sys
+  CldFlt | state=Running | start=Auto | C:\Windows\system32\drivers\cldflt.sys
+  CLFS | state=Running | start=Boot | C:\Windows\system32\drivers\CLFS.sys
+  CmBatt | state=Stopped | start=Manual | C:\Windows\system32\drivers\CmBatt.sys
+  CNG | state=Running | start=Boot | C:\Windows\system32\Drivers\cng.sys
+  cnghwassist | state=Stopped | start=Disabled | C:\Windows\system32\DRIVERS\cnghwassist.sys
+  CompositeBus | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\compositebus.inf_amd64_7500cffa210c6946\CompositeBus.sys
+  condrv | state=Running | start=Manual | C:\Windows\system32\drivers\condrv.sys
+  CSC | state=Running | start=System | C:\Windows\system32\drivers\csc.sys
+  dam | state=Stopped | start=System | C:\Windows\system32\drivers\dam.sys
+  dc1-controller | state=Stopped | start=Manual | C:\Windows\system32\drivers\dc1-controller.sys
+  Dfsc | state=Running | start=System | C:\Windows\system32\Drivers\dfsc.sys
+  dg_ssudbus | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ssudbus2.sys
+  disk | state=Running | start=Boot | C:\Windows\system32\drivers\disk.sys
+  dmvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\dmvsc.sys
+  drmkaud | state=Stopped | start=Manual | C:\Windows\system32\drivers\drmkaud.sys
+  dtlitescsibus | state=Running | start=Manual | C:\Windows\system32\drivers\dtlitescsibus.sys
+  dtliteusbbus | state=Running | start=Manual | C:\Windows\system32\drivers\dtliteusbbus.sys
+  DXGKrnl | state=Running | start=System | C:\Windows\system32\drivers\dxgkrnl.sys
+  ebdrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\evbda.sys
+  EhStorClass | state=Running | start=Boot | C:\Windows\system32\drivers\EhStorClass.sys
+  EhStorTcgDrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\EhStorTcgDrv.sys
+  ErrDev | state=Stopped | start=Manual | C:\Windows\system32\drivers\errdev.sys
+  exfat | state=Stopped | start=Manual | C:\Windows\system32\drivers\exfat.sys
+  fastfat | state=Running | start=Manual | C:\Windows\system32\drivers\fastfat.sys
+  fdc | state=Stopped | start=Manual | C:\Windows\system32\drivers\fdc.sys
+  FileCrypt | state=Running | start=System | C:\Windows\system32\drivers\filecrypt.sys
+  FileInfo | state=Running | start=Boot | C:\Windows\system32\drivers\fileinfo.sys
+  Filetrace | state=Stopped | start=Manual | C:\Windows\system32\drivers\filetrace.sys
+  flpydisk | state=Stopped | start=Manual | C:\Windows\system32\drivers\flpydisk.sys
+  FltMgr | state=Running | start=Boot | C:\Windows\system32\drivers\fltmgr.sys
+  FsDepends | state=Running | start=Manual | C:\Windows\system32\drivers\FsDepends.sys
+  fvevol | state=Running | start=Boot | C:\Windows\system32\DRIVERS\fvevol.sys
+  gameflt | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\gameflt.inf_amd64_c03f7ce96acee3d6\gameflt.sys
+  gencounter | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmgencounter.sys
+  genericusbfn | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\genericusbfn.inf_amd64_53931f0ae21d6d2c\genericusbfn.sys
+  GPIOClx0101 | state=Running | start=Manual | C:\Windows\system32\Drivers\msgpioclx.sys
+  GpuEnergyDrv | state=Running | start=System | C:\Windows\system32\drivers\gpuenergydrv.sys
+  gvinput | state=Running | start=Manual | C:\Windows\system32\drivers\gvinput.sys
+  gvinputmf | state=Running | start=Manual | C:\Windows\system32\drivers\gvinputmf.sys
+  hcmon | state=Running | start=Auto | C:\Windows\system32\DRIVERS\hcmon.sys
+  HdAudAddService | state=Stopped | start=Manual | C:\Windows\system32\drivers\HdAudio.sys
+  HDAudBus | state=Running | start=Manual | C:\Windows\system32\drivers\HDAudBus.sys
+  HidBatt | state=Stopped | start=Manual | C:\Windows\system32\drivers\HidBatt.sys
+  HidBth | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidbth.sys
+  HidEventFilter | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\hideventfilter.inf_amd64_550b85a074d33f99\HidEventFilter.sys
+  HidGuardian | state=Stopped | start=Manual | C:\Windows\system32\drivers\HidGuardian.sys
+  hidi2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidi2c.sys
+  hidinterrupt | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidinterrupt.sys
+  HidIr | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidir.sys
+  hidspi | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidspi.sys
+  HidSpiCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\HidSpiCx.sys
+  HidUsb | state=Running | start=Manual | C:\Windows\system32\drivers\hidusb.sys
+  HKKbdFltr | state=Running | start=Manual | C:\Windows\system32\DRIVERS\HKKbdFltr.sys
+  HKMouFltr | state=Running | start=Manual | C:\Windows\system32\DRIVERS\HKMouFltr.sys
+  hnswfpdriver | state=Stopped | start=Manual | C:\Windows\system32\drivers\hnswfpdriver.sys
+  HpSAMD | state=Stopped | start=Manual | C:\Windows\system32\drivers\HpSAMD.sys
+  hrdevmon | state=Running | start=Boot | C:\Windows\system32\DRIVERS\hrdevmon.sys
+  hrndis6 | state=Running | start=System | C:\Windows\system32\DRIVERS\hrndis6.sys
+  hrwfpdrv | state=Running | start=Auto | C:\Windows\system32\DRIVERS\hrwfpdrv.sys
+  HTTP | state=Running | start=Manual | C:\Windows\system32\drivers\HTTP.sys
+  hvcrash | state=Stopped | start=Disabled | C:\Windows\system32\drivers\hvcrash.sys
+  hvservice | state=Running | start=Manual | C:\Windows\system32\drivers\hvservice.sys
+  hvsocketcontrol | state=Running | start=Manual | C:\Windows\system32\drivers\hvsocketcontrol.sys
+  HWiNFO_214 | state=Stopped | start=Manual | \??\C:\Users\22186\AppData\Local\Temp\HWiNFO_x64_214.sys
+  HwNClx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\mshwnclx.sys
+  hwpolicy | state=Stopped | start=Boot | C:\Windows\system32\drivers\hwpolicy.sys
+  hyperkbd | state=Stopped | start=Manual | C:\Windows\system32\drivers\hyperkbd.sys
+  HyperVideo | state=Stopped | start=Manual | C:\Windows\system32\drivers\HyperVideo.sys
+  i8042prt | state=Stopped | start=Manual | C:\Windows\system32\drivers\i8042prt.sys
+  iagpio | state=Stopped | start=Manual | C:\Windows\system32\drivers\iagpio.sys
+  iai2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\iai2c.sys
+  iaLPSS2i_GPIO2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2.sys
+  iaLPSS2i_GPIO2_BXT_P | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2_BXT_P.sys
+  iaLPSS2i_GPIO2_CNL | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2_CNL.sys
+  iaLPSS2i_GPIO2_GLK | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2_GLK.sys
+  iaLPSS2i_I2C | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C.sys
+  iaLPSS2i_I2C_BXT_P | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C_BXT_P.sys
+  iaLPSS2i_I2C_CNL | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C_CNL.sys
+  iaLPSS2i_I2C_GLK | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C_GLK.sys
+  iaLPSS2_GPIO2_CNL | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ialpss2_gpio2_cnl.inf_amd64_d920c2a844f26eba\iaLPSS2_GPIO2_CNL.sys
+  iaLPSS2_I2C_CNL | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ialpss2_i2c_cnl.inf_amd64_666eecf21665eb26\iaLPSS2_I2C_CNL.sys
+  iaLPSSi_GPIO | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSSi_GPIO.sys
+  iaLPSSi_I2C | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSSi_I2C.sys
+  iaStorAC | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaStorAC.sys
+  iaStorAVC | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaStorAVC.sys
+  iaStorV | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaStorV.sys
+  ibbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\ibbus.sys
+  ibtusb | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ibtusb.inf_amd64_4b5f2b8abc15711b\ibtusb.sys
+  igfx | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\iigd_dch.inf_amd64_23a1c1315f01c788\igdkmd64.sys
+  IndirectKmd | state=Running | start=Manual | C:\Windows\system32\drivers\IndirectKmd.sys
+  IntcAzAudAddService | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\hdxmsi.inf_amd64_359747d349df57f4\RTKVHD64.sys
+  IntcDAud | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\intcdaud.inf_amd64_658abcf72ee536fa\IntcDAud.sys
+  intelide | state=Stopped | start=Manual | C:\Windows\system32\drivers\intelide.sys
+  intelpep | state=Running | start=Boot | C:\Windows\system32\drivers\intelpep.sys
+  intelpmax | state=Stopped | start=Manual | C:\Windows\system32\drivers\intelpmax.sys
+  intelppm | state=Stopped | start=Manual | C:\Windows\system32\drivers\intelppm.sys
+  iorate | state=Running | start=Boot | C:\Windows\system32\drivers\iorate.sys
+  IpFilterDriver | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ipfltdrv.sys
+  IPMIDRV | state=Stopped | start=Manual | C:\Windows\system32\drivers\IPMIDrv.sys
+  IPNAT | state=Stopped | start=Manual | C:\Windows\system32\drivers\ipnat.sys
+  IPT | state=Stopped | start=Manual | C:\Windows\system32\drivers\ipt.sys
+  isapnp | state=Stopped | start=Manual | C:\Windows\system32\drivers\isapnp.sys
+  iScsiPrt | state=Stopped | start=Manual | C:\Windows\system32\drivers\msiscsi.sys
+  ItSas35i | state=Stopped | start=Manual | C:\Windows\system32\drivers\ItSas35i.sys
+  kbdclass | state=Running | start=Manual | C:\Windows\system32\drivers\kbdclass.sys
+  kbdhid | state=Running | start=Manual | C:\Windows\system32\drivers\kbdhid.sys
+  kbldfltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\kbldfltr.sys
+  kdnic | state=Running | start=Manual | C:\Windows\system32\drivers\kdnic.sys
+  KSecDD | state=Running | start=Boot | C:\Windows\system32\Drivers\ksecdd.sys
+  KSecPkg | state=Running | start=Boot | C:\Windows\system32\Drivers\ksecpkg.sys
+  KslD | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\KslD.sys
+  ksthunk | state=Running | start=Manual | C:\Windows\system32\drivers\ksthunk.sys
+  l2bridge | state=Stopped | start=Manual | C:\Windows\system32\drivers\l2bridge.sys
+  lltdio | state=Running | start=Auto | C:\Windows\system32\drivers\lltdio.sys
+  LSI_SAS | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sas.sys
+  LSI_SAS2i | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sas2i.sys
+  LSI_SAS3i | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sas3i.sys
+  LSI_SSS | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sss.sys
+  luafv | state=Running | start=Auto | C:\Windows\system32\drivers\luafv.sys
+  lunparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\lunparser.sys
+  lxss | state=Running | start=Boot | C:\Windows\system32\drivers\lxss.sys
+  mausbhost | state=Stopped | start=Manual | C:\Windows\system32\drivers\mausbhost.sys
+  mausbip | state=Stopped | start=Manual | C:\Windows\system32\drivers\mausbip.sys
+  MbbCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\MbbCx.sys
+  megasas | state=Stopped | start=Manual | C:\Windows\system32\drivers\megasas.sys
+  megasas2i | state=Stopped | start=Manual | C:\Windows\system32\drivers\MegaSas2i.sys
+  megasas35i | state=Stopped | start=Manual | C:\Windows\system32\drivers\megasas35i.sys
+  megasr | state=Stopped | start=Manual | C:\Windows\system32\drivers\megasr.sys
+  Microsoft_Bluetooth_AvrcpTransport | state=Running | start=Manual | C:\Windows\system32\drivers\Microsoft.Bluetooth.AvrcpTransport.sys
+  mlx4_bus | state=Stopped | start=Manual | C:\Windows\system32\drivers\mlx4_bus.sys
+  MMCSS | state=Running | start=Auto | C:\Windows\system32\drivers\mmcss.sys
+  Modem | state=Stopped | start=Manual | C:\Windows\system32\drivers\modem.sys
+  monitor | state=Running | start=Manual | C:\Windows\system32\drivers\monitor.sys
+  mouclass | state=Running | start=Manual | C:\Windows\system32\drivers\mouclass.sys
+  mouhid | state=Running | start=Manual | C:\Windows\system32\drivers\mouhid.sys
+  mountmgr | state=Running | start=Boot | C:\Windows\system32\drivers\mountmgr.sys
+  mpsdrv | state=Running | start=Manual | C:\Windows\system32\drivers\mpsdrv.sys
+  MRxDAV | state=Stopped | start=Manual | C:\Windows\system32\drivers\mrxdav.sys
+  mrxsmb | state=Running | start=Manual | C:\Windows\system32\DRIVERS\mrxsmb.sys
+  mrxsmb20 | state=Running | start=Manual | C:\Windows\system32\DRIVERS\mrxsmb20.sys
+  MsBridge | state=Stopped | start=Manual | C:\Windows\system32\drivers\bridge.sys
+  Msfs | state=Running | start=System | C:\Windows\system32\drivers\Msfs.sys
+  msgpiowin32 | state=Stopped | start=Manual | C:\Windows\system32\drivers\msgpiowin32.sys
+  mshidkmdf | state=Running | start=Manual | C:\Windows\system32\drivers\mshidkmdf.sys
+  mshidumdf | state=Running | start=Manual | C:\Windows\system32\drivers\mshidumdf.sys
+  msisadrv | state=Running | start=Boot | C:\Windows\system32\drivers\msisadrv.sys
+  MSKSSRV | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSKSSRV.sys
+  MSPCLOCK | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSPCLOCK.sys
+  MSPQM | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSPQM.sys
+  MsQuic | state=Running | start=Manual | C:\Windows\system32\drivers\msquic.sys
+  MsRPC | state=Stopped | start=Manual | C:\Windows\system32\drivers\MsRPC.sys
+  MsSecCore | state=Running | start=Boot | C:\Windows\system32\drivers\msseccore.sys
+  MsSecFlt | state=Stopped | start=Manual | C:\Windows\system32\drivers\mssecflt.sys
+  MsSecWfp | state=Stopped | start=Manual | C:\Windows\system32\drivers\mssecwfp.sys
+  mssmbios | state=Running | start=System | C:\Windows\system32\drivers\mssmbios.sys
+  MSTEE | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSTEE.sys
+  mt7612US | state=Stopped | start=Manual | C:\Windows\system32\drivers\mt7612US.sys
+  MTConfig | state=Stopped | start=Manual | C:\Windows\system32\drivers\MTConfig.sys
+  MTKBTFilterx64 | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\mtkbtfilter.inf_amd64_be5b1c784d5b96f4\mtkbtfilterx.sys
+  mtkwlex | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\mtkwl6ex.inf_amd64_e4e766c9f7adc16a\mtkwl6ex.sys
+  Mup | state=Running | start=Boot | C:\Windows\system32\Drivers\mup.sys
+  mvumis | state=Stopped | start=Manual | C:\Windows\system32\drivers\mvumis.sys
+  NativeWifiP | state=Running | start=Manual | C:\Windows\system32\DRIVERS\nwifi.sys
+  ndfltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\ndfltr.sys
+  NDIS | state=Running | start=Boot | C:\Windows\system32\drivers\ndis.sys
+  NdisCap | state=Running | start=System | C:\Windows\system32\drivers\ndiscap.sys
+  NdisImPlatform | state=Stopped | start=Manual | C:\Windows\system32\drivers\NdisImPlatform.sys
+  ndisrd | state=Running | start=System | C:\Windows\system32\DRIVERS\ndisrd.sys
+  NdisTapi | state=Running | start=Manual | C:\Windows\system32\DRIVERS\ndistapi.sys
+  Ndisuio | state=Running | start=Manual | C:\Windows\system32\drivers\ndisuio.sys
+  NdisVirtualBus | state=Running | start=Manual | C:\Windows\system32\drivers\NdisVirtualBus.sys
+  NdisWan | state=Running | start=Manual | C:\Windows\system32\drivers\ndiswan.sys
+  ndiswanlegacy | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ndiswan.sys
+  NDKPing | state=Stopped | start=Manual | C:\Windows\system32\drivers\NDKPing.sys
+  ndproxy | state=Running | start=Manual | C:\Windows\system32\DRIVERS\NDProxy.sys
+  Ndu | state=Running | start=Auto | C:\Windows\system32\drivers\Ndu.sys
+  NeSigVerify | state=Running | start=System | C:\Windows\system32\drivers\NeSigVerify.sys
+  NetAdapterCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\NetAdapterCx.sys
+  NetBIOS | state=Running | start=System | C:\Windows\system32\drivers\netbios.sys
+  NetBT | state=Running | start=System | C:\Windows\system32\DRIVERS\netbt.sys
+  Netease_UU_TAP_0921 | state=Running | start=Manual | C:\Windows\system32\drivers\Netease_UU_TAP_0921.sys
+  netfilter2wfp | state=Stopped | start=Manual | \??\C:\Users\22186\AppData\Local\QiYou\netfilter2wfp8.sys
+  netvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\netvsc.sys
+  Netwtw08 | state=Stopped | start=Manual | C:\Windows\system32\drivers\Netwtw08.sys
+  Netwtw10 | state=Stopped | start=Manual | C:\Windows\system32\drivers\Netwtw10.sys
+  npcap | state=Running | start=System | C:\Windows\system32\DRIVERS\npcap.sys
+  NPF | state=Running | start=Auto | C:\Windows\system32\drivers\npf.sys
+  Npfs | state=Running | start=System | C:\Windows\system32\drivers\Npfs.sys
+  npsvctrig | state=Running | start=System | C:\Windows\system32\drivers\npsvctrig.sys
+  nsiproxy | state=Running | start=System | C:\Windows\system32\drivers\nsiproxy.sys
+  Ntfs | state=Running | start=Manual | C:\Windows\system32\drivers\Ntfs.sys
+  Null | state=Running | start=System | C:\Windows\system32\drivers\Null.sys
+  nvdimm | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvdimm.sys
+  NVHDA | state=Running | start=Manual | C:\Windows\system32\drivers\nvhda64v.sys
+  nvlddmkm | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\nv_dispi.inf_amd64_6f3cfb7117944855\nvlddmkm.sys
+  NvModuleTracker | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\nvmoduletracker.inf_amd64_0c1cc60a4b422185\NvModuleTracker.sys
+  nvraid | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvraid.sys
+  nvrtxvad_WaveExtensible | state=Running | start=Manual | C:\Windows\system32\drivers\nvrtxvad64v.sys
+  nvstor | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvstor.sys
+  nvvad_WaveExtensible | state=Running | start=Manual | C:\Windows\system32\drivers\nvvad64v.sys
+  nvvhci | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvvhci.sys
+  P9Rdr | state=Running | start=Manual | C:\Windows\system32\drivers\p9rdr.sys
+  Parport | state=Stopped | start=Manual | C:\Windows\system32\drivers\parport.sys
+  partmgr | state=Running | start=Boot | C:\Windows\system32\drivers\partmgr.sys
+  passthruparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\passthruparser.sys
+  pci | state=Running | start=Boot | C:\Windows\system32\drivers\pci.sys
+  pciide | state=Stopped | start=Manual | C:\Windows\system32\drivers\pciide.sys
+  pcip | state=Stopped | start=Manual | C:\Windows\system32\drivers\pcip.sys
+  pcmcia | state=Stopped | start=Manual | C:\Windows\system32\drivers\pcmcia.sys
+  pcw | state=Running | start=Boot | C:\Windows\system32\drivers\pcw.sys
+  pdc | state=Running | start=Boot | C:\Windows\system32\drivers\pdc.sys
+  PEAUTH | state=Running | start=Auto | C:\Windows\system32\drivers\peauth.sys
+  percsas2i | state=Stopped | start=Manual | C:\Windows\system32\drivers\percsas2i.sys
+  percsas3i | state=Stopped | start=Manual | C:\Windows\system32\drivers\percsas3i.sys
+  PktMon | state=Stopped | start=Manual | C:\Windows\system32\drivers\PktMon.sys
+  pmem | state=Stopped | start=Manual | C:\Windows\system32\drivers\pmem.sys
+  PNPMEM | state=Stopped | start=Manual | C:\Windows\system32\drivers\pnpmem.sys
+  portcfg | state=Stopped | start=Manual | C:\Windows\system32\drivers\portcfg.sys
+  PptpMiniport | state=Running | start=Manual | C:\Windows\system32\drivers\raspptp.sys
+  Processor | state=Stopped | start=Manual | C:\Windows\system32\drivers\processr.sys
+  Psched | state=Running | start=System | C:\Windows\system32\drivers\pacer.sys
+  pvhdparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\pvhdparser.sys
+  QWAVEdrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\qwavedrv.sys
+  Ramdisk | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ramdisk.sys
+  ramparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\ramparser.sys
+  RasAcd | state=Running | start=Manual | C:\Windows\system32\DRIVERS\rasacd.sys
+  RasAgileVpn | state=Running | start=Manual | C:\Windows\system32\drivers\AgileVpn.sys
+  Rasl2tp | state=Running | start=Manual | C:\Windows\system32\drivers\rasl2tp.sys
+  RasPppoe | state=Running | start=Manual | C:\Windows\system32\DRIVERS\raspppoe.sys
+  RasSstp | state=Running | start=Manual | C:\Windows\system32\drivers\rassstp.sys
+  rdbss | state=Running | start=System | C:\Windows\system32\DRIVERS\rdbss.sys
+  rdpbus | state=Running | start=Manual | C:\Windows\system32\drivers\rdpbus.sys
+  RDPDR | state=Stopped | start=Manual | C:\Windows\system32\drivers\rdpdr.sys
+  RdpVideoMiniport | state=Stopped | start=Manual | C:\Windows\system32\drivers\rdpvideominiport.sys
+  rdyboost | state=Running | start=Boot | C:\Windows\system32\drivers\rdyboost.sys
+  ReFS | state=Stopped | start=Manual | C:\Windows\system32\drivers\ReFS.sys
+  ReFSv1 | state=Stopped | start=Manual | C:\Windows\system32\drivers\ReFSv1.sys
+  RFCOMM | state=Running | start=Manual | C:\Windows\system32\drivers\rfcomm.sys
+  rhproxy | state=Stopped | start=Manual | C:\Windows\system32\drivers\rhproxy.sys
+  RMCAST | state=Running | start=Auto | C:\Windows\system32\DRIVERS\RMCAST.sys
+  RsFx0600 | state=Stopped | start=Disabled | C:\Windows\system32\DRIVERS\RsFx0600.sys
+  rspndr | state=Running | start=Auto | C:\Windows\system32\drivers\rspndr.sys
+  rt640x64 | state=Running | start=Manual | C:\Windows\system32\drivers\rt640x64.sys
+  RTSPER | state=Stopped | start=Manual | C:\Windows\system32\drivers\RtsPer.sys
+  RvNetMP60 | state=Stopped | start=Manual | C:\Windows\system32\drivers\RvNetMP60.sys
+  s3cap | state=Stopped | start=Manual | C:\Windows\system32\drivers\vms3cap.sys
+  sbp2port | state=Stopped | start=Manual | C:\Windows\system32\drivers\sbp2port.sys
+  scfilter | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\scfilter.sys
+  scmbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\scmbus.sys
+  sdbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\sdbus.sys
+  SDFRd | state=Stopped | start=Manual | C:\Windows\system32\drivers\SDFRd.sys
+  sdstor | state=Stopped | start=Manual | C:\Windows\system32\drivers\sdstor.sys
+  SerCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\SerCx.sys
+  SerCx2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\SerCx2.sys
+  Serenum | state=Stopped | start=Manual | C:\Windows\system32\drivers\serenum.sys
+  Serial | state=Stopped | start=Manual | C:\Windows\system32\drivers\serial.sys
+  sermouse | state=Stopped | start=Manual | C:\Windows\system32\drivers\sermouse.sys
+  sfloppy | state=Stopped | start=Manual | C:\Windows\system32\drivers\sfloppy.sys
+  SiSRaid2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\SiSRaid2.sys
+  SiSRaid4 | state=Stopped | start=Manual | C:\Windows\system32\drivers\sisraid4.sys
+  SmartSAMD | state=Stopped | start=Manual | C:\Windows\system32\drivers\SmartSAMD.sys
+  smbdirect | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\smbdirect.sys
+  spacedeskAndroidUsb | state=Stopped | start=Manual | C:\Windows\system32\drivers\spacedeskDriverAndroidUsb.sys
+  spacedeskDriverAndroidControl | state=Running | start=Manual | C:\Windows\system32\drivers\spacedeskDriverAndroidControl.sys
+  spacedeskDriverAudio | state=Stopped | start=Manual | C:\Windows\system32\drivers\spacedeskDriverAudio.sys
+  spacedeskDriverBus | state=Running | start=Manual | C:\Windows\system32\drivers\spacedeskDriverBus.sys
+  spacedeskKtmInputMouse | state=Stopped | start=Manual | C:\Windows\system32\drivers\spacedeskKtmInputMouse.sys
+  spaceparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\spaceparser.sys
+  spaceport | state=Running | start=Boot | C:\Windows\system32\drivers\spaceport.sys
+  SpatialGraphFilter | state=Stopped | start=Manual | C:\Windows\system32\drivers\SpatialGraphFilter.sys
+  SpbCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\SpbCx.sys
+  srv2 | state=Running | start=Manual | C:\Windows\system32\DRIVERS\srv2.sys
+  srvnet | state=Running | start=Manual | C:\Windows\system32\DRIVERS\srvnet.sys
+  ssdevfactory | state=Running | start=Manual | C:\Windows\system32\drivers\ssdevfactory.sys
+  ssudmdm | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ssudmdm.sys
+  SteelSeries_Sonar_VAD | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\steelseries-sonar-vad.inf_amd64_036e27f3054ae1bc\SteelSeries-Sonar-VAD.sys
+  stexstor | state=Stopped | start=Manual | C:\Windows\system32\drivers\stexstor.sys
+  storahci | state=Running | start=Boot | C:\Windows\system32\drivers\storahci.sys
+  storflt | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmstorfl.sys
+  stornvme | state=Running | start=Boot | C:\Windows\system32\drivers\stornvme.sys
+  storqosflt | state=Running | start=Auto | C:\Windows\system32\drivers\storqosflt.sys
+  storufs | state=Stopped | start=Manual | C:\Windows\system32\drivers\storufs.sys
+  storvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\storvsc.sys
+  storvsp | state=Running | start=Manual | C:\Windows\system32\drivers\storvsp.sys
+  swenum | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\swenum.inf_amd64_16a14542b63c02af\swenum.sys
+  Synth3dVsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\Synth3dVsc.sys
+  Synth3dVsp | state=Running | start=Manual | C:\Windows\system32\drivers\Synth3dVsp.sys
+  sysdiag | state=Running | start=System | C:\Windows\system32\DRIVERS\sysdiag.sys
+  tap0901 | state=Running | start=Manual | C:\Windows\system32\drivers\tap0901.sys
+  Tcpip | state=Running | start=Boot | C:\Windows\system32\drivers\tcpip.sys
+  Tcpip6 | state=Stopped | start=Manual | C:\Windows\system32\drivers\tcpip.sys
+  tcpipreg | state=Running | start=Auto | C:\Windows\system32\drivers\tcpipreg.sys
+  tdx | state=Running | start=System | C:\Windows\system32\DRIVERS\tdx.sys
+  Telemetry | state=Running | start=Boot | C:\Windows\system32\drivers\IntelTA.sys
+  terminpt | state=Stopped | start=Manual | C:\Windows\system32\drivers\terminpt.sys
+  TPM | state=Running | start=Manual | C:\Windows\system32\drivers\tpm.sys
+  TsUsbFlt | state=Stopped | start=Manual | C:\Windows\system32\drivers\tsusbflt.sys
+  TsUsbGD | state=Stopped | start=Manual | C:\Windows\system32\drivers\TsUsbGD.sys
+  tsusbhub | state=Stopped | start=Manual | C:\Windows\system32\drivers\tsusbhub.sys
+  tunnel | state=Stopped | start=Manual | C:\Windows\system32\drivers\tunnel.sys
+  UASPStor | state=Stopped | start=Manual | C:\Windows\system32\drivers\uaspstor.sys
+  UcmCx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\UcmCx.sys
+  UcmTcpciCx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\UcmTcpciCx.sys
+  UcmUcsiAcpiClient | state=Stopped | start=Manual | C:\Windows\system32\drivers\UcmUcsiAcpiClient.sys
+  UcmUcsiCx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\UcmUcsiCx.sys
+  UCPD | state=Running | start=System | C:\Windows\system32\drivers\UCPD.sys
+  Ucx01000 | state=Running | start=Manual | C:\Windows\system32\drivers\ucx01000.sys
+  UdeCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\udecx.sys
+  udfs | state=Stopped | start=Disabled | C:\Windows\system32\DRIVERS\udfs.sys
+  UEFI | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\uefi.inf_amd64_c1628ffa62c8e54c\UEFI.sys
+  UevAgentDriver | state=Stopped | start=Disabled | C:\Windows\system32\drivers\UevAgentDriver.sys
+  Ufx01000 | state=Stopped | start=Manual | C:\Windows\system32\drivers\ufx01000.sys
+  UfxChipidea | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ufxchipidea.inf_amd64_1c78775fffab6a0a\UfxChipidea.sys
+  ufxsynopsys | state=Stopped | start=Manual | C:\Windows\system32\drivers\ufxsynopsys.sys
+  umbus | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\umbus.inf_amd64_b78a9c5b6fd62c27\umbus.sys
+  UmPass | state=Running | start=Manual | C:\Windows\system32\drivers\umpass.sys
+  UrsChipidea | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\urschipidea.inf_amd64_78ad1c14e33df968\urschipidea.sys
+  UrsCx01000 | state=Stopped | start=Manual | C:\Windows\system32\drivers\urscx01000.sys
+  UrsSynopsys | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\urssynopsys.inf_amd64_057fa37902020500\urssynopsys.sys
+  usbaudio | state=Running | start=Manual | C:\Windows\system32\drivers\usbaudio.sys
+  usbaudio2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbaudio2.sys
+  usbccgp | state=Running | start=Manual | C:\Windows\system32\drivers\usbccgp.sys
+  usbcir | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbcir.sys
+  usbehci | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbehci.sys
+  usbhub | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbhub.sys
+  USBHUB3 | state=Running | start=Manual | C:\Windows\system32\drivers\UsbHub3.sys
+  usbohci | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbohci.sys
+  USBPcap | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\USBPcap.sys
+  usbprint | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbprint.sys
+  usbrndis6 | state=Stopped | start=Manual | C:\Windows\system32\drivers\usb80236.sys
+  usbser | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbser.sys
+  USBSTOR | state=Stopped | start=Manual | C:\Windows\system32\drivers\USBSTOR.SYS
+  usbuhci | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbuhci.sys
+  usbvideo | state=Stopped | start=Manual | C:\Windows\system32\Drivers\usbvideo.sys
+  USBXHCI | state=Running | start=Manual | C:\Windows\system32\drivers\USBXHCI.SYS
+  vdrvroot | state=Running | start=Boot | C:\Windows\system32\drivers\vdrvroot.sys
+  VerifierExt | state=Stopped | start=Disabled | C:\Windows\system32\drivers\VerifierExt.sys
+  VfpExt | state=Running | start=System | C:\Windows\system32\drivers\vfpext.sys
+  vhdmp | state=Running | start=Manual | C:\Windows\system32\drivers\vhdmp.sys
+  vhdparser | state=Running | start=Manual | C:\Windows\system32\drivers\vhdparser.sys
+  vhf | state=Stopped | start=Manual | C:\Windows\system32\drivers\vhf.sys
+  Vid | state=Running | start=System | C:\Windows\system32\drivers\Vid.sys
+  ViGEmBus | state=Running | start=System | C:\Windows\system32\drivers\ViGEmBus.sys
+  VirtualRender | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\vrd.inf_amd64_81fbd405ff2470fc\vrd.sys
+  vjoy | state=Stopped | start=Manual | C:\Windows\system32\drivers\vjoy.sys
+  vkrnlintvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\vkrnlintvsc.sys
+  vkrnlintvsp | state=Running | start=Manual | C:\Windows\system32\drivers\vkrnlintvsp.sys
+  vmbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmbus.sys
+  VMBusHID | state=Stopped | start=Manual | C:\Windows\system32\drivers\VMBusHID.sys
+  vmbusr | state=Running | start=Manual | C:\Windows\system32\drivers\vmbusr.sys
+  vmci | state=Running | start=Boot | C:\Windows\system32\drivers\vmci.sys
+  vmgid | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmgid.sys
+  VMnetAdapter | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\vmnetadapter.sys
+  VMnetBridge | state=Running | start=Auto | C:\Windows\system32\DRIVERS\vmnetbridge.sys
+  VMnetuserif | state=Running | start=Auto | C:\Windows\system32\DRIVERS\vmnetuserif.sys
+  vmsmp | state=Running | start=Manual | C:\Windows\system32\drivers\vmswitch.sys
+  VMSNPXY | state=Running | start=Boot | C:\Windows\system32\drivers\VmsProxyHNic.sys
+  VMSNPXYMP | state=Running | start=Manual | C:\Windows\system32\drivers\VmsProxyHNic.sys
+  VMSP | state=Running | start=Auto | C:\Windows\system32\drivers\vmswitch.sys
+  VmsProxy | state=Running | start=Boot | C:\Windows\system32\drivers\VmsProxy.sys
+  VMSVSF | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmswitch.sys
+  VMSVSP | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmswitch.sys
+  vmx86 | state=Running | start=Auto | C:\Windows\system32\DRIVERS\vmx86.sys
+  volmgr | state=Running | start=Boot | C:\Windows\system32\drivers\volmgr.sys
+  volmgrx | state=Running | start=Boot | C:\Windows\system32\drivers\volmgrx.sys
+  volsnap | state=Running | start=Boot | C:\Windows\system32\drivers\volsnap.sys
+  volume | state=Running | start=Boot | C:\Windows\system32\drivers\volume.sys
+  vpci | state=Stopped | start=Manual | C:\Windows\system32\drivers\vpci.sys
+  vpcivsp | state=Running | start=Manual | C:\Windows\system32\drivers\vpcivsp.sys
+  vsmraid | state=Stopped | start=Manual | C:\Windows\system32\drivers\vsmraid.sys
+  vsock | state=Running | start=Boot | C:\Windows\system32\DRIVERS\vsock.sys
+  VSTXRAID | state=Stopped | start=Manual | C:\Windows\system32\drivers\vstxraid.sys
+  vwifibus | state=Running | start=Manual | C:\Windows\system32\drivers\vwifibus.sys
+  vwififlt | state=Running | start=System | C:\Windows\system32\drivers\vwififlt.sys
+  vwifimp | state=Running | start=Manual | C:\Windows\system32\drivers\vwifimp.sys
+  WacomPen | state=Stopped | start=Manual | C:\Windows\system32\drivers\wacompen.sys
+  wanarp | state=Running | start=Auto | C:\Windows\system32\DRIVERS\wanarp.sys
+  wanarpv6 | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\wanarp.sys
+  wcifs | state=Running | start=Auto | C:\Windows\system32\drivers\wcifs.sys
+  wcnfs | state=Stopped | start=Manual | C:\Windows\system32\drivers\wcnfs.sys
+  WdBoot | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\WdBoot.sys
+  Wdf01000 | state=Running | start=Boot | C:\Windows\system32\drivers\Wdf01000.sys
+  WdFilter | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\WdFilter.sys
+  wdiwifi | state=Running | start=Manual | C:\Windows\system32\DRIVERS\wdiwifi.sys
+  WdmCompanionFilter | state=Stopped | start=Manual | C:\Windows\system32\drivers\WdmCompanionFilter.sys
+  WdNisDrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\WdNisDrv.sys
+  WFPLWFS | state=Running | start=Boot | C:\Windows\system32\drivers\wfplwfs.sys
+  WIMMount | state=Stopped | start=Manual | C:\Windows\system32\drivers\wimmount.sys
+  WindowsTrustedRT | state=Running | start=Boot | C:\Windows\system32\drivers\WindowsTrustedRT.sys
+  WindowsTrustedRTProxy | state=Running | start=Boot | C:\Windows\system32\drivers\WindowsTrustedRTProxy.sys
+  WinMad | state=Stopped | start=Manual | C:\Windows\system32\drivers\winmad.sys
+  WinNat | state=Running | start=Manual | C:\Windows\system32\drivers\winnat.sys
+  wintun | state=Running | start=Manual | C:\Windows\system32\drivers\wintun.sys
+  WINUSB | state=Stopped | start=Manual | C:\Windows\system32\drivers\WinUsb.sys
+  WinVerbs | state=Stopped | start=Manual | C:\Windows\system32\drivers\winverbs.sys
+  WmiAcpi | state=Running | start=Manual | C:\Windows\system32\drivers\wmiacpi.sys
+  Wof | state=Running | start=Boot | C:\Windows\system32\drivers\Wof.sys
+  WOVAD | state=Running | start=Manual | C:\Windows\system32\drivers\womic.sys
+  WpdUpFltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\WpdUpFltr.sys
+  ws2ifsl | state=Running | start=System | C:\Windows\system32\drivers\ws2ifsl.sys
+  WudfPf | state=Stopped | start=Manual | C:\Windows\system32\drivers\WudfPf.sys
+  WUDFRd | state=Running | start=Manual | C:\Windows\system32\drivers\WUDFRd.sys
+  WUDFWpdFs | state=Running | start=Manual | C:\Windows\system32\drivers\WUDFRd.sys
+  WUDFWpdMtp | state=Running | start=Manual | C:\Windows\system32\drivers\WUDFRd.sys
+  xboxgip | state=Stopped | start=Manual | C:\Windows\system32\drivers\xboxgip.sys
+  xinputhid | state=Running | start=Manual | C:\Windows\system32\drivers\xinputhid.sys
+  XtuAcpiDriver | state=Stopped | start=Manual | C:\Windows\system32\drivers\XtuAcpiDriver.sys
+  XunYouFilter | state=Running | start=System | C:\Windows\system32\drivers\XunYouFilter.sys
+  xusb22 | state=Stopped | start=Manual | C:\Windows\system32\drivers\xusb22.sys
+  Xvdd | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\xvdd.inf_amd64_1e22073ba7136f03\xvdd.sys
+  zttap300 | state=Stopped | start=Manual | C:\Windows\system32\drivers\zttap300.sys
+
+=== N. RTL/Realtek + audio stack quick check ===
+  IntcAzAudAddService | Running | Manual
+  absent: RTKVHD64
+  SteelSeries_Sonar_VAD | Running | Manual
+  HdAudAddService | Stopped | Manual
+  AudioSrv | Running | Automatic
+  AudioEndpointBuilder | Running | Automatic
+
+=== O. Page file / commit at crash time context (current) ===
+TotalVisible=31.93GB Free=24.16GB CommitLimit=47.93GB
+
+=== P. MSI MS-7C94 board + BIOS + XMP-relevant info ===
+Product      : MAG B550M MORTAR MAX WIFI (MS-7C94)
+Manufacturer : Micro-Star International Co., Ltd.
+Version      : 1.0
+SerialNumber : 07C9414_O41E078311
+SMBIOSBIOSVersion : 1.M0
+ReleaseDate       : 2025/9/2 8:00:00
+Manufacturer      : American Megatrends International, LLC.
+Name                      : AMD Ryzen 7 5700X 8-Core Processor             
+MaxClockSpeed             : 3401
+NumberOfCores             : 8
+NumberOfLogicalProcessors : 16
+
+=== END ===

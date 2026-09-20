@@ -1,0 +1,164 @@
+=== 1. Where is VMware actually installed? (registry says D:\VMware Workstation17\) ===
+-- Everything search vmware --
+C:\Program Files (x86)\VMware
+C:\Program Files (x86)\Common Files\VMware
+C:\Program Files\Common Files\VMware
+C:\ProgramData\VMware
+C:\ProgramData\Microsoft\Windows\Start Menu\Programs\VMware
+C:\Users\22186\AppData\Local\VMware
+C:\Users\22186\AppData\Roaming\VMware
+C:\Windows\INF\VMware
+C:\Windows\SysWOW64\config\systemprofile\AppData\Roaming\VMware
+C:\ProgramData\VMware\VMware KVM
+C:\ProgramData\VMware\VMware Player
+C:\ProgramData\VMware\VMware USB Arbitration Service
+C:\Program Files (x86)\VMware\VMware VIX
+C:\ProgramData\VMware\VMware Workstation
+C:\Users\22186\AppData\Local\VMware\vmware-custData-3570
+C:\Users\22186\AppData\Local\VMware\vmware-custData-3A88
+C:\Users\22186\AppData\Local\VMware\vmware-custData-40DC
+C:\Users\22186\AppData\Local\VMware\vmware-download-3570
+C:\Users\22186\AppData\Local\VMware\vmware-download-3A88
+C:\Users\22186\AppData\Local\VMware\vmware-download-40DC
+C:\Users\22186\AppData\Local\Packages\Microsoft.Windows.Search_cw5n1h2txyewy\LocalState\AppIconCache\100\D__VMware Workstation17_vmnetcfg_exe
+C:\Users\Administrator\AppData\Local\Packages\Microsoft.Windows.Search_cw5n1h2txyewy\LocalState\AppIconCache\100\D__VMware Workstation17_vmnetcfg_exe
+C:\Users\22186\AppData\Local\Packages\Microsoft.Windows.Search_cw5n1h2txyewy\LocalState\AppIconCache\100\D__VMware Workstation17_vmplayer_exe
+D:\Workspace\hermes-agent\node_modules\@icons-pack\react-simple-icons\icons\SiVmware.cjs
+D:\Workspace\hermes-agent\node_modules\@icons-pack\react-simple-icons\icons\SiVmware.d.ts
+D:\Workspace\hermes-agent\node_modules\@icons-pack\react-simple-icons\icons\SiVmware.mjs
+D:\Workspace\hermes-agent\node_modules\@icons-pack\react-simple-icons\src\icons\SiVmware.tsx
+C:\ProgramData\Microsoft\Windows\Start Menu\Programs\VMware\VMware Workstation Pro.lnk
+C:\Windows\SysWOW64\config\systemprofile\AppData\Local\CrashDumps\vmware-authd.exe.5368.dmp
+C:\Windows\SysWOW64\config\systemprofile\AppData\Local\CrashDumps\vmware-authd.exe.5500.dmp
+-- vmware-vmx.exe locations --
+
+-- D: root --
+  D:\.pnpm-store  09/15/2026 01:11:17
+  D:\工具  09/15/2026 22:40:07
+  D:\工作  04/19/2026 23:41:31
+  D:\软考资料  03/02/2024 19:12:02
+  D:\素材  08/09/2026 16:58:51
+  D:\迅雷下载  07/16/2024 06:45:53
+  D:\知识库  07/16/2026 00:05:48
+  D:\AI  09/12/2026 12:05:32
+  D:\anaconda3  06/29/2026 09:32:16
+  D:\Backup  07/19/2026 21:06:46
+  D:\Cache  08/13/2026 11:46:48
+  D:\chengxu  05/08/2026 09:44:22
+  D:\cobject  05/04/2024 15:54:03
+  D:\Codex++  07/04/2026 21:15:23
+  D:\Deep_learning  03/09/2024 02:29:29
+  D:\GoLand 2023.2.6  03/14/2024 17:18:58
+  D:\goobject  06/29/2026 15:41:02
+  D:\Graphviz  06/29/2026 16:37:49
+  D:\IntelliJ IDEA 2023.2.6  03/14/2024 17:19:24
+  D:\javaobject  03/14/2024 17:44:02
+  D:\jetbra  09/14/2023 20:03:07
+  D:\Navicat Premium 16  05/04/2024 17:34:22
+  D:\Obsidian  06/29/2026 16:38:07
+  D:\OllamaModels  08/25/2026 20:58:19
+  D:\PostgreSQL  06/29/2026 17:12:48
+  D:\PyCharm 2023.2.6  03/08/2024 18:46:53
+  D:\pythonobject  05/24/2024 20:14:58
+  D:\QiYou  10/11/2025 17:25:31
+  D:\terminal  05/07/2026 17:59:51
+  D:\tmp  09/20/2026 11:10:30
+  D:\vsproject  06/16/2026 12:27:29
+  D:\vueSpace  07/19/2026 21:27:52
+  D:\workbuddy  09/12/2026 10:10:44
+  D:\workbuddy ai  09/15/2026 03:54:04
+  D:\Workspace  09/15/2026 19:38:30
+  D:\wsl  05/09/2026 11:52:30
+  D:\简历.docx  02/09/2024 21:54:19
+
+=== 2. VMware service binaries + real ImagePath (what actually loads) ===
+  vmx86 | Start=2 Type=1 | ImagePath=\SystemRoot\system32\DRIVERS\vmx86.sys
+  hcmon | Start=2 Type=1 | ImagePath=\SystemRoot\system32\DRIVERS\hcmon.sys
+  vmci | Start=0 Type=1 | ImagePath=System32\drivers\vmci.sys
+  vsock | Start=0 Type=1 | ImagePath=system32\DRIVERS\vsock.sys
+  VMnetBridge | Start=2 Type=1 | ImagePath=\SystemRoot\system32\DRIVERS\vmnetbridge.sys
+  VMnetuserif | Start=2 Type=1 | ImagePath=\SystemRoot\system32\DRIVERS\vmnetuserif.sys
+  VMnetAdapter | Start=3 Type=1 | ImagePath=\SystemRoot\system32\DRIVERS\vmnetadapter.sys
+  VMware NAT Service | Start=3 Type=16 | ImagePath=C:\Windows\SysWOW64\vmnat.exe
+  VMnetDHCP | Start=3 Type=16 | ImagePath=C:\Windows\SysWOW64\vmnetdhcp.exe
+  VMAuthdService : KEY ABSENT
+-- actual file dates/versions of loaded VMware drivers --
+  vmx86.sys | v16.0.0.23 | VMware, Inc. | 11/16/2022 01:10:10 | 99768
+  hcmon.sys | v8.11.11.0 | VMware, Inc. | 09/07/2022 09:13:42 | 84480
+  vmci.sys | v9.8.18.0 | VMware, Inc. | 07/03/2022 18:47:16 | 104888
+  vsock.sys | v9.8.19.0 | VMware, Inc. | 07/03/2022 18:47:16 | 88976
+  vmnetbridge.sys | v14.0.0.5 | VMware, Inc. | 11/16/2022 01:15:14 | 67072
+  vmnetuserif.sys | v14.0.0.5 | VMware, Inc. | 11/16/2022 01:15:14 | 44544
+  vmnetadapter.sys | v14.0.0.5 | VMware, Inc. | 11/16/2022 01:15:14 | 46576
+  vnetWfp.sys : absent
+
+=== 3. MSI Afterburner / RTSS / overclocking tools (aggressive OC = hypervisor instability) ===
+  C:\Program Files (x86)\MSI Afterburner exists=False
+  C:\Program Files\RivaTuner Statistics Server exists=False
+  C:\Program Files\AMD\CNext\CNext exists=False
+  C:\Program Files\AMD exists=True
+  DRV amdgpio2 | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\amdgpio2.inf_amd64_487ee5525dcee517\amdgpio2.sys
+  DRV amdgpio3 | state=Running | start=Manual | C:\Windows\system32\drivers\amdgpio3.sys
+  DRV amdi2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdi2c.sys
+  DRV AmdK8 | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdk8.sys
+  DRV AMDPCIDev | state=Running | start=Manual | C:\Windows\system32\drivers\AMDPCIDev.sys
+  DRV AmdPPM | state=Running | start=Manual | C:\Windows\system32\drivers\amdppm.sys
+  DRV amdpsp | state=Running | start=Boot | C:\Windows\system32\drivers\amdpsp.sys
+  DRV amdsata | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdsata.sys
+  DRV amdsbs | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdsbs.sys
+  DRV amdxata | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdxata.sys
+  DRV HpSAMD | state=Stopped | start=Manual | C:\Windows\system32\drivers\HpSAMD.sys
+  DRV Ramdisk | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ramdisk.sys
+  DRV SmartSAMD | state=Stopped | start=Manual | C:\Windows\system32\drivers\SmartSAMD.sys
+
+=== 4. Update history detail: when did KB5126256 land vs the 09:43 boot ===
+  KB5126256 | InstalledOn=09/20/2026 00:00:00 | Security Update | by=NT AUTHORITY\SYSTEM
+  KB5071959 | InstalledOn=05/14/2026 00:00:00 | Security Update | by=NT AUTHORITY\SYSTEM
+  KB5071982 | InstalledOn=05/09/2026 00:00:00 | Security Update | by=NT AUTHORITY\SYSTEM
+  KB5072653 | InstalledOn=11/23/2025 00:00:00 | Security Update | by=NT AUTHORITY\SYSTEM
+  KB5066130 | InstalledOn=10/16/2025 00:00:00 | Update | by=NT AUTHORITY\SYSTEM
+  KB5066790 | InstalledOn=10/16/2025 00:00:00 | Security Update | by=NT AUTHORITY\SYSTEM
+-- CBS / WindowsUpdate events around 09-20 09:00-10:00 --
+  09-20 09:45:50 id=19 | 安装成功: Windows 成功安装了下列更新: 2026-09 适用于 Windows 10 Version 22H2 的扩展安全更新 (ESU) 许可准备程序包，适合基于 x64 的系统 (KB5126256)
+-- Kernel-PnP / driver install events 09-20 09:00-10:00 (new drivers?) --
+  09:43:32 id=219 | 为设备 USB\VID_2717&PID_FF48&MI_00\7&343f9132&0&0000 加载驱动程序 \Driver\WudfRd 失败。
+  09:43:23 id=219 | 为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+
+=== 5. Was the 09-14->09-20 period really one continuous uptime? ===
+-- Kernel-Power 109 (shutdown init) + 41 all retained --
+  09-20 17:21:25 id=109 | 内核电源管理器已启动关机转换。  关机原因: Kernel API
+  09-20 17:18:11 id=41 | 系统已在未先正常关机的情况下重新启动。如果系统停止响应、发生崩溃或意外断电，则可能会导致此错误。
+  09-20 13:32:10 id=41 | 系统已在未先正常关机的情况下重新启动。如果系统停止响应、发生崩溃或意外断电，则可能会导致此错误。
+  09-20 09:43:03 id=109 | 内核电源管理器已启动关机转换。  关机原因: Kernel API
+  09-14 00:20:35 id=109 | 内核电源管理器已启动关机转换。  关机原因: Kernel API
+-- Kernel-General 13 (OS shutting down) all retained --
+  09-20 17:21:26 | 操作系统将在系统时间 ‎2026‎-‎09‎-‎20T09:21:26.334758700Z 关闭。
+  09-20 09:43:04 | 操作系统将在系统时间 ‎2026‎-‎09‎-‎20T01:43:04.170182900Z 关闭。
+  09-14 00:20:36 | 操作系统将在系统时间 ‎2026‎-‎09‎-‎13T16:20:36.508522400Z 关闭。
+
+=== 6. Critical: minidump readability re-confirm + archive the file hash attempt ===
+exists=True
+  092026-16046-01.dmp 4270176 09/20/2026 17:18:19
+IsElevated = False
+
+=== 7. Safe Mode / boot config (bcdedit) ===
+无法打开启动配置数据存储。
+拒绝访问。
+
+=== 8. Windows GameInput / GameViewer virtual display (Xvdd) identity ===
+  gameflt | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\gameflt.inf_amd64_c03f7ce96acee3d6\gameflt.sys
+  gvinput | state=Running | start=Manual | C:\Windows\system32\drivers\gvinput.sys
+  gvinputmf | state=Running | start=Manual | C:\Windows\system32\drivers\gvinputmf.sys
+  VirtualRender | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\vrd.inf_amd64_81fbd405ff2470fc\vrd.sys
+  Xvdd | state=Running | start=Manual | C:\Windows\system32\DriverStore\FileRepository\xvdd.inf_amd64_1e22073ba7136f03\xvdd.sys
+  VC: GameViewer Virtual Display Adapter | 15.6.5.199 | ROOT\DISPLAY\0000
+  VC: NVIDIA GeForce RTX 5060 Ti | 32.0.16.1062 | PCI\VEN_10DE&DEV_2D04&SUBSYS_205E1771&REV_A1\EA1C7074242DB04800
+
+=== 9. Reliability Monitor: unexpected-shutdown 'bugcode 0' at 13:12 — any preceding hang? ===
+-- System log 13:05:00-13:13:00 (right before first crash) --
+  13:09:03.211 id=1014 Microsoft-Windows-DNS-Client | 在没有配置的 DNS 服务器响应之后，名称 dns.msftncsi.com 的名称解析超时。
+  13:06:44.718 id=1014 Microsoft-Windows-DNS-Client | 在没有配置的 DNS 服务器响应之后，名称 dns.msftncsi.com 的名称解析超时。
+-- Application log 13:05:00-13:13:00 --
+  13:06:47.087 id=16384 Microsoft-Windows-Security-SPP | 安排软件保护服务在 2026-11-27T18:47:22Z 时重新启动成功。原因: RulesEngine。
+
+=== END ===

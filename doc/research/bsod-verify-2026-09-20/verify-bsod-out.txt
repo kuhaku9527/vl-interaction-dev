@@ -1,0 +1,558 @@
+=== 1. HOST / OS ===
+Hostname : DESKTOP-NT9P61P
+OS       : Microsoft Windows 10 专业版 | Build 19045 | LastBoot 09/20/2026 17:21:41
+UptimeHrs: 0.52
+HypervisorPresent: True | Model=MS-7C94 | Mfr=Micro-Star International Co., Ltd.
+
+=== 2. EVENT LOG RETAINED SPAN ===
+System : oldest=09/12/2026 21:06:09  newest=09/20/2026 17:52:14
+Application : oldest=09/12/2026 22:08:57  newest=09/20/2026 17:49:56
+
+=== 3. ALL BUGCHECK REPORTS (WER-SystemErrorReporting 1001) in retained System log ===
+COUNT = 1
+2026-09-20 17:18:25.852 | 计算机已经从检测错误后重新启动。检测错误: 0x00020001 (0x0000000000000026, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000)。已将转储的数据保存在: C:\Windows\Minidump\092026-16046-01.dmp。报告 ID: 9b19323d-671a-4657-abfe-868ff2b713ac。
+
+=== 4. Kernel-Power 41 (unexpected shutdown) - ALL retained ===
+2026-09-20 17:18:11 | BC=131073 P1=0x26 P2=0x0 P3=0x0 P4=0x0 PwrBtn=0
+2026-09-20 13:32:10 | BC=0 P1=0x0 P2=0x0 P3=0x0 P4=0x0 PwrBtn=0
+
+=== 5. Event 6008 unexpected-shutdown records - ALL retained ===
+2026-09-20 17:18:24 | 上一次系统的 下午5:11:24 在 ‎20/‎9/‎2026 上的关闭是意外的。
+2026-09-20 13:32:22 | 上一次系统的 下午1:12:52 在 ‎20/‎9/‎2026 上的关闭是意外的。
+
+=== 6. BOOT MARKERS (Kernel-General 12) - ALL retained ===
+2026-09-20 17:21:42 | 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T09:21:41.500000000Z 启动。
+2026-09-20 17:18:09 | 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T09:18:08.500000000Z 启动。
+2026-09-20 13:32:06 | 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T05:32:05.500000000Z 启动。
+2026-09-20 09:43:21 | 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T01:43:20.500000000Z 启动。
+2026-09-14 07:22:59 | 操作系统已在系统时间 ‎2026‎-‎09‎-‎13T23:22:58.500000000Z 启动。
+
+=== 7. AUDIODG CRASH CENSUS (Application id=1000, WHOLE retained log) ===
+total Application id=1000 events = 795
+AUDIODG subset = 776
+FIRST = 2026-09-20 13:47:31.861
+LAST  = 2026-09-20 17:11:38.572
+-- per-minute histogram (whole log) --
+  09-20 13:47  x1
+  09-20 14:00  x60
+  09-20 15:36  x1
+  09-20 15:41  x2
+  09-20 15:43  x1
+  09-20 16:45  x1
+  09-20 16:46  x1
+  09-20 16:49  x1
+  09-20 16:52  x1
+  09-20 16:54  x1
+  09-20 17:02  x35
+  09-20 17:03  x72
+  09-20 17:04  x81
+  09-20 17:05  x80
+  09-20 17:06  x77
+  09-20 17:07  x80
+  09-20 17:08  x82
+  09-20 17:09  x73
+  09-20 17:10  x75
+  09-20 17:11  x51
+-- crash module census --
+  dtstech64.dll x776
+
+=== 8. AUDIODG crashes AFTER the reboot (post 17:18:09) ===
+post-reboot AUDIODG id=1000 count = 0
+
+=== 9. 7026 failed-load driver lists, EVERY boot (compare crash vs non-crash boots) ===
+2026-09-20 17:22:01 | 以下引导启动或系统启动驱动程序未加载:  bootsafe dam e kavbootc klim6
+2026-09-20 17:18:30 | 以下引导启动或系统启动驱动程序未加载:  bootsafe dam e kavbootc klim6
+2026-09-20 13:32:27 | 以下引导启动或系统启动驱动程序未加载:  bootsafe dam e kavbootc klim6
+2026-09-20 09:43:43 | 以下引导启动或系统启动驱动程序未加载:  bootsafe dam e kavbootc klim6
+2026-09-14 07:23:21 | 以下引导启动或系统启动驱动程序未加载:  bootsafe dam e kavbootc klim6
+
+=== 10. Suspect driver files present? + vendor identity ===
+dtsapo64.dll : NOT in System32\drivers
+dtstech64.dll : NOT in System32\drivers
+hrdevmon.sys | Beijing Huorong Network Technology Co., Ltd. | Huorong Internet Security Device Monitor | v6.0.0.0 | 05/13/2026 15:30:35
+sysdiag.sys | Beijing Huorong Network Technology Co., Ltd. | System Diagnosis Toolkit | v6.0.0.3 | 09/20/2026 09:48:46
+gameflt.sys : NOT in System32\drivers
+hcmon.sys | VMware, Inc. | VMware USB monitor | v8.11.11.0 | 09/07/2022 09:13:42
+vmx86.sys | VMware, Inc. | VMware kernel driver | v16.0.0.23 | 11/16/2022 01:10:10
+vmnetbridge.sys | VMware, Inc. | VMware bridge driver (64-bit) | v14.0.0.5 | 11/16/2022 01:15:14
+vmnetuserif.sys | VMware, Inc. | VMware network application interface driver (64-bit) | v14.0.0.5 | 11/16/2022 01:15:14
+bootsafe.sys : NOT in System32\drivers
+kavbootc.sys : NOT in System32\drivers
+klim6.sys : NOT in System32\drivers
+klif.sys : NOT in System32\drivers
+dam.sys | Microsoft Corporation | DAM Kernel Driver | v10.0.19041.5553 (WinBuild.160101.0800) | 03/12/2025 10:36:01
+e.sys : NOT in System32\drivers
+nvlddmkm.sys : NOT in System32\drivers
+SteelSeries-Sonar-VAD.sys : NOT in System32\drivers
+VfpExt.sys | Microsoft Corporation | Microsoft Azure VFP Extension | v10.0.19041.4466 (WinBuild.160101.0800) | 10/07/2025 22:27:07
+
+=== 11. Registry Start/Type for the 7026 drivers (dangling service entries?) ===
+bootsafe : Start=1 Type=1 ErrorControl=1 ImagePath=system32\drivers\bootsafe64_ev.sys
+dam : Start=1 Type=1 ErrorControl=1 ImagePath=system32\drivers\dam.sys
+e : Start=1 Type=1 ErrorControl=1 ImagePath=E
+kavbootc : Start=0 Type=1 ErrorControl=1 ImagePath=system32\drivers\kavbootc64.sys
+klim6 : Start=1 Type=1 ErrorControl=1 ImagePath=\SystemRoot\system32\DRIVERS\klim6.sys
+
+=== 12. MEMORY POPULATION (channel balance / part-number mixing) ===
+P0 CHANNEL A | DIMM 0 | 16GB | 3200MHz | cfg=3200 | Unknown | S16G3200TCSBGHC18    | SN=384CD781
+P0 CHANNEL A | DIMM 1 | 8GB | 3200MHz | cfg=3200 | Unknown | UCC418B C3600/8G     | SN=00000000
+P0 CHANNEL B | DIMM 1 | 8GB | 3200MHz | cfg=3200 | Unknown | UCC418B C3600/8G     | SN=00000000
+Array: slots=4 maxcap=128GB
+
+=== 13. VBS / HVCI state ===
+
+HVCI scenario: WasEnabledBy       : 2
+Enabled            : 1
+ChangedInBootCycle : 134226131965000000
+PSPath             : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity
+PSParentPath       : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios
+PSChildName        : HypervisorEnforcedCodeIntegrity
+PSDrive            : HKLM
+PSProvider         : Microsoft.PowerShell.Core\Registry
+Win32_DeviceGuard: AvailableSecurityProperties                  : {1, 2, 3, 5…}
+CodeIntegrityPolicyEnforcementStatus         : 2
+InstanceIdentifier                           : 4ff40742-2649-41b8-bdd1-e80fad1cce80
+RequiredSecurityProperties                   : {0}
+SecurityServicesConfigured                   : {2}
+SecurityServicesRunning                      : {2}
+UsermodeCodeIntegrityPolicyEnforcementStatus : 0
+Version                                      : 1.0
+VirtualizationBasedSecurityStatus            : 2
+VirtualMachineIsolation                      : False
+VirtualMachineIsolationProperties            : {0}
+PSComputerName                               :
+
+=== 14. HYPERVISOR / SECURE KERNEL BOOT EVENTS (all retained) ===
+09-20 17:21:42 id=165 | Hypervisor configured mitigations for CVE-2019-11091, CVE-2018-12126, CVE-2018-12127, CVE-2018-12130 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports microarchi
+09-20 17:21:42 id=156 | Hypervisor configured mitigations for CVE-2018-3646 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports cache flush: false HyperThreading enabled: true Parent hype
+09-20 17:21:42 id=129 | Hypervisor initialized I/O remapping.  Hardware present: true Hardware enabled: true Policy: 0x0 Enabled features: 0x4A Internal information: 0x0 Problems: 0x0 Additional information: 0x0
+09-20 17:21:42 id=2 | Hypervisor scheduler type is 0x4.
+09-20 17:21:42 id=1 | Hypervisor successfully started.
+09-20 17:18:09 id=165 | Hypervisor configured mitigations for CVE-2019-11091, CVE-2018-12126, CVE-2018-12127, CVE-2018-12130 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports microarchi
+09-20 17:18:09 id=156 | Hypervisor configured mitigations for CVE-2018-3646 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports cache flush: false HyperThreading enabled: true Parent hype
+09-20 17:18:09 id=129 | Hypervisor initialized I/O remapping.  Hardware present: true Hardware enabled: true Policy: 0x0 Enabled features: 0x4A Internal information: 0x0 Problems: 0x0 Additional information: 0x0
+09-20 17:18:09 id=2 | Hypervisor scheduler type is 0x4.
+09-20 17:18:09 id=1 | Hypervisor successfully started.
+09-20 13:32:06 id=165 | Hypervisor configured mitigations for CVE-2019-11091, CVE-2018-12126, CVE-2018-12127, CVE-2018-12130 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports microarchi
+09-20 13:32:06 id=156 | Hypervisor configured mitigations for CVE-2018-3646 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports cache flush: false HyperThreading enabled: true Parent hype
+09-20 13:32:06 id=129 | Hypervisor initialized I/O remapping.  Hardware present: true Hardware enabled: true Policy: 0x0 Enabled features: 0x4A Internal information: 0x0 Problems: 0x0 Additional information: 0x0
+09-20 13:32:06 id=2 | Hypervisor scheduler type is 0x4.
+09-20 13:32:06 id=1 | Hypervisor successfully started.
+09-20 09:43:21 id=165 | Hypervisor configured mitigations for CVE-2019-11091, CVE-2018-12126, CVE-2018-12127, CVE-2018-12130 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports microarchi
+09-20 09:43:21 id=156 | Hypervisor configured mitigations for CVE-2018-3646 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports cache flush: false HyperThreading enabled: true Parent hype
+09-20 09:43:21 id=129 | Hypervisor initialized I/O remapping.  Hardware present: true Hardware enabled: true Policy: 0x0 Enabled features: 0x4A Internal information: 0x0 Problems: 0x0 Additional information: 0x0
+09-20 09:43:21 id=2 | Hypervisor scheduler type is 0x4.
+09-20 09:43:21 id=1 | Hypervisor successfully started.
+09-14 07:22:59 id=165 | Hypervisor configured mitigations for CVE-2019-11091, CVE-2018-12126, CVE-2018-12127, CVE-2018-12130 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports microarchi
+09-14 07:22:59 id=156 | Hypervisor configured mitigations for CVE-2018-3646 for virtual machines.  Processor not affected: false Processor family not affected: false Processor supports cache flush: false HyperThreading enabled: true Parent hype
+09-14 07:22:59 id=129 | Hypervisor initialized I/O remapping.  Hardware present: true Hardware enabled: true Policy: 0x0 Enabled features: 0x4A Internal information: 0x0 Problems: 0x0 Additional information: 0x0
+09-14 07:22:59 id=2 | Hypervisor scheduler type is 0x4.
+09-14 07:22:59 id=1 | Hypervisor successfully started.
+09-20 17:21:56 ISOLATED id=1 | Secure Trustlet \??\C:\Windows\system32\lsaiso.exe Id 1 and Pid 1152 started with status STATUS_SUCCESS.
+09-20 17:21:56 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 17:21:42 ISOLATED id=3 | Secure Kernel started with status STATUS_SUCCESS and flags HvciEnabled,HvciStrictMode.
+09-20 17:18:24 ISOLATED id=1 | Secure Trustlet \??\C:\Windows\system32\lsaiso.exe Id 1 and Pid 1172 started with status STATUS_SUCCESS.
+09-20 17:18:24 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 17:18:09 ISOLATED id=3 | Secure Kernel started with status STATUS_SUCCESS and flags HvciEnabled,HvciStrictMode.
+09-20 16:19:20 ISOLATED id=2 | Secure Trustlet Id 0 and Pid 0 stopped with status STATUS_SUCCESS.
+09-20 15:36:57 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 15:36:07 ISOLATED id=2 | Secure Trustlet Id 0 and Pid 0 stopped with status STATUS_SUCCESS.
+09-20 15:36:03 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 14:43:11 ISOLATED id=2 | Secure Trustlet Id 0 and Pid 0 stopped with status STATUS_SUCCESS.
+09-20 14:39:03 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 14:17:38 ISOLATED id=2 | Secure Trustlet Id 0 and Pid 0 stopped with status STATUS_SUCCESS.
+09-20 14:14:37 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 13:32:21 ISOLATED id=1 | Secure Trustlet \??\C:\Windows\system32\lsaiso.exe Id 1 and Pid 1144 started with status STATUS_SUCCESS.
+09-20 13:32:21 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 13:32:06 ISOLATED id=3 | Secure Kernel started with status STATUS_SUCCESS and flags HvciEnabled,HvciStrictMode.
+09-20 09:43:38 ISOLATED id=1 | Secure Trustlet \??\C:\Windows\system32\lsaiso.exe Id 1 and Pid 1164 started with status STATUS_SUCCESS.
+09-20 09:43:38 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-20 09:43:21 ISOLATED id=3 | Secure Kernel started with status STATUS_SUCCESS and flags HvciEnabled,HvciStrictMode.
+09-17 16:55:31 ISOLATED id=2 | Secure Trustlet Id 0 and Pid 0 stopped with status STATUS_SUCCESS.
+09-17 16:54:43 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-15 00:04:55 ISOLATED id=2 | Secure Trustlet Id 0 and Pid 0 stopped with status STATUS_SUCCESS.
+09-15 00:04:19 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-14 07:23:14 ISOLATED id=1 | Secure Trustlet \??\C:\Windows\system32\lsaiso.exe Id 1 and Pid 1152 started with status STATUS_SUCCESS.
+09-14 07:23:14 ISOLATED id=5 | Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+09-14 07:22:59 ISOLATED id=3 | Secure Kernel started with status STATUS_SUCCESS and flags HvciEnabled,HvciStrictMode.
+
+=== 15. WHEA HARDWARE ERRORS (all retained) ===
+WHEA count = 0
+
+=== 16. PRE-CRASH WINDOW #2 : ALL System events 17:00:00 - 17:12:00 (09-20) ===
+17:01:19.187 id=10016 Microsoft-Windows-DistributedCOM | 应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 DESKTOP-NT9P61P\22186 SID (S-1-5-21-2001291667-2943734438-584985882-1001)授予针对 CLSID 为  {2593
+
+=== 17. PRE-CRASH WINDOW #1 : ALL System events 12:55:00 - 13:15:00 (09-20) ===
+13:09:03.211 id=1014 Microsoft-Windows-DNS-Client | 在没有配置的 DNS 服务器响应之后，名称 dns.msftncsi.com 的名称解析超时。
+13:06:44.718 id=1014 Microsoft-Windows-DNS-Client | 在没有配置的 DNS 服务器响应之后，名称 dns.msftncsi.com 的名称解析超时。
+13:04:00.161 id=1014 Microsoft-Windows-DNS-Client | 在没有配置的 DNS 服务器响应之后，名称 client.wns.windows.com 的名称解析超时。
+
+=== 18. ALL System events on 09-20 grouped by hour (density map) ===
+  09:00  x308
+  10:00  x9
+  11:00  x7
+  12:00  x15
+  13:00  x213
+  14:00  x11
+  15:00  x24
+  16:00  x25
+  17:00  x354
+
+=== 19. THERMAL / POWER-TRANSITION / IDLE events last 2 days ===
+09-20 17:21:25 Microsoft-Windows-Kernel-Power id=109 | 内核电源管理器已启动关机转换。  关机原因: Kernel API
+09-20 09:43:03 Microsoft-Windows-Kernel-Power id=109 | 内核电源管理器已启动关机转换。  关机原因: Kernel API
+09-19 23:40:46 Microsoft-Windows-Kernel-Power id=107 | 系统已从睡眠状态恢复。
+09-19 23:40:42 Microsoft-Windows-Kernel-Power id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-19 23:40:39 Microsoft-Windows-Kernel-Power id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-19 00:25:27 Microsoft-Windows-Kernel-Power id=107 | 系统已从睡眠状态恢复。
+09-19 00:25:24 Microsoft-Windows-Kernel-Power id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-19 00:25:20 Microsoft-Windows-Kernel-Power id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+
+=== 20. VMware / hcmon / VMnet / VmSwitch events last 2 days ===
+09-20 17:21:59 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:21:59 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:21:59 vmx86 id=34 | 
+09-20 17:21:58 VMnetuserif id=1 | () Starting up the User Interface Driver for VMware Virtual Networks.
+09-20 17:21:58 VMnetBridge id=10 | () Starting up the Bridge Driver for VMware Virtual Networks.
+09-20 17:18:28 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:18:28 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 17:18:28 vmx86 id=34 | 
+09-20 17:18:26 VMnetuserif id=1 | () Starting up the User Interface Driver for VMware Virtual Networks.
+09-20 17:18:26 VMnetBridge id=10 | () Starting up the Bridge Driver for VMware Virtual Networks.
+09-20 13:32:24 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 13:32:24 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 13:32:24 vmx86 id=34 | 
+09-20 13:32:24 VMnetuserif id=1 | () Starting up the User Interface Driver for VMware Virtual Networks.
+09-20 13:32:24 VMnetBridge id=10 | () Starting up the Bridge Driver for VMware Virtual Networks.
+09-20 09:43:41 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 09:43:41 hcmon id=0 | Detected unrecognized USB driver (\Driver\hrdevmon).
+09-20 09:43:41 vmx86 id=34 | 
+09-20 09:43:41 VMnetuserif id=1 | () Starting up the User Interface Driver for VMware Virtual Networks.
+09-20 09:43:41 VMnetBridge id=10 | () Starting up the Bridge Driver for VMware Virtual Networks.
+
+=== 21. Non-running boot/system/auto kernel drivers right now ===
+  1394ohci | state=Stopped | start=Manual | C:\Windows\system32\drivers\1394ohci.sys
+  3ware | state=Stopped | start=Manual | C:\Windows\system32\drivers\3ware.sys
+  ACE-BASE | state=Stopped | start=Manual | \??\C:\Windows\system32\drivers\ACE-BASE.sys
+  AcpiBridge | state=Stopped | start=Manual | C:\Windows\system32\drivers\AcpiBridge.sys
+  AcpiDev | state=Stopped | start=Manual | C:\Windows\system32\drivers\AcpiDev.sys
+  acpipagr | state=Stopped | start=Manual | C:\Windows\system32\drivers\acpipagr.sys
+  AcpiPmi | state=Stopped | start=Manual | C:\Windows\system32\drivers\acpipmi.sys
+  acpitime | state=Stopped | start=Manual | C:\Windows\system32\drivers\acpitime.sys
+  Acx01000 | state=Stopped | start=Manual | C:\Windows\system32\drivers\Acx01000.sys
+  ADP80XX | state=Stopped | start=Manual | C:\Windows\system32\drivers\ADP80XX.SYS
+  amdi2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdi2c.sys
+  AmdK8 | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdk8.sys
+  amdsata | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdsata.sys
+  amdsbs | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdsbs.sys
+  amdxata | state=Stopped | start=Manual | C:\Windows\system32\drivers\amdxata.sys
+  ampa | state=Stopped | start=Manual | \??\C:\Windows\system32\ampa.sys
+  AppID | state=Stopped | start=Manual | C:\Windows\system32\drivers\appid.sys
+  applockerfltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\applockerfltr.sys
+  AppvStrm | state=Stopped | start=Manual | C:\Windows\system32\drivers\AppvStrm.sys
+  AppvVemgr | state=Stopped | start=Manual | C:\Windows\system32\drivers\AppvVemgr.sys
+  AppvVfs | state=Stopped | start=Manual | C:\Windows\system32\drivers\AppvVfs.sys
+  arcsas | state=Stopped | start=Manual | C:\Windows\system32\drivers\arcsas.sys
+  AsyncMac | state=Stopped | start=Manual | C:\Windows\system32\drivers\asyncmac.sys
+  atapi | state=Stopped | start=Manual | C:\Windows\system32\drivers\atapi.sys
+  AudioMirror | state=Stopped | start=Manual | C:\Windows\system32\drivers\AudioMirror.sys
+  b06bdrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\bxvbda.sys
+  bcmfn2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\bcmfn2.sys
+  BthMini | state=Stopped | start=Manual | C:\Windows\system32\drivers\BTHMINI.sys
+  bttflt | state=Stopped | start=Manual | C:\Windows\system32\drivers\bttflt.sys
+  buttonconverter | state=Stopped | start=Manual | C:\Windows\system32\drivers\buttonconverter.sys
+  CH341SER_A64 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\CH341S64.SYS
+  cht4iscsi | state=Stopped | start=Manual | C:\Windows\system32\drivers\cht4sx64.sys
+  cht4vbd | state=Stopped | start=Manual | C:\Windows\system32\drivers\cht4vx64.sys
+  circlass | state=Stopped | start=Manual | C:\Windows\system32\drivers\circlass.sys
+  CmBatt | state=Stopped | start=Manual | C:\Windows\system32\drivers\CmBatt.sys
+  dam | state=Stopped | start=System | C:\Windows\system32\drivers\dam.sys
+  dc1-controller | state=Stopped | start=Manual | C:\Windows\system32\drivers\dc1-controller.sys
+  dg_ssudbus | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ssudbus2.sys
+  dmvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\dmvsc.sys
+  drmkaud | state=Stopped | start=Manual | C:\Windows\system32\drivers\drmkaud.sys
+  ebdrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\evbda.sys
+  EhStorTcgDrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\EhStorTcgDrv.sys
+  ErrDev | state=Stopped | start=Manual | C:\Windows\system32\drivers\errdev.sys
+  exfat | state=Stopped | start=Manual | C:\Windows\system32\drivers\exfat.sys
+  fdc | state=Stopped | start=Manual | C:\Windows\system32\drivers\fdc.sys
+  Filetrace | state=Stopped | start=Manual | C:\Windows\system32\drivers\filetrace.sys
+  flpydisk | state=Stopped | start=Manual | C:\Windows\system32\drivers\flpydisk.sys
+  FsWriteBack64 | state=Stopped | start=Manual | \??\C:\Windows\system32\drivers\FsWriteBack64.sys
+  gencounter | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmgencounter.sys
+  genericusbfn | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\genericusbfn.inf_amd64_53931f0ae21d6d2c\genericusbfn.sys
+  HdAudAddService | state=Stopped | start=Manual | C:\Windows\system32\drivers\HdAudio.sys
+  HidBatt | state=Stopped | start=Manual | C:\Windows\system32\drivers\HidBatt.sys
+  HidBth | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidbth.sys
+  HidEventFilter | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\hideventfilter.inf_amd64_550b85a074d33f99\HidEventFilter.sys
+  HidGuardian | state=Stopped | start=Manual | C:\Windows\system32\drivers\HidGuardian.sys
+  hidi2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidi2c.sys
+  hidinterrupt | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidinterrupt.sys
+  HidIr | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidir.sys
+  hidspi | state=Stopped | start=Manual | C:\Windows\system32\drivers\hidspi.sys
+  HidSpiCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\HidSpiCx.sys
+  hnswfpdriver | state=Stopped | start=Manual | C:\Windows\system32\drivers\hnswfpdriver.sys
+  HpSAMD | state=Stopped | start=Manual | C:\Windows\system32\drivers\HpSAMD.sys
+  HWiNFO_214 | state=Stopped | start=Manual | \??\C:\Users\22186\AppData\Local\Temp\HWiNFO_x64_214.sys
+  HwNClx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\mshwnclx.sys
+  hwpolicy | state=Stopped | start=Boot | C:\Windows\system32\drivers\hwpolicy.sys
+  hyperkbd | state=Stopped | start=Manual | C:\Windows\system32\drivers\hyperkbd.sys
+  HyperVideo | state=Stopped | start=Manual | C:\Windows\system32\drivers\HyperVideo.sys
+  i8042prt | state=Stopped | start=Manual | C:\Windows\system32\drivers\i8042prt.sys
+  iagpio | state=Stopped | start=Manual | C:\Windows\system32\drivers\iagpio.sys
+  iai2c | state=Stopped | start=Manual | C:\Windows\system32\drivers\iai2c.sys
+  iaLPSS2i_GPIO2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2.sys
+  iaLPSS2i_GPIO2_BXT_P | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2_BXT_P.sys
+  iaLPSS2i_GPIO2_CNL | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2_CNL.sys
+  iaLPSS2i_GPIO2_GLK | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_GPIO2_GLK.sys
+  iaLPSS2i_I2C | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C.sys
+  iaLPSS2i_I2C_BXT_P | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C_BXT_P.sys
+  iaLPSS2i_I2C_CNL | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C_CNL.sys
+  iaLPSS2i_I2C_GLK | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSS2i_I2C_GLK.sys
+  iaLPSS2_GPIO2_CNL | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ialpss2_gpio2_cnl.inf_amd64_d920c2a844f26eba\iaLPSS2_GPIO2_CNL.sys
+  iaLPSS2_I2C_CNL | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ialpss2_i2c_cnl.inf_amd64_666eecf21665eb26\iaLPSS2_I2C_CNL.sys
+  iaLPSSi_GPIO | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSSi_GPIO.sys
+  iaLPSSi_I2C | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaLPSSi_I2C.sys
+  iaStorAC | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaStorAC.sys
+  iaStorAVC | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaStorAVC.sys
+  iaStorV | state=Stopped | start=Manual | C:\Windows\system32\drivers\iaStorV.sys
+  ibbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\ibbus.sys
+  ibtusb | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ibtusb.inf_amd64_4b5f2b8abc15711b\ibtusb.sys
+  igfx | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\iigd_dch.inf_amd64_23a1c1315f01c788\igdkmd64.sys
+  IntcDAud | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\intcdaud.inf_amd64_658abcf72ee536fa\IntcDAud.sys
+  intelide | state=Stopped | start=Manual | C:\Windows\system32\drivers\intelide.sys
+  intelpmax | state=Stopped | start=Manual | C:\Windows\system32\drivers\intelpmax.sys
+  intelppm | state=Stopped | start=Manual | C:\Windows\system32\drivers\intelppm.sys
+  IpFilterDriver | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ipfltdrv.sys
+  IPMIDRV | state=Stopped | start=Manual | C:\Windows\system32\drivers\IPMIDrv.sys
+  IPNAT | state=Stopped | start=Manual | C:\Windows\system32\drivers\ipnat.sys
+  IPT | state=Stopped | start=Manual | C:\Windows\system32\drivers\ipt.sys
+  isapnp | state=Stopped | start=Manual | C:\Windows\system32\drivers\isapnp.sys
+  iScsiPrt | state=Stopped | start=Manual | C:\Windows\system32\drivers\msiscsi.sys
+  ItSas35i | state=Stopped | start=Manual | C:\Windows\system32\drivers\ItSas35i.sys
+  kbldfltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\kbldfltr.sys
+  KslD | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\KslD.sys
+  l2bridge | state=Stopped | start=Manual | C:\Windows\system32\drivers\l2bridge.sys
+  LSI_SAS | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sas.sys
+  LSI_SAS2i | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sas2i.sys
+  LSI_SAS3i | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sas3i.sys
+  LSI_SSS | state=Stopped | start=Manual | C:\Windows\system32\drivers\lsi_sss.sys
+  lunparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\lunparser.sys
+  mausbhost | state=Stopped | start=Manual | C:\Windows\system32\drivers\mausbhost.sys
+  mausbip | state=Stopped | start=Manual | C:\Windows\system32\drivers\mausbip.sys
+  MbbCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\MbbCx.sys
+  megasas | state=Stopped | start=Manual | C:\Windows\system32\drivers\megasas.sys
+  megasas2i | state=Stopped | start=Manual | C:\Windows\system32\drivers\MegaSas2i.sys
+  megasas35i | state=Stopped | start=Manual | C:\Windows\system32\drivers\megasas35i.sys
+  megasr | state=Stopped | start=Manual | C:\Windows\system32\drivers\megasr.sys
+  mlx4_bus | state=Stopped | start=Manual | C:\Windows\system32\drivers\mlx4_bus.sys
+  Modem | state=Stopped | start=Manual | C:\Windows\system32\drivers\modem.sys
+  MRxDAV | state=Stopped | start=Manual | C:\Windows\system32\drivers\mrxdav.sys
+  MsBridge | state=Stopped | start=Manual | C:\Windows\system32\drivers\bridge.sys
+  msgpiowin32 | state=Stopped | start=Manual | C:\Windows\system32\drivers\msgpiowin32.sys
+  MSKSSRV | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSKSSRV.sys
+  MSPCLOCK | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSPCLOCK.sys
+  MSPQM | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSPQM.sys
+  MsRPC | state=Stopped | start=Manual | C:\Windows\system32\drivers\MsRPC.sys
+  MsSecFlt | state=Stopped | start=Manual | C:\Windows\system32\drivers\mssecflt.sys
+  MsSecWfp | state=Stopped | start=Manual | C:\Windows\system32\drivers\mssecwfp.sys
+  MSTEE | state=Stopped | start=Manual | C:\Windows\system32\drivers\MSTEE.sys
+  mt7612US | state=Stopped | start=Manual | C:\Windows\system32\drivers\mt7612US.sys
+  MTConfig | state=Stopped | start=Manual | C:\Windows\system32\drivers\MTConfig.sys
+  mvumis | state=Stopped | start=Manual | C:\Windows\system32\drivers\mvumis.sys
+  ndfltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\ndfltr.sys
+  NdisImPlatform | state=Stopped | start=Manual | C:\Windows\system32\drivers\NdisImPlatform.sys
+  ndiswanlegacy | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ndiswan.sys
+  NDKPing | state=Stopped | start=Manual | C:\Windows\system32\drivers\NDKPing.sys
+  NetAdapterCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\NetAdapterCx.sys
+  netfilter2wfp | state=Stopped | start=Manual | \??\C:\Users\22186\AppData\Local\QiYou\netfilter2wfp8.sys
+  netvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\netvsc.sys
+  Netwtw08 | state=Stopped | start=Manual | C:\Windows\system32\drivers\Netwtw08.sys
+  Netwtw10 | state=Stopped | start=Manual | C:\Windows\system32\drivers\Netwtw10.sys
+  nvdimm | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvdimm.sys
+  NvModuleTracker | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\nvmoduletracker.inf_amd64_0c1cc60a4b422185\NvModuleTracker.sys
+  nvraid | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvraid.sys
+  nvstor | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvstor.sys
+  nvvhci | state=Stopped | start=Manual | C:\Windows\system32\drivers\nvvhci.sys
+  Parport | state=Stopped | start=Manual | C:\Windows\system32\drivers\parport.sys
+  passthruparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\passthruparser.sys
+  pciide | state=Stopped | start=Manual | C:\Windows\system32\drivers\pciide.sys
+  pcip | state=Stopped | start=Manual | C:\Windows\system32\drivers\pcip.sys
+  pcmcia | state=Stopped | start=Manual | C:\Windows\system32\drivers\pcmcia.sys
+  percsas2i | state=Stopped | start=Manual | C:\Windows\system32\drivers\percsas2i.sys
+  percsas3i | state=Stopped | start=Manual | C:\Windows\system32\drivers\percsas3i.sys
+  PktMon | state=Stopped | start=Manual | C:\Windows\system32\drivers\PktMon.sys
+  pmem | state=Stopped | start=Manual | C:\Windows\system32\drivers\pmem.sys
+  PNPMEM | state=Stopped | start=Manual | C:\Windows\system32\drivers\pnpmem.sys
+  portcfg | state=Stopped | start=Manual | C:\Windows\system32\drivers\portcfg.sys
+  Processor | state=Stopped | start=Manual | C:\Windows\system32\drivers\processr.sys
+  pvhdparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\pvhdparser.sys
+  QWAVEdrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\qwavedrv.sys
+  Ramdisk | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ramdisk.sys
+  ramparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\ramparser.sys
+  RDPDR | state=Stopped | start=Manual | C:\Windows\system32\drivers\rdpdr.sys
+  RdpVideoMiniport | state=Stopped | start=Manual | C:\Windows\system32\drivers\rdpvideominiport.sys
+  ReFS | state=Stopped | start=Manual | C:\Windows\system32\drivers\ReFS.sys
+  ReFSv1 | state=Stopped | start=Manual | C:\Windows\system32\drivers\ReFSv1.sys
+  rhproxy | state=Stopped | start=Manual | C:\Windows\system32\drivers\rhproxy.sys
+  RTSPER | state=Stopped | start=Manual | C:\Windows\system32\drivers\RtsPer.sys
+  RvNetMP60 | state=Stopped | start=Manual | C:\Windows\system32\drivers\RvNetMP60.sys
+  s3cap | state=Stopped | start=Manual | C:\Windows\system32\drivers\vms3cap.sys
+  sbp2port | state=Stopped | start=Manual | C:\Windows\system32\drivers\sbp2port.sys
+  scfilter | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\scfilter.sys
+  scmbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\scmbus.sys
+  sdbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\sdbus.sys
+  SDFRd | state=Stopped | start=Manual | C:\Windows\system32\drivers\SDFRd.sys
+  sdstor | state=Stopped | start=Manual | C:\Windows\system32\drivers\sdstor.sys
+  SerCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\SerCx.sys
+  SerCx2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\SerCx2.sys
+  Serenum | state=Stopped | start=Manual | C:\Windows\system32\drivers\serenum.sys
+  Serial | state=Stopped | start=Manual | C:\Windows\system32\drivers\serial.sys
+  sermouse | state=Stopped | start=Manual | C:\Windows\system32\drivers\sermouse.sys
+  sfloppy | state=Stopped | start=Manual | C:\Windows\system32\drivers\sfloppy.sys
+  SiSRaid2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\SiSRaid2.sys
+  SiSRaid4 | state=Stopped | start=Manual | C:\Windows\system32\drivers\sisraid4.sys
+  SmartSAMD | state=Stopped | start=Manual | C:\Windows\system32\drivers\SmartSAMD.sys
+  smbdirect | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\smbdirect.sys
+  spacedeskAndroidUsb | state=Stopped | start=Manual | C:\Windows\system32\drivers\spacedeskDriverAndroidUsb.sys
+  spacedeskDriverAudio | state=Stopped | start=Manual | C:\Windows\system32\drivers\spacedeskDriverAudio.sys
+  spacedeskKtmInputMouse | state=Stopped | start=Manual | C:\Windows\system32\drivers\spacedeskKtmInputMouse.sys
+  spaceparser | state=Stopped | start=Manual | C:\Windows\system32\drivers\spaceparser.sys
+  SpatialGraphFilter | state=Stopped | start=Manual | C:\Windows\system32\drivers\SpatialGraphFilter.sys
+  SpbCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\SpbCx.sys
+  SSGDIO | state=Stopped | start=Auto | \??\C:\Windows\SysWOW64\DRIVERS\ssgdio64.sys
+  ssudmdm | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\ssudmdm.sys
+  stexstor | state=Stopped | start=Manual | C:\Windows\system32\drivers\stexstor.sys
+  storflt | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmstorfl.sys
+  storufs | state=Stopped | start=Manual | C:\Windows\system32\drivers\storufs.sys
+  storvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\storvsc.sys
+  Synth3dVsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\Synth3dVsc.sys
+  Tcpip6 | state=Stopped | start=Manual | C:\Windows\system32\drivers\tcpip.sys
+  terminpt | state=Stopped | start=Manual | C:\Windows\system32\drivers\terminpt.sys
+  TsUsbFlt | state=Stopped | start=Manual | C:\Windows\system32\drivers\tsusbflt.sys
+  TsUsbGD | state=Stopped | start=Manual | C:\Windows\system32\drivers\TsUsbGD.sys
+  tsusbhub | state=Stopped | start=Manual | C:\Windows\system32\drivers\tsusbhub.sys
+  UASPStor | state=Stopped | start=Manual | C:\Windows\system32\drivers\uaspstor.sys
+  UcmCx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\UcmCx.sys
+  UcmTcpciCx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\UcmTcpciCx.sys
+  UcmUcsiAcpiClient | state=Stopped | start=Manual | C:\Windows\system32\drivers\UcmUcsiAcpiClient.sys
+  UcmUcsiCx0101 | state=Stopped | start=Manual | C:\Windows\system32\Drivers\UcmUcsiCx.sys
+  UdeCx | state=Stopped | start=Manual | C:\Windows\system32\drivers\udecx.sys
+  UEFI | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\uefi.inf_amd64_c1628ffa62c8e54c\UEFI.sys
+  Ufx01000 | state=Stopped | start=Manual | C:\Windows\system32\drivers\ufx01000.sys
+  UfxChipidea | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\ufxchipidea.inf_amd64_1c78775fffab6a0a\UfxChipidea.sys
+  ufxsynopsys | state=Stopped | start=Manual | C:\Windows\system32\drivers\ufxsynopsys.sys
+  UrsChipidea | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\urschipidea.inf_amd64_78ad1c14e33df968\urschipidea.sys
+  UrsCx01000 | state=Stopped | start=Manual | C:\Windows\system32\drivers\urscx01000.sys
+  UrsSynopsys | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\urssynopsys.inf_amd64_057fa37902020500\urssynopsys.sys
+  usbaudio2 | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbaudio2.sys
+  usbcir | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbcir.sys
+  usbehci | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbehci.sys
+  usbhub | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbhub.sys
+  usbohci | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbohci.sys
+  USBPcap | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\USBPcap.sys
+  usbprint | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbprint.sys
+  usbrndis6 | state=Stopped | start=Manual | C:\Windows\system32\drivers\usb80236.sys
+  usbser | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbser.sys
+  USBSTOR | state=Stopped | start=Manual | C:\Windows\system32\drivers\USBSTOR.SYS
+  usbuhci | state=Stopped | start=Manual | C:\Windows\system32\drivers\usbuhci.sys
+  usbvideo | state=Stopped | start=Manual | C:\Windows\system32\Drivers\usbvideo.sys
+  uunetfilter | state=Stopped | start=Manual | \??\C:\Windows\System32\drivers\uunetfilter.sys
+  uupacket | state=Stopped | start=Manual | \??\C:\Windows\System32\drivers\uupacket.sys
+  uuwfp | state=Stopped | start=Manual | \??\C:\Windows\System32\drivers\uuwfp.sys
+  vhf | state=Stopped | start=Manual | C:\Windows\system32\drivers\vhf.sys
+  VirtualRender | state=Stopped | start=Manual | C:\Windows\system32\DriverStore\FileRepository\vrd.inf_amd64_81fbd405ff2470fc\vrd.sys
+  vjoy | state=Stopped | start=Manual | C:\Windows\system32\drivers\vjoy.sys
+  vkrnlintvsc | state=Stopped | start=Manual | C:\Windows\system32\drivers\vkrnlintvsc.sys
+  vmbus | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmbus.sys
+  VMBusHID | state=Stopped | start=Manual | C:\Windows\system32\drivers\VMBusHID.sys
+  vmgid | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmgid.sys
+  VMnetAdapter | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\vmnetadapter.sys
+  VMSVSF | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmswitch.sys
+  VMSVSP | state=Stopped | start=Manual | C:\Windows\system32\drivers\vmswitch.sys
+  vpci | state=Stopped | start=Manual | C:\Windows\system32\drivers\vpci.sys
+  vsmraid | state=Stopped | start=Manual | C:\Windows\system32\drivers\vsmraid.sys
+  VSTXRAID | state=Stopped | start=Manual | C:\Windows\system32\drivers\vstxraid.sys
+  WacomPen | state=Stopped | start=Manual | C:\Windows\system32\drivers\wacompen.sys
+  wanarpv6 | state=Stopped | start=Manual | C:\Windows\system32\DRIVERS\wanarp.sys
+  wcnfs | state=Stopped | start=Manual | C:\Windows\system32\drivers\wcnfs.sys
+  WdBoot | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\WdBoot.sys
+  WdFilter | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\WdFilter.sys
+  WdmCompanionFilter | state=Stopped | start=Manual | C:\Windows\system32\drivers\WdmCompanionFilter.sys
+  WdNisDrv | state=Stopped | start=Manual | C:\Windows\system32\drivers\wd\WdNisDrv.sys
+  WIMMount | state=Stopped | start=Manual | C:\Windows\system32\drivers\wimmount.sys
+  WinMad | state=Stopped | start=Manual | C:\Windows\system32\drivers\winmad.sys
+  WINUSB | state=Stopped | start=Manual | C:\Windows\system32\drivers\WinUsb.sys
+  WinVerbs | state=Stopped | start=Manual | C:\Windows\system32\drivers\winverbs.sys
+  WpdUpFltr | state=Stopped | start=Manual | C:\Windows\system32\drivers\WpdUpFltr.sys
+  WudfPf | state=Stopped | start=Manual | C:\Windows\system32\drivers\WudfPf.sys
+  wxrjsqxyz | state=Stopped | start=Manual | \??\C:\Windows\system32\drivers\wxrjsqxyz.sys
+  xboxgip | state=Stopped | start=Manual | C:\Windows\system32\drivers\xboxgip.sys
+  XtuAcpiDriver | state=Stopped | start=Manual | C:\Windows\system32\drivers\XtuAcpiDriver.sys
+  xusb22 | state=Stopped | start=Manual | C:\Windows\system32\drivers\xusb22.sys
+  zttap300 | state=Stopped | start=Manual | C:\Windows\system32\drivers\zttap300.sys
+
+=== 22. DUMPS available ===
+-- C:\Windows\Minidump --
+  092026-16046-01.dmp  4270176  09/20/2026 17:18:19
+MEMORY.DMP: False
+-- LiveKernelReports (WATCHDOG dumps) --
+
+=== 23. CrashControl / dump configuration ===
+CrashDumpEnabled     : 3
+AutoReboot           : 1
+DebugInfoType        : 
+DumpFile             : C:\Windows\MEMORY.DMP
+MinidumpDir          : C:\Windows\Minidump
+MinidumpsCount       : 5
+AlwaysKeepMemoryDump : 
+IgnorePagefileSize   : 
+Overwrite            : 1
+
+=== 24. GPU / display driver ===
+GameViewer Virtual Display Adapter | driver=15.6.5.199 | date=02/28/2026 08:00:00 | status=OK
+NVIDIA GeForce RTX 5060 Ti | driver=32.0.16.1062 | date=06/11/2026 08:00:00 | status=OK
+09-20 17:21:44 Microsoft-Windows-Kernel-PnP id=219 | 为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+09-20 17:18:11 Microsoft-Windows-Kernel-PnP id=219 | 为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+09-20 13:32:09 Microsoft-Windows-Kernel-PnP id=219 | 为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+09-20 09:43:32 Microsoft-Windows-Kernel-PnP id=219 | 为设备 USB\VID_2717&PID_FF48&MI_00\7&343f9132&0&0000 加载驱动程序 \Driver\WudfRd 失败。
+09-20 09:43:23 Microsoft-Windows-Kernel-PnP id=219 | 为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+
+=== 25. Software versions (virtualization + audio + security stack) ===
+C:\Program Files (x86)\VMware\VMware Workstation\vmware.exe : absent
+C:\Program Files\Docker\Docker\Docker Desktop.exe -> v4.72.0.225998
+C:\Program Files\NVIDIA Corporation\NVIDIA app\CEF\NVIDIA app.exe -> v128.4.13.31
+C:\Program Files\SteelSeries\GG\SteelSeriesGG.exe -> v119.0.0.0
+ProductVersion : 17.0.0.20800274
+InstallPath    : D:\VMware Workstation17\
+09-20 17:21:43 VfpExt id=7036 |  服务处于 Driver load complete 状态。
+09-20 17:21:43 VfpExt id=7036 |  服务处于 Driver load start 状态。
+09-20 17:18:11 VfpExt id=7036 |  服务处于 Driver load complete 状态。
+09-20 17:18:11 VfpExt id=7036 |  服务处于 Driver load start 状态。
+09-20 13:32:09 VfpExt id=7036 |  服务处于 Driver load complete 状态。
+09-20 13:32:09 VfpExt id=7036 |  服务处于 Driver load start 状态。
+09-20 09:43:23 VfpExt id=7036 |  服务处于 Driver load complete 状态。
+09-20 09:43:23 VfpExt id=7036 |  服务处于 Driver load start 状态。
+
+=== 26. Application log: non-AUDIODG id=1000 crashes (whole retained log) ===
+  ? x5
+  WorkBuddy.exe x4
+  QQ.exe x3
+  ctfmon.exe x2
+  WorkBuddyAI.exe x2
+  wetype_renderer.exe x1
+  wetype_server.exe x1
+  wetype_update.exe x1
+
+=== 27. Secure Boot / TPM state ===
+Confirm-SecureBootUEFI: unavailable
+09-20 17:26:57 id=1801 | 需要更新安全启动 CA/密钥。此设备签名信息包含在此处。 DeviceAttributes： BaseBoardManufacturer:Micro-Star International Co., Ltd.;FirmwareManufacturer:American Megatrends International, LLC.;FirmwareVersion
+09-20 17:22:05 id=1025 | TPM 已成功预配，现在可以使用。
+09-20 17:22:05 id=1282 | 已生成 TBS 设备标识符。
+09-20 17:18:36 id=1025 | TPM 已成功预配，现在可以使用。
+09-20 17:18:36 id=1282 | 已生成 TBS 设备标识符。
+09-20 13:37:23 id=1801 | 需要更新安全启动 CA/密钥。此设备签名信息包含在此处。 DeviceAttributes： BaseBoardManufacturer:Micro-Star International Co., Ltd.;FirmwareManufacturer:American Megatrends International, LLC.;FirmwareVersion
+09-20 13:32:32 id=1025 | TPM 已成功预配，现在可以使用。
+09-20 13:32:31 id=1282 | 已生成 TBS 设备标识符。
+
+=== END ===

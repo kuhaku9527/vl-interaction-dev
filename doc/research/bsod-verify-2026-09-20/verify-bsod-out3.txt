@@ -1,0 +1,218 @@
+=== 1. CPU / board COUNTER-CHECK (brief said Intel; verify) ===
+CPU: AMD Ryzen 7 5700X 8-Core Processor              | Mfr=AuthenticAMD | cores=8 | logical=16 | 64bit
+Board: MAG B550M MORTAR MAX WIFI (MS-7C94)
+BIOS : 1.M0 09/02/2025 08:00:00
+-- hypervisor arch binary check (hvix64=Intel, hvax64=AMD) --
+  hvix64.exe exists=True
+  hvax64.exe exists=True
+
+=== 2. VM activity BEFORE crash: Hyper-V-Worker / Compute / Docker / WSL logs ===
+-- Microsoft-Windows-Hyper-V-Worker : 0 events
+-- Microsoft-Windows-Hyper-V-Compute : 0 events
+-- Microsoft-Windows-Hyper-V-VMMS : 0 events
+-- Microsoft-Windows-Hyper-V-Integration : 0 events
+
+=== 3. Any VM/Guest lifecycle right before 17:11 (16:30-17:12) - broad provider sweep ===
+16:31:57 Microsoft-Windows-Hyper-V-VmSwitch id=233 | The operation 'Delete' succeeded on nic 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 (Friendly Name: ).
+16:31:57 Microsoft-Windows-Hyper-V-VmSwitch id=234 | NIC 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 successfully disconnected from port .
+16:30:41 Microsoft-Windows-Hyper-V-VmSwitch id=102 | Networking driver in Virtual Machine is loaded and the protocol version is negotiated to the most recent version (Virtual machine ID 8D95DBB
+16:30:40 Microsoft-Windows-Hyper-V-VmSwitch id=102 | Networking driver in Virtual Machine is loaded and the protocol version is negotiated to the most recent version (Virtual machine ID 8D95DBB
+16:30:40 Microsoft-Windows-Hyper-V-VmSwitch id=232 | NIC 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 (Friendly Name: ) successfully connected to port 6527450B-41B
+16:30:40 Microsoft-Windows-Hyper-V-VmSwitch id=233 | The operation 'Create' succeeded on nic 8D95DBBF-4874-4CC4-8500-98DD1F170BE3--FB84AE7A-6231-4F4B-8296-9A7209774D25 (Friendly Name: ).
+16:30:40 Microsoft-Windows-Hyper-V-VmSwitch id=264 | Port 6527450B-41B9-4228-871B-394D33B1FB1E (Friendly Name: FB84AE7A-6231-4F4B-8296-9A7209774D25) successfully created on switch F0D1F64D-ADC1
+
+=== 4. VMware Workstation logs (vmware.log / vmware-vmx) ===
+absent: D:\VMware Workstation17
+DIR EXISTS: C:\ProgramData\VMware
+   C:\ProgramData\VMware\logs\vmmsi.log_20221215_231424.log  1563534  12/15/2022 23:14:24
+   C:\ProgramData\VMware\logs\vmmsi.log_20221215_234307.log  1552956  12/15/2022 23:43:07
+   C:\ProgramData\VMware\logs\vmmsi.log_20221216_004927.log  3190478  12/16/2022 00:49:27
+absent: D:\Virtual Machines
+absent: C:\Users\22186\Documents\Virtual Machines
+-- VMware install date --
+ProductVersion : 17.0.0.20800274
+InstallPath    : D:\VMware Workstation17\
+EULA_Accepted  : 
+InstallDate    :
+
+=== 5. Docker Desktop install date + vhdx sizes (any 8GB virtual disk?) ===
+DisplayName     : Docker Desktop
+DisplayVersion  : 4.72.0
+InstallLocation : C:\Program Files\Docker\Docker
+InstallDate     :
+-- search for *.vhdx (Everything, size) --
+C:\ProgramData\Microsoft\Windows\Containers\BaseImages\57d60623-74f8-4522-beb1-058a0ee1c504\BaseLayer.vhdx
+D:\wsl\DockerData\DockerDesktopWSL\disk\docker_data.vhdx
+C:\Program Files\Docker\Docker\resources\wsl\ext4.vhdx
+D:\wsl\DockerData\DockerDesktopWSL\main\ext4.vhdx
+D:\wsl\Ubuntu\ext4.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\Sandboxes\fdba022a-129e-4397-ac3f-af6ff5662246\sandbox.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\BaseImages\57d60623-74f8-4522-beb1-058a0ee1c504\Snapshot\SnapshotSandbox.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\BaseImages\57d60623-74f8-4522-beb1-058a0ee1c504\Snapshot\SystemTemplate.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\PortableBaseLayer\SystemTemplate.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\Zygotes\fdba022a-129e-4397-ac3f-af6ff5662246\SystemTemplate.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\PortableBaseLayer\SystemTemplateBase.vhdx
+C:\ProgramData\Microsoft\Windows\Containers\PortableBaseLayer\WindowsDefenderApplicationGuard.vhdx
+C:\OneDriveTemp\S-1-5-21-2001291667-2943734438-584985882-1001\{2B7923C5-F846-4F71-9AC6-5A065B4C5269}.vhdx
+
+
+=== 6. Get-PhysicalDisk incl virtual (identify the 8GB Msft Virtual Disk) ===
+  #1 ZHITAI TiPlus7100 1TB | bus=NVMe | 953.87GB | Healthy | SSD
+  #2 Msft Virtual Disk | bus=File Backed Virtual | 8GB | Healthy | SSD
+  #0 kimtigo SSD 512GB | bus=NVMe | 476.94GB | Healthy | SSD
+-- Disk2 / partition detail --
+  Disk0 kimtigo SSD 512GB | 476.94GB | bus=NVMe | Online | GPT
+  Disk1 ZHITAI TiPlus7100 1TB | 953.87GB | bus=NVMe | Online | MBR
+
+=== 7. Memory: FULL detail incl. rank / voltage if exposed ===
+
+BankLabel            : P0 CHANNEL A
+DeviceLocator        : DIMM 0
+Capacity             : 17179869184
+Speed                : 3200
+ConfiguredClockSpeed : 3200
+Manufacturer         : Unknown
+PartNumber           : S16G3200TCSBGHC18   
+SerialNumber         : 384CD781
+SMBIOSMemoryType     : 26
+FormFactor           : 8
+
+
+
+BankLabel            : P0 CHANNEL A
+DeviceLocator        : DIMM 1
+Capacity             : 8589934592
+Speed                : 3200
+ConfiguredClockSpeed : 3200
+Manufacturer         : Unknown
+PartNumber           : UCC418B C3600/8G    
+SerialNumber         : 00000000
+SMBIOSMemoryType     : 26
+FormFactor           : 8
+
+
+
+BankLabel            : P0 CHANNEL B
+DeviceLocator        : DIMM 1
+Capacity             : 8589934592
+Speed                : 3200
+ConfiguredClockSpeed : 3200
+Manufacturer         : Unknown
+PartNumber           : UCC418B C3600/8G    
+SerialNumber         : 00000000
+SMBIOSMemoryType     : 26
+FormFactor           : 8
+
+
+-- Win32_MemoryDeviceArray / slot occupancy --
+slots total=4  populated=3
+-- MemoryDiagnostics results --
+MemoryDiagnostics-Results count = 0
+
+=== 8. Third-party kernel driver census: non-Microsoft, RUNNING right now ===
+Microsoft-signed running drivers: 170
+NON-Microsoft running drivers: 44
+  amdgpio2 | Manual | co=Advanced Micro Devices, Inc | C:\Windows\system32\DriverStore\FileRepository\amdgpio2.inf_amd64_487ee5525dcee517\amdgpio2.sys
+  amdgpio3 | Manual | co=Advanced Micro Devices, Inc | C:\Windows\system32\drivers\amdgpio3.sys
+  AMDPCIDev | Manual | co=Advanced Micro Devices | C:\Windows\system32\drivers\AMDPCIDev.sys
+  amdpsp | Boot | co=Advanced Micro Devices, Inc.  | C:\Windows\system32\drivers\amdpsp.sys
+  CimFS | System | co= | C:\Windows\system32\drivers\CimFS.sys
+  dtlitescsibus | Manual | co=Disc Soft Ltd | C:\Windows\system32\drivers\dtlitescsibus.sys
+  dtliteusbbus | Manual | co=Disc Soft Ltd | C:\Windows\system32\drivers\dtliteusbbus.sys
+  gvinput | Manual | co=Windows (R) Win 7 DDK provider | C:\Windows\system32\drivers\gvinput.sys
+  gvinputmf | Manual | co=Windows (R) Win 7 DDK provider | C:\Windows\system32\drivers\gvinputmf.sys
+  hcmon | Auto | co=VMware, Inc. | C:\Windows\system32\DRIVERS\hcmon.sys
+  HKKbdFltr | Manual | co=Insyde Software Corp. | C:\Windows\system32\DRIVERS\HKKbdFltr.sys
+  HKMouFltr | Manual | co=Insyde Software Corp. | C:\Windows\system32\DRIVERS\HKMouFltr.sys
+  hrdevmon | Boot | co=Beijing Huorong Network Technology Co., Ltd. | C:\Windows\system32\DRIVERS\hrdevmon.sys
+  hrndis6 | System | co=Beijing Huorong Network Technology Co., Ltd. | C:\Windows\system32\DRIVERS\hrndis6.sys
+  hrwfpdrv | Auto | co=Beijing Huorong Network Technology Co., Ltd. | C:\Windows\system32\DRIVERS\hrwfpdrv.sys
+  IntcAzAudAddService | Manual | co=Realtek Semiconductor Corp. | C:\Windows\system32\DriverStore\FileRepository\hdxmsi.inf_amd64_359747d349df57f4\RTKVHD64.sys
+  LdVBoxDrv | Auto | co=Oracle Corporation | \??\C:\Program Files\ldplayerbox\LdVBoxDrv.sys
+  MTKBTFilterx64 | Manual | co=MediaTek Inc. | C:\Windows\system32\DriverStore\FileRepository\mtkbtfilter.inf_amd64_be5b1c784d5b96f4\mtkbtfilterx.sys
+  mtkwlex | Manual | co=MediaTek Inc. | C:\Windows\system32\DriverStore\FileRepository\mtkwl6ex.inf_amd64_e4e766c9f7adc16a\mtkwl6ex.sys
+  ndisrd | System | co=NT Kernel Resources | C:\Windows\system32\DRIVERS\ndisrd.sys
+  NeSigVerify | System | co=NetEase | C:\Windows\system32\drivers\NeSigVerify.sys
+  Netease_UU_TAP_0921 | Manual | co=The OpenVPN Project | C:\Windows\system32\drivers\Netease_UU_TAP_0921.sys
+  npcap | System | co=Insecure.Com LLC. | C:\Windows\system32\DRIVERS\npcap.sys
+  NPF | Auto | co=Riverbed Technology, Inc. | C:\Windows\system32\drivers\npf.sys
+  NVHDA | Manual | co=NVIDIA Corporation | C:\Windows\system32\drivers\nvhda64v.sys
+  nvlddmkm | Manual | co=NVIDIA Corporation | C:\Windows\system32\DriverStore\FileRepository\nv_dispi.inf_amd64_6f3cfb7117944855\nvlddmkm.sys
+  nvrtxvad_WaveExtensible | Manual | co=NVIDIA Corporation | C:\Windows\system32\drivers\nvrtxvad64v.sys
+  nvvad_WaveExtensible | Manual | co=NVIDIA Corporation | C:\Windows\system32\drivers\nvvad64v.sys
+  rt640x64 | Manual | co=Realtek                                         | C:\Windows\system32\drivers\rt640x64.sys
+  spacedeskDriverAndroidControl | Manual | co=datronicsoft Technology GmbH | C:\Windows\system32\drivers\spacedeskDriverAndroidControl.sys
+  spacedeskDriverBus | Manual | co=datronicsoft Technology GmbH | C:\Windows\system32\drivers\spacedeskDriverBus.sys
+  ssdevfactory | Manual | co=SteelSeries ApS | C:\Windows\system32\drivers\ssdevfactory.sys
+  SteelSeries_Sonar_VAD | Manual | co=Windows (R) Win 7 DDK provider | C:\Windows\system32\DriverStore\FileRepository\steelseries-sonar-vad.inf_amd64_036e27f3054ae1bc\SteelSeries-Sonar-VAD.sys
+  sysdiag | System | co=Beijing Huorong Network Technology Co., Ltd. | C:\Windows\system32\DRIVERS\sysdiag.sys
+  tap0901 | Manual | co=The OpenVPN Project | C:\Windows\system32\drivers\tap0901.sys
+  ViGEmBus | System | co=Nefarius Software Solutions e.U. | C:\Windows\system32\drivers\ViGEmBus.sys
+  vmci | Boot | co=VMware, Inc. | C:\Windows\system32\drivers\vmci.sys
+  VMnetBridge | Auto | co=VMware, Inc. | C:\Windows\system32\DRIVERS\vmnetbridge.sys
+  VMnetuserif | Auto | co=VMware, Inc. | C:\Windows\system32\DRIVERS\vmnetuserif.sys
+  vmx86 | Auto | co=VMware, Inc. | C:\Windows\system32\DRIVERS\vmx86.sys
+  vsock | Boot | co=VMware, Inc. | C:\Windows\system32\DRIVERS\vsock.sys
+  wintun | Manual | co=WireGuard LLC | C:\Windows\system32\drivers\wintun.sys
+  WOVAD | Manual | co=Windows (R) Win 7 DDK provider | C:\Windows\system32\drivers\womic.sys
+  XunYouFilter | System | co=Sichuan XunYou Network Technology Co. | C:\Windows\system32\drivers\XunYouFilter.sys
+
+=== 9. Installed AV / security products (WSC) ===
+{4C17E7AE-043A-D732-91B8-D139C9EB6B26} -> 火绒安全软件
+{4F76F112-43EB-40E8-11D8-F7BD1853EA23} -> 卡巴斯基免费版
+{942F0ADA-4B44-B85B-4408-2FE0BED885FC} -> 火绒安全软件
+{D68DDC3A-831F-4fae-9E44-DA132C1ACF46} -> Microsoft Defender 防病毒
+
+=== 10. Sleep/hibernate + fast startup config (idle-transition angle) ===
+此系统上有以下睡眠状态:
+    待机 (S3)
+    休眠
+
+此系统上没有以下睡眠状态:
+    待机 (S1)
+	系统固件不支持此待机状态。
+
+    待机 (S2)
+	系统固件不支持此待机状态。
+
+    待机(S0 低电量待机)
+	系统固件不支持此待机状态。
+
+    混合睡眠
+	虚拟机监控程序不支持此待机状态。
+
+    快速启动
+	当前系统策略禁用此动作。
+HiberbootEnabled (fast startup) = 0
+-- sleep events last 7 days --
+09-19 23:40:46 id=107 | 系统已从睡眠状态恢复。
+09-19 23:40:42 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-19 23:40:39 id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-19 00:25:27 id=107 | 系统已从睡眠状态恢复。
+09-19 00:25:24 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-19 00:25:20 id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-18 00:15:21 id=107 | 系统已从睡眠状态恢复。
+09-18 00:15:17 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-18 00:12:16 id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-16 23:22:46 id=107 | 系统已从睡眠状态恢复。
+09-16 23:22:38 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-16 23:22:35 id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-16 00:44:58 id=107 | 系统已从睡眠状态恢复。
+09-16 00:44:55 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-16 00:44:51 id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-15 14:17:13 id=107 | 系统已从睡眠状态恢复。
+09-15 14:17:10 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+09-15 14:17:07 id=187 | 用户模式进程尝试通过调用 SetSuspendState 或 SetSystemPowerState API 更改系统状态。
+09-15 04:20:55 id=107 | 系统已从睡眠状态恢复。
+09-15 04:20:51 id=42 | 系统正在进入睡眠状态。  睡眠原因: Application API
+
+=== 11. HWiNFO / temp-dir kernel driver + unsigned-ish driver paths ===
+  HWiNFO_214 | state=Stopped | start=Manual | \??\C:\Users\22186\AppData\Local\Temp\HWiNFO_x64_214.sys
+  netfilter2wfp | state=Stopped | start=Manual | \??\C:\Users\22186\AppData\Local\QiYou\netfilter2wfp8.sys
+
+=== 12. Reliability: WER Kernel_20001 report CONTENT ===
+
+=== 13. Minidump header bytes (can we at least read the header?) ===
+header read FAILED: 调用“Open”并传入“4”个参数时发生异常：“Access to the path 'C:\Windows\Minidump\092026-16046-01.dmp' is denied.”
+
+=== END ===
