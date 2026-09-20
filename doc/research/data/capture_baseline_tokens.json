@@ -1,0 +1,70 @@
+{
+  "text_tokens_est": 13,
+  "cases": [
+    {
+      "case": "888x540",
+      "w": 888,
+      "h": 540,
+      "pixels": 479520,
+      "theory_visual_tokens": 468,
+      "measured_prompt_tokens": 489,
+      "prompt_ms": 411.8,
+      "jpeg_b64_bytes": 23312,
+      "raw_jpeg_bytes": 17484,
+      "note": "★ 出厂 ideal:960x540 实际协商值（16:9 主屏）",
+      "visual_tokens": 476
+    },
+    {
+      "case": "960x540",
+      "w": 960,
+      "h": 540,
+      "pixels": 518400,
+      "theory_visual_tokens": 506,
+      "measured_prompt_tokens": 523,
+      "prompt_ms": 329.9,
+      "jpeg_b64_bytes": 24044,
+      "raw_jpeg_bytes": 18033,
+      "note": "出厂请求值（对照）",
+      "visual_tokens": 510
+    },
+    {
+      "case": "768x576",
+      "w": 768,
+      "h": 576,
+      "pixels": 442368,
+      "theory_visual_tokens": 432,
+      "measured_prompt_tokens": 445,
+      "prompt_ms": 270.6,
+      "jpeg_b64_bytes": 21808,
+      "raw_jpeg_bytes": 16356,
+      "note": "标定探针（已知 448 total）",
+      "visual_tokens": 432
+    },
+    {
+      "case": "1280x720",
+      "w": 1280,
+      "h": 720,
+      "pixels": 921600,
+      "theory_visual_tokens": 900,
+      "measured_prompt_tokens": 933,
+      "prompt_ms": 703.2,
+      "jpeg_b64_bytes": 34948,
+      "raw_jpeg_bytes": 26211,
+      "note": "首选改进候选 C1",
+      "visual_tokens": 920
+    },
+    {
+      "case": "1365x768",
+      "w": 1365,
+      "h": 768,
+      "pixels": 1048320,
+      "theory_visual_tokens": 1024,
+      "measured_prompt_tokens": 1045,
+      "prompt_ms": 836.3,
+      "jpeg_b64_bytes": 41136,
+      "raw_jpeg_bytes": 30852,
+      "note": "max_pixels 削后上限（1080p/1440p 共同落点）",
+      "visual_tokens": 1032
+    }
+  ]
+}
