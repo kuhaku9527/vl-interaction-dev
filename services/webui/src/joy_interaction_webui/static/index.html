@@ -313,7 +313,9 @@ limitations under the License.
                                 <div class="settings-item-label" data-i18n>Jarvis 唤醒词监听</div>
                                 <div class="settings-item-description" data-i18n>监听唤醒词 “bt” 触发对话；与聊天栏的「实时」互斥（二选一）</div>
                             </div>
-                            <div class="live-mode-seg" id="liveModeSeg">
+                            <!-- 互斥 radio 的 Jarvis 侧；「实时」那侧在聊天输入栏，
+                                 两者各带一个 .mode-group[role=radiogroup]（详见该处注释）。 -->
+                            <div class="mode-group" role="radiogroup" id="liveModeSeg" aria-label="交互模式：Jarvis 唤醒（与「实时」互斥，单选）">
                                 <button class="chat-prompt-action listen" id="btListenBtn" title="监听 BT 唤醒词" type="button" role="radio" aria-checked="false" aria-label="Jarvis 唤醒模式（BT 唤醒词监听）">
                                     <i data-lucide="radio"></i>
                                     <span class="listen-label">Jarvis 唤醒</span>
@@ -1207,10 +1209,17 @@ limitations under the License.
                 </div>
                 </div>
         </div>
-            <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="实时">
-                <i data-lucide="radio-tower"></i>
-                <span class="ctrl-label">实时</span>
-            </button>
+            <!-- 2026-09-20：本按钮与设置页的 btListenBtn 是**互斥 radio**（用户 2026-08-12 拍板），
+                 但两者分处两个 UI 区域（本按钮按用户 2026-09-19 要求留在聊天栏"方便直接开启"，
+                 而 btListenBtn 已真删入设置页）。role="radio" 必须有 radiogroup 祖先，
+                 故此处各带一个 .mode-group[role=radiogroup]，而不是共用一个容器。
+                 详见 styles.css .mode-group 处注释 —— 勿为"合并容器"回退这两次拍板。 -->
+            <div class="mode-group" role="radiogroup" aria-label="交互模式：实时（与「Jarvis 唤醒」互斥，单选）">
+                <button class="chat-prompt-action listen live-mode" id="liveModeBtn" title="进入 Live 常驻模式" type="button" role="radio" aria-checked="false" aria-label="实时">
+                    <i data-lucide="radio-tower"></i>
+                    <span class="ctrl-label">实时</span>
+                </button>
+            </div>
             <textarea class="chat-prompt-input" id="promptText" rows="1" placeholder="和 BT-7274 对话..."></textarea>
             <button class="chat-prompt-action speech speech-control" id="speechBtn" title="语音识别" type="button" aria-label="语音识别">
                 <i class="mic-icon" data-lucide="mic"></i>
