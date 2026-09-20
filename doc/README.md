@@ -313,6 +313,10 @@ JoyAI-VL-Interaction-main/
 > **背景**：2026-09-14 本轮文档收口共 6 个提交、改了约 60 个文件，但**全程未跑测试**。用户追问"还有没注意的点吗"后才跑 —— 结果发现 **9 个失败**。经 git worktree 二分确认：**这 9 个在我改动之前（`3a282ef`）就存在**，是历史遗留，非本轮引入。
 >
 > **2026-09-20 更新**：用户批准开修，**那 9 个已全部修完**（详见下节）。本节数字为收口后实测。
+>
+> ✅ **CI 状态（2026-09-20 收尾，run [35516795934](https://github.com/kuhaku9527/vl-interaction-dev/actions/runs/35516795934) @ `74f7e34`）：**
+> **12/12 job 全绿**（ruff / eslint / package-smoke / frontend-test / drift-gate /
+> drift-gate-runtime / pytest ×5）。此前 `main` 自 2026-08-11 起长期有 4 个 job 红。
 
 ### 各套件实测结果
 
@@ -322,7 +326,7 @@ JoyAI-VL-Interaction-main/
 | **tts** | ✅ 28 passed | — |
 | **voice-clone** | ✅ 11 passed | — |
 | **asr** | ✅ 2 passed | — |
-| **webui** | ✅ **0 failed**（2026-09-20 修复；详见下） | 见 §webui 失败收口 |
+| **webui** | ✅ **CI 全绿**（2026-09-20 修复；详见下） | 见 §webui 失败收口 |
 
 ### ✅ webui 的 9 个失败 —— 已于 2026-09-20 全部修完
 
@@ -383,6 +387,8 @@ JoyAI-VL-Interaction-main/
 时 10 个用例因 `ModuleNotFoundError` 失败。
 **CI 不报**：CI 在该目录内 `pip install -e ".[dev]"`，包已可导入。
 ⇒ 属**测试自身缺陷**（在裸跑路径下失效），不在 CI 失败名单内，**建议另立工单**。
+> 2026-09-20 复核：`pytest (webui)` 现已在 CI **全绿**；本地裸跑仍会看到这 10 个，
+> **属预期**，不是回归。
 
 ### 另发现两个 webinfer 的"假通过"测试（子代理诊断）
 

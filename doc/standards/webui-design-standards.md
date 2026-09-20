@@ -865,6 +865,66 @@ Studio 渲染的是**内联快照**（`design/<session>/index.html`），不是�
 
 ---
 
+## 9.14 CI 门禁的三类"只在 CI 出现"的失败（2026-09-20 实测）
+
+本轮把 `main` 从「12 个 job 里 4 个红」修到 **12/12 全绿**
+（run [35516795934](https://github.com/kuhaku9527/vl-interaction-dev/actions/runs/35516795934) @ `74f7e34`）。
+四类坑，**本地都复现不出来**，必须知道才会查：
+
+### (a) 多步 job 会被第一个失败 step 掩盖 —— 只修"CI 报出来的那一步"是错的
+
+`quality.yml` 的 `ruff` job 顺序跑 **14 个 step**（6 个服务的 `check` + `format`，
+再加 webui Python 两步），`bash -e` 下**遇错即停**。
+⇒ CI 只报**第一个**红 scope，**后面的一律不执行、也不显示**。
+本轮因此漏掉 `asr`(15) / `tts`(97) / `background-agent`(267) /
+**`services/webui` Python(364)** 四个 scope，直到手工把 14 步全跑一遍才发现。
+
+**纪律**：修受 `bash -e` 约束的多步 job，**必须手工枚举并全跑该 job 的每一步**，
+不能以 CI 输出的红项清单为全集。
+
+### (b) 浅克隆取不到历史对象 → 52 个 ERROR（不是 failure）
+
+`services/webui/tests/test_qa_server_split_equivalence.py` 用
+`git show 5c0089e~1:…/server.py` 取「拆分前」基线做逐语句等价比对，
+基线在 **~149 个 commit 之前**；而 `actions/checkout@v4` **默认 `fetch-depth: 1`**
+（浅克隆）⇒ 对象不在库里 ⇒ `CalledProcessError … exit status 128`，**52 个用例全 ERROR**。
+
+**纪律**：任何"用 git 历史做基线"的测试，**必须在 workflow 里显式 `fetch-depth: 0`**，
+并在注释里写明**"这是被测试要求的，不是优化选项"**（否则后人会当冗余删掉）；
+测试侧同时把 `check=True` 换成可读的 `pytest.fail(...)`，让这类失败**说人话**。
+自检：`git clone --depth 1 <repo> && pytest <该文件>` —— 能复现才算查到了。
+
+### (c) Windows 上 `write_text()` 文本模式会静默 LF→CRLF
+
+子代理用 Python `write_text()` 批量改文件，**23 个文件被静默转成 CRLF**，
+`git diff --stat` 一度虚高到 **6013/5937**（实际改动约 60 处）。
+**更隐蔽的是**：本仓 `.gitattributes` 声明 `*.py eol=lf`，但**部分文件 blob 里实为 CRLF**
+⇒ 既不能无脑统一成 LF（会整文件重写），也不能统一成 CRLF。
+
+**纪律**：改文件一律**字节级**读写并**保留 HEAD 的行尾**；
+收尾核对 `git diff --numstat` 与 `git diff --ignore-cr-at-eol --numstat` 的差值是否为 0。
+
+### (d) `ruff check --fix` 会吞掉 `# noqa`（并因此"造出"新错误）
+
+两个子代理各踩一次：`--fix` 走 I001 重排 import 时，把超长行折成括号形式、
+**丢掉了行尾的 `# noqa: E402`** ⇒ **凭空造出新 E402**（webui/server.py 计数一度 364 → 367，
+**掩盖了真实进展**）。
+
+**纪律**：`--fix` 之后**必须复跑完整 check**，不能假设"fix 完就是干净"。
+另：**`ruff check --select <codes>` 会虚增 `RUF100`**（实测 **85 vs 真实 3**）——
+`--select` 替换了配置的 select、关掉 `E`，令合法的 `# noqa: E402` 看起来"未使用"；
+**只有与 CI 完全相同的命令输出才算数**，否则会删掉几十个正确注解。
+
+### (e) 派生式清单要 fail-closed，不要 `glob`
+
+同一类"清单过期 → 范围悄悄缩小 → 假绿"的教训（§9.10）在静态契约测试上重演（§9.7）。
+**正解是派生 + 失败即抛**，而不是 glob：
+`SPLIT_JS = (index.html 加载的 script，按加载序) − PRE_EXISTING_MODULES(冻结)`，
+引用不存在的脚本即 `RuntimeError`。
+`glob('*.js')` 会纳入从未属于该语料的模块，**实测引入 22 处假红**。
+
+---
+
 ## 附录：现成契约速查
 
 | 类 / 变量 | 用途 | 位置 |
