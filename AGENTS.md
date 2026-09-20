@@ -23,6 +23,33 @@
 - 删元素后必须自查：`getElementById('已删id')` 是否留下裸引用（会 TypeError），
   以及是否连带删除其 CSS 规则。
 
+## 脚本编码硬约束（用户拍板，2026-09-20）
+
+**Windows PowerShell 5.1 在文件无 UTF-8 BOM 时按系统 ANSI 代码页（本机 GBK）解码。**
+含中文的 `.ps1` / `.env` 若无 BOM，中文会被读成乱码，**连带破坏引号/括号配对**，
+报「缺少表达式 / 字符串缺少终止符 / 缺少右 `}`」，**导致脚本无法启动**。
+（`pwsh` / PowerShell 7 默认按 UTF-8 读，故两者表现不同——**不要用 `pwsh` 验证就以为没事**。）
+
+- **新建 `.ps1` / `.env`：ASCII-only 优先**；必须写中文时**加 UTF-8 BOM**。
+- **诊断/取证类脚本一律 ASCII-only**（本轮同一坑踩了两次，代价是项目启动不了）。
+- **扫描与修复**：`py scripts/find-ps1-encoding-issues.py [--fix]`
+- **验证纪律**：必须用**用户实际使用的解释器**验证（`powershell` 5.1，不是 `pwsh`），
+  且**真跑一次**。用 `[Text.Encoding]::UTF8.GetString()` 显式解码验证是**无效验证**
+  ——它绕过了真实运行时解码路径（本轮据此误判为"假阳性"，教训已固化）。
+
+## 取证权限硬约束（2026-09-20）
+
+**内核 dump 与 WER 报告均受 ACL 保护，普通权限与子代理（delegated subagent，权限启动时固定、
+不可提权）都读不了**，报 `PermissionError: [Errno 13]`。
+
+- **路径**：`C:\Windows\Minidump\*.dmp`、`C:\ProgramData\Microsoft\Windows\WER\ReportArchive\*`
+- **⇒ 这类取证必须交由用户提权执行**，agent 只负责给命令 + 解读结果。
+  让子代理反复尝试是浪费（本轮浪费过一轮）。
+- **dump 会被轮转覆盖**：分析前先 `copy` 保全。
+- **kernel minidump 的魔数是 `PAGE`/`DU64`，不是用户态的 `MDMP`** —— 自写解析器易静默误读；
+  自写解析器还受 triage 结构随版本漂移影响，**最终必须用 `cdb.exe`**（来自
+  `Microsoft.WindowsSDK`，**WinDbg 的 AppX 版本轮实测跑不起来** `ApplicationFailedException`）。
+
 ## 收尾自查清单
 
 实质性工作收尾前自查：
