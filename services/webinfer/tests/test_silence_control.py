@@ -52,6 +52,39 @@ def _make_harness() -> _SilenceHarness:
 
 
 # ---------------------------------------------------------------------------
+# Deterministic timer base (do not remove — see note below)
+# ---------------------------------------------------------------------------
+#
+# The T1/T2 tests drive ``_silence_check_timeouts(now=...)`` with *exact*
+# boundary offsets (``t0 + 900``, ``t0 + 60``, ...). ``_silence_enter`` stamps
+# ``_silence_entered_at = time.monotonic()``, an arbitrary float, and the mixin
+# compares ``now - entered_at >= t1_sec``.
+#
+# That comparison is NOT exact in IEEE-754: for many values of ``t0`` the
+# subtraction rounds down, so ``(t0 + 60) - t0`` yields ``59.99999999999999``
+# and the boundary assertion fails. Measured failure rate for ``t0 + 60`` on a
+# freshly-booted container/runner (small ``time.monotonic()``, e.g. ``58.4``):
+# ~19-25%. It falls to ~0.05% once uptime is ~10^4s, which is why this passed
+# for months locally and only surfaced on CI.
+#
+# Pinning ``t0`` to a power-of-two keeps ``t0 + offset`` exactly representable
+# at these magnitudes, so the elapsed arithmetic is exact and the tests assert
+# the boundary semantics they mean to assert. This is a *test determinism* fix,
+# not a product change: the production comparison is intentionally ``>=`` and
+# is unaffected.
+_TIMER_T0 = 1024.0
+
+
+def _entered_harness(monkeypatch: pytest.MonkeyPatch) -> _SilenceHarness:
+    """Enter silence with a deterministic, exactly-representable ``t0``."""
+    harness = _make_harness()
+    monkeypatch.setattr("silence_control.time.monotonic", lambda: _TIMER_T0)
+    harness._silence_enter(reason="test")
+    assert harness._silence_entered_at == _TIMER_T0
+    return harness
+
+
+# ---------------------------------------------------------------------------
 # ① suppressed suppression gate
 # ---------------------------------------------------------------------------
 
@@ -206,9 +239,8 @@ def test_wake_directive_not_consumed_for_non_live():
 # ---------------------------------------------------------------------------
 
 
-def test_t1_hint_fires_once_and_bumps_count():
-    harness = _make_harness()
-    harness._silence_enter(reason="test")
+def test_t1_hint_fires_once_and_bumps_count(monkeypatch):
+    harness = _entered_harness(monkeypatch)
     # Default T1 = 15 min = 900s. Enter at t0, check at t0+900.
     t0 = harness._silence_entered_at
     assert harness._silence_check_timeouts(now=t0 + 899) is None
@@ -222,18 +254,16 @@ def test_t1_hint_fires_once_and_bumps_count():
     assert harness._is_suppressed("live") is True
 
 
-def test_t1_disabled_never_hints():
-    harness = _make_harness()
-    harness._silence_enter(reason="test")
+def test_t1_disabled_never_hints(monkeypatch):
+    harness = _entered_harness(monkeypatch)
     harness._silence_update_settings({"timeout_hint_enabled": False})
     t0 = harness._silence_entered_at
     assert harness._silence_check_timeouts(now=t0 + 3600) is None
     assert harness._silence_snapshot()["hint_count"] == 0
 
 
-def test_t2_auto_wake_exits_silence():
-    harness = _make_harness()
-    harness._silence_enter(reason="test")
+def test_t2_auto_wake_exits_silence(monkeypatch):
+    harness = _entered_harness(monkeypatch)
     harness._silence_update_settings({"auto_wake_enabled": True, "auto_wake_minutes": 1})
     t0 = harness._silence_entered_at
     assert harness._silence_check_timeouts(now=t0 + 59) is None
@@ -243,19 +273,17 @@ def test_t2_auto_wake_exits_silence():
     assert harness._silence_snapshot()["hint_count"] == 0
 
 
-def test_t2_disabled_never_auto_wakes():
-    harness = _make_harness()
-    harness._silence_enter(reason="test")
+def test_t2_disabled_never_auto_wakes(monkeypatch):
+    harness = _entered_harness(monkeypatch)
     # T1 (hint) legitimately fires at 900s, but T2 is off => never auto-wakes.
     result = harness._silence_check_timeouts(now=harness._silence_entered_at + 7200)
     assert result != "auto_wake"
     assert harness._is_suppressed("live") is True
 
 
-def test_t1_and_t2_independent_settings():
+def test_t1_and_t2_independent_settings(monkeypatch):
     """T1 on + T2 on: hint fires first (shorter), auto-wake later."""
-    harness = _make_harness()
-    harness._silence_enter(reason="test")
+    harness = _entered_harness(monkeypatch)
     harness._silence_update_settings(
         {"timeout_hint_minutes": 1, "auto_wake_enabled": True, "auto_wake_minutes": 2}
     )
