@@ -393,6 +393,22 @@ function Start-LlamaMain {
         # "CLIP graph uses unsupported" warning, so the upstream #21272 CLIP
         # CPU-fallback does not reproduce on this box.
         "-fit", "off",
+        # KV cache quantization (measured 2026-09-20, see
+        # doc/research/kv-quantization-measured-2026-09-20.md):
+        #   f16 KV = 2321 MiB  ->  q8_0 KV = 1224 MiB  (llama.cpp self-reported)
+        #   VRAM 9535 -> 8215 MiB (-1320) ; prompt 265.9 -> 260.5ms ; wall 618 -> 576ms
+        # i.e. it saves ~1.3 GB AND is marginally FASTER here, because this
+        # workload decodes only 1-3 tokens per turn (almost no KV reads).
+        #
+        # ★ --flash-attn on is NOT optional: with FA off the V tensor is stored
+        #   transposed (v_trans = !cparams.flash_attn) and q8_0's 32-multiple
+        #   assertion has nowhere to land -> the server refuses to start.
+        #   K and V must stay symmetric (mixed q8/q4 is unsupported here).
+        #   q4_0 is explicitly rejected: it saves only ~112 MiB more while
+        #   similarity collapses 81.6% -> 8.3% ("not a trade, a cliff").
+        "-ctk", "q8_0",
+        "-ctv", "q8_0",
+        "--flash-attn", "on",
         "--jinja"
     )
     if ($env:MAIN_EXTRA_ARGS) { $args += @($env:MAIN_EXTRA_ARGS -split " ") }

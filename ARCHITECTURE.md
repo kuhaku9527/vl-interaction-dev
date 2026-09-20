@@ -77,7 +77,7 @@ flowchart TB
 | 端口 | 服务 | 角色 | 说明 |
 | --- | --- | --- | --- |
 | **8070** | webinfer | 单入口网关（ADR0006） | 决策 token 编排 + 角色 prompt 注入；对外唯一 LLM 入口。**SPOF** |
-| **7060** | llama-server | VLM 推理主进程 | GGUF IQ4_NL + mmproj F16，**实测稳态 ≈ 9.3GB VRAM**（2026-09-20 实测 9,326 MiB；原记 "~5.8GB" 为错值，差 ~60%）。**唯一 SPOF**（挂=全瘫） |
+| **7060** | llama-server | VLM 推理主进程 | GGUF IQ4_NL + mmproj F16，**实测稳态 ≈ 8.0GB VRAM**（2026-09-20 KV q8_0 落地后实测 8,014 MiB；落地前 f16 KV 为 9.3GB / 9,535 MiB）。**唯一 SPOF**（挂=全瘫） |
 | **8099** | WebUI | 创作者交互端 | WebRTC + 进程内 sherpa-onnx |
 | **8985** | voice_clone API | 声音克隆注册 | MiniMax Rapid Clone 同步路径（ADR0001） |
 | ~~8991~~ | ~~本地 TTS 模型~~ | — | ❌ **已移除**（CosyVoice3 于 2026-07-12 从代码库删除；不在 `$PortMap`，永不启动） |
@@ -123,7 +123,7 @@ flowchart TB
 
 | 维度 | 选型 | 理由 |
 | --- | --- | --- |
-| VLM 引擎 | llama.cpp / llama-server（GGUF IQ4_NL） | 单卡消费级 GPU 友好、MIT 免费、OpenAI 兼容、**实测稳态 ≈ 9.3GB VRAM**（见 §3；原记 "~5.8GB" 为错值）；vLLM 运行时重、Windows 单卡不友好 |
+| VLM 引擎 | llama.cpp / llama-server（GGUF IQ4_NL） | 单卡消费级 GPU 友好、MIT 免费、OpenAI 兼容、**实测稳态 ≈ 8.0GB VRAM**（KV q8_0 已落地，见 §3）；vLLM 运行时重、Windows 单卡不友好 |
 | 流式传输 | WebRTC（浏览器）+ 进程内 sherpa-onnx | 不推翻 webinfer 单入口（ADR0006），仅借鉴模式 |
 | TTS / 克隆 | MiniMax Speech 2.8 / Rapid Clone | 质量优先；本地 CozyVoice 作 fallback |
 | 委派框架 | Hermes（gateway 8642 + shim 8079） | 人格/记忆/Skills/Provider 独立、故障隔离 |
@@ -159,7 +159,7 @@ flowchart TB
 | 端到端延迟 P99 | ≤ 1.2s ⚠️ **前提与来源待重估** | 原记「当前 0.8–1.5s」**无可追溯的端到端实测来源**，继承自已废弃的 2026-07 交付稿；且其前提是**单次交互**，**非「每秒一次」**。本机现有实测仅覆盖 **VLM 推理段**（prompt eval 453.64ms + decode 520ms ≈ 0.97s，2026-09-20）。**端到端 P99 从未实测**（含采集/编码链路）。见 `doc/research/realtime-claim-drift-audit-2026-09-20.md` |
 | 进程自愈 RTO | ≤ 30s（P99） | 崩溃 → 自动重启恢复 |
 | 数据 RPO | ≤ 5min | 记忆/会话持久化 |
-| VRAM 预算 | ⚠️ **待重算**（原记 ≤ 11.5GB / 16GB） | 原预算按**已废弃的 11 进程方案**（含 summary llama 2.9GB / CosyVoice 1.1GB / whisper 0.7GB，均已不在启动计划）推算。**2026-09-20 实测：当前 6 进程方案下 llama-server 单进程即占 9,326 MiB**，权重 ~8.3GB 是大头，KV 仅 1GB 量级（"KV 吃满"的怀疑不成立）。真实可用余量 ≈ 16 − 9.0 = **7.0GB**，非原记的 10.2GB。**显存缺口量化与逐项分解见 issue #145 / #143** |
+| VRAM 预算 | ⚠️ **待重算**（原记 ≤ 11.5GB / 16GB） | 原预算按**已废弃的 11 进程方案**（含 summary llama 2.9GB / CosyVoice 1.1GB / whisper 0.7GB，均已不在启动计划）推算。**2026-09-20 实测（KV q8_0 落地后）：llama-server 占 8,014 MiB**（落地前 f16 KV 为 9,535 MiB）。构成：权重 ~4,535 / **KV q8_0 1,224**（原 f16 2,321）/ mmproj ~1,483 / 固定 ~840 MiB。**"KV 吃满"的怀疑不成立**（KV 经量化后仅占 1.2GB）。真实可用余量 ≈ 16 − 8.0 = **8.0GB**。**显存逐项分解见 issue #143 / #145** |
 | 可用性 | 进程自愈最佳努力 | 单用户本地，无对外 SLA、无多租户 |
 
 > **延迟瓶颈实测结论（issue #43，已 CLOSED）**：端到端延迟瓶颈在采集/编码链路（OBS/屏幕捕获 + `max_pixels` 偏小 + JPEG 有损），VLM 推理段稳态 <320ms（DRIFT-6 实测）非瓶颈；webui 已埋 `frame_seq` 测量环（PR #93）暴露采集/编码开销。指标边界与细节见 `决策/VLM架构与模型组成.md`「VLM 端到端延迟实测结论」。

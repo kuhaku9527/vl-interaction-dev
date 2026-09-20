@@ -4,6 +4,16 @@
   "schema_notes": "v2: pure-Python executor (scripts/drift_gate.py) reads listed files and runs re.search on the merged content. Drop the legacy `command` field. Use `paths` + `pattern`. Optional `not_pattern` for negative checks.",
   "checks": [
     {
+      "id": "vlm-kv-quantization",
+      "decision_ref": "doc/research/kv-quantization-measured-2026-09-20.md",
+      "description": "llama-server 必须启用对称 KV q8_0 且 flash-attn on。实测省 1320 MiB 显存且延迟略降（9535->8214 MiB；prompt 265.9->260.5ms）。★ FA 与量化 V 是焊死的：FA 关闭时 V 转置存储，q8_0 的 32 倍数断言无处落脚会导致启动失败。q4_0 明确否决（仅多省 112 MiB 而相似度 81.6%->8.3%）。",
+      "phase": "static",
+      "paths": ["services/scripts/run-windows.ps1"],
+      "pattern": "\"-ctk\",\\s*\"q8_0\"[\\s\\S]{0,200}?\"-ctv\",\\s*\"q8_0\"[\\s\\S]{0,200}?\"--flash-attn\",\\s*\"on\"",
+      "not_pattern": "(\"-ctv\",\\s*\"q4_0\"|\"-ctk\",\\s*\"q4_0\")",
+      "severity": "block"
+    },
+    {
       "id": "vlm-n_ctx",
       "decision_ref": "决策/业务-上下文架构.md D-050 / drift-历史.md DRIFT-1",
       "description": "VLM 运行时 n_ctx 必须等于 webinfer main_ctx_tokens=16384（避免 2026-07-28 DRIFT-1 复发）；通过 scripts/vlm_runtime_probe.py 写出的 logs/vlm-runtime-props.json 校验（替代旧的日志 grep 方案：launcher 从未真正写 log 文件）",
