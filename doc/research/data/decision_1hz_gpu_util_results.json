@@ -1,0 +1,38 @@
+{
+  "idle": {
+    "label": "IDLE_30s",
+    "seconds": 30,
+    "samples": 118,
+    "gpu_util": {
+      "median": 2.0,
+      "mean": 3.1,
+      "p90": 5,
+      "max": 18,
+      "idle_pct_of_samples": 91.5
+    },
+    "vram_mib": {
+      "median": 9348,
+      "max": 9359
+    },
+    "requests": 0,
+    "wall_ms_median": 0
+  },
+  "load_1hz": {
+    "label": "LOAD_1HZ_30s",
+    "seconds": 30,
+    "samples": 118,
+    "gpu_util": {
+      "median": 2.0,
+      "mean": 20.0,
+      "p90": 83,
+      "max": 100,
+      "idle_pct_of_samples": 62.7
+    },
+    "vram_mib": {
+      "median": 9333,
+      "max": 9357
+    },
+    "requests": 23,
+    "wall_ms_median": 318.6
+  }
+}
