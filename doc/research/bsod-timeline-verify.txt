@@ -1,0 +1,184 @@
+=== BSOD timeline verification 2026-09-20T17:46:54.5906865+08:00 ===
+
+--- 1. Exact boot/shutdown markers (Kernel-General/Boot, EventLog) ---
+[17:18:09.003] id=12 Microsoft-Windows-Kernel-General: 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T09:18:08.500000000Z 启动。
+[17:18:09.003] id=20 Microsoft-Windows-Kernel-Boot: 上一次关机的成功状态为“false”。上一次引导的成功状态为“true”。
+[17:18:09.003] id=27 Microsoft-Windows-Kernel-Boot: 引导类型为 0x0。
+[17:18:09.044] id=20 Microsoft-Windows-Kernel-General: 闰秒配置已更新。 原因: Leap second data initialized from registry during boot 已启用闰秒: true 新闰秒计数: 0 旧闰秒计数: 0
+[17:18:11.571] id=41 Microsoft-Windows-Kernel-Power: 系统已在未先正常关机的情况下重新启动。如果系统停止响应、发生崩溃或意外断电，则可能会导致此错误。
+[17:18:24.698] id=6005 EventLog: 事件日志服务已启动。
+[17:18:24.698] id=6008 EventLog: 上一次系统的 下午5:11:24 在 ‎20/‎9/‎2026 上的关闭是意外的。
+[17:18:25.852] id=1001 Microsoft-Windows-WER-SystemErrorReporting: 计算机已经从检测错误后重新启动。检测错误: 0x00020001 (0x0000000000000026, 0x0000000000000000, 0x0000000000000000, 0x00000000000000
+[17:21:20.967] id=6006 EventLog: 事件日志服务已停止。
+[17:21:25.922] id=109 Microsoft-Windows-Kernel-Power: 内核电源管理器已启动关机转换。 关机原因: Kernel API
+[17:21:26.334] id=13 Microsoft-Windows-Kernel-General: 操作系统将在系统时间 ‎2026‎-‎09‎-‎20T09:21:26.334758700Z 关闭。
+[17:21:42.001] id=12 Microsoft-Windows-Kernel-General: 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T09:21:41.500000000Z 启动。
+[17:21:42.002] id=20 Microsoft-Windows-Kernel-Boot: 上一次关机的成功状态为“true”。上一次引导的成功状态为“true”。
+[17:21:42.002] id=27 Microsoft-Windows-Kernel-Boot: 引导类型为 0x0。
+[17:21:42.041] id=20 Microsoft-Windows-Kernel-General: 闰秒配置已更新。 原因: Leap second data initialized from registry during boot 已启用闰秒: true 新闰秒计数: 0 旧闰秒计数: 0
+[17:21:56.878] id=6005 EventLog: 事件日志服务已启动。
+
+--- 2. AUDIODG crash window: first and last (Application log id=1000) ---
+total AUDIODG crash events: 711
+FIRST: 16:45:01.527
+LAST : 17:11:38.572
+
+per-second histogram (top 20):
+  16:45:01  x1
+  16:46:12  x1
+  16:49:00  x1
+  16:52:48  x1
+  16:54:37  x1
+  17:02:34  x1
+  17:02:35  x1
+  17:02:36  x2
+  17:02:37  x1
+  17:02:38  x1
+  17:02:39  x2
+  17:02:40  x1
+  17:02:41  x1
+  17:02:42  x2
+  17:02:43  x1
+  17:02:44  x2
+  17:02:45  x1
+  17:02:46  x1
+  17:02:47  x2
+  17:02:48  x1
+
+last 5 events:
+[17:11:35.686] 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5
+[17:11:36.403] 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5
+[17:11:37.124] 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5
+[17:11:37.845] 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5
+[17:11:38.572] 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5
+
+--- 3. All events in the 90 seconds spanning the crash (17:10:30 - 17:12:00) ---
+
+--- 4. Application log same window ---
+x 137  [17:10:30] id=1001 Windows Error Reporting: 故障存储段 ，类型 0 事件名称: BEX64 响应: 不可用 Cab ID: 0 问题签名: P1: AUDIODG.EXE P2: 10.0.19041.5794 P3: 7b
+x  87  [17:10:30] id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.
+
+--- 5. WER kernel report (Kernel_20001_*) content ---
+DIR: C:\ProgramData\Microsoft\Windows\WER\ReportArchive\Kernel_20001_35b468f5dd64ee8aefdbd72e2a41b161919cf45_00000000_cab_a47cc72b-0b1d-4ce6-bf84-6a2fffb78a6e  (09/20/2026 17:20:02)
+
+--- 6. WER crash report count for AUDIODG (today) ---
+AUDIODG AppCrash report dirs: 498
+
+--- 7. DTS / SteelSeries services and processes ---
+
+Name                            DisplayName                            Status StartType
+----                            -----------                            ------ ---------
+ProcessGovernor                 Process Lasso Core (Process Governor) Running Automatic
+SteelSeriesGGUpdateServiceProxy SteelSeries GG Update Service Proxy   Stopped    Manual
+
+
+Name                   Id  MemMB
+----                   --  -----
+ProcessGovernor      6836   6.70
+SteelSeriesEngine   20660  44.80
+SteelSeriesGG       11028  29.10
+SteelSeriesGGClient  5256 131.50
+SteelSeriesGGClient  6304   3.30
+SteelSeriesGGClient  8044   6.30
+SteelSeriesGGClient 10816   5.30
+SteelSeriesGGClient 19768  23.00
+SteelSeriesGGClient 21568   3.20
+SteelSeriesGGClient 24332  10.90
+SteelSeriesGGEZ      7204  68.90
+SteelSeriesMoments  20716  13.90
+SteelSeriesPrism    22260  10.70
+SteelSeriesSonar    20768  58.40
+
+
+--- 8. DTS INF package info ---
+DIR: dtsapo4xhpxv2x64.inf_amd64_f33091eec786752b
+  dtsapo4xhpxv2x64.cat  59948
+  dtsapo4xhpxv2x64.inf  18546
+  dtsapo4xhpxv2x64.PNF  22244
+  dtsapo64.dll  2210896
+  dtscnt64.dll  1076688
+  DtsHPXV2Apo4Service.exe  123728
+  dtstech64.dll  2096824
+  msvcp140.dll  651904
+  vcruntime140.dll  106640
+  ---- INF: dtsapo4xhpxv2x64.inf (first 80 lines) ----
+  [Version]
+  Signature   = "$WINDOWS NT$"
+  Class       =  SoftwareComponent ; SoftwareDevice 
+  ClassGuid   = {5c4c3332-344d-483c-8739-259e934c9cc8}
+  Provider    = %DTS%
+  DriverVer   = 04/11/2018,1.0.3.0
+  CatalogFile = dtsapo4xhpxv2x64.cat
+  
+  [SourceDisksNames]
+  222="DTS APO Installation Disk",,,
+  
+  [SourceDisksFiles]
+  dtsapo64.dll=222
+  dtscnt64.dll=222
+  dtstech64.dll=222
+  DtsHPXV2Apo4Service.exe=222
+  msvcp140.dll=222
+  vcruntime140.dll=222
+  
+  [DestinationDirs]
+  SfxFx.CopyList=11, DTS\HP\APO4x\SteelSeries ; %windir%\system32
+  
+  [SignatureAttributes]
+  dtsapo64.dll=SignatureAttributes.PETrust
+  dtscnt64.dll=SignatureAttributes.PETrust
+  dtstech64.dll=SignatureAttributes.PETrust
+  
+  [SignatureAttributes.DRM]
+  DRMLevel=1300
+  
+  [SignatureAttributes.PETrust]
+  PETrust=true
+  
+  [Manufacturer]
+  %DTS% = ApoComponents,NTamd64
+  
+  [ApoComponents.NTamd64]
+  %Apo.ComponentDesc% = ApoComponent_Install,SWC\VEN_DTSI&AID_DTSI3
+  
+  [ApoComponent_Install]
+  CopyFiles = SfxFx.CopyList
+  AddReg    = DTSAPO.AddReg
+  
+  ;[ApoComponent_Install.Services]
+  ;;AddService = ,2    ; no function driver
+  ;AddService = DtsHPXV2Apo4Service, 0x00000800, Hsa_Usersrv_ServiceInstall
+  
+  [SfxFx.CopyList]
+  dtsapo64.dll
+  dtscnt64.dll
+  dtstech64.dll
+  DtsHPXV2Apo4Service.exe
+  msvcp140.dll
+  vcruntime140.dll
+  
+  ;[Hsa_Usersrv_ServiceInstall]
+  ;DisplayName    = "DtsHPXV2Apo4Service"
+  ;ServiceType    = 0x00000010      ; SERVICE_WIN32_SHARE_PROCESS
+  ;StartType      = 2               ; SERVICE_AUTO_START
+  ;ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+  ;ServiceBinary  = %11%\DTS\HP\APO4x\SteelSeries\DtsHPXV2Apo4Service.exe 
+  
+  
+  [DTSAPO.AddReg]
+  ; DTS Stream effect APO COM registration
+  HKCR,CLSID\%DTS_SFX_CLSID%,,,"DTS_SFX_APO Class"
+  HKCR,CLSID\%DTS_SFX_CLSID%\InProcServer32,,0x00020000,%%SystemRoot%%\System32\DTS\HP\APO4x\SteelSeries\dtsapo64.dll
+  HKCR,CLSID\%DTS_SFX_CLSID%\InProcServer32,ThreadingModel,0,"Both"
+  HKCR,CLSID\%DTS_SFX_CLSID%\TypeLib,,,"{7E9B8778-4F71-4639-B3D6-4657535CB01D}"
+  ;HKCR,CLSID\%DTS_SFX_CLSID%\Version,ThreadingModel,,"1.0"
+  
+  ; DTS Mode effect APO COM registration
+  HKCR,CLSID\%DTS_MFX_CLSID%,,,"DTS_MFX_APO Class"
+  HKCR,CLSID\%DTS_MFX_CLSID%\InProcServer32,,0x00020000,%%SystemRoot%%\System32\DTS\HP\APO4x\SteelSeries\dtsapo64.dll
+  HKCR,CLSID\%DTS_MFX_CLSID%\InProcServer32,ThreadingModel,0,"Both"
+  HKCR,CLSID\%DTS_MFX_CLSID%\TypeLib,,,"{7E9B8778-4F71-4639-B3D6-4657535CB01D}"
+  
+  ; DTS Stream effect APO registration
+  HKCR,AudioEngine\AudioProcessingObjects\%DTS_SFX_CLSID%, "FriendlyName", ,"DTS SFX APO"
+  HKCR,AudioEngine\AudioProcessingObjects\%DTS_SFX_CLSID%, "Copyright", ,"Copyright (c) 2018 DTS, Inc."
