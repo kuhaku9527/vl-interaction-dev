@@ -1,0 +1,330 @@
+=== BSOD forensics 2026-09-20T17:35:14.5721445+08:00 ===
+
+--- 1. All disk devices (incl. virtual / mounted VHD) ---
+
+Index         : 1
+Model         : ZHITAI TiPlus7100 1TB
+InterfaceType : SCSI
+Size          : 1024203640320
+PNPDeviceID   : SCSI\DISK&VEN_NVME&PROD_ZHITAI_TIPLUS710\7&F90BB5F&0&000000
+DeviceID      : \\.\PHYSICALDRIVE1
+
+Index         : 0
+Model         : kimtigo SSD 512GB
+InterfaceType : SCSI
+Size          : 512105932800
+PNPDeviceID   : SCSI\DISK&VEN_NVME&PROD_KIMTIGO_SSD_512G\5&2A87580F&0&000000
+DeviceID      : \\.\PHYSICALDRIVE0
+
+
+--- 2. Mounted VHD/VHDX (if any) ---
+
+Number       : 0
+FriendlyName : kimtigo SSD 512GB
+Location     : Integrated : Bus 1 : Device 0 : Function 0 : Adapter 1
+Path         : \\?\scsi#disk&ven_nvme&prod_kimtigo_ssd_512g#5&2a87580f&0&000000#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}
+BusType      : NVMe
+
+Number       : 1
+FriendlyName : ZHITAI TiPlus7100 1TB
+Location     : PCI Slot 1 : Bus 4 : Device 0 : Function 0 : Adapter 2
+Path         : \\?\scsi#disk&ven_nvme&prod_zhitai_tiplus710#7&f90bb5f&0&000000#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}
+BusType      : NVMe
+
+
+--- 3. Paging configuration detail (where can Windows page?) ---
+PageFileSetting count: 1
+
+MaximumSize : 24576
+Name        : C:\pagefile.sys
+Caption     : C:\ 'pagefile.sys'
+
+
+Caption   : C:\pagefile.sys
+Name      : C:\pagefile.sys
+PeakUsage : 387
+
+AutomaticManagedPagefile: False
+
+--- 4. Events in the 20 minutes BEFORE the crash (16:58 - 17:19) ---
+[17:01:19] L=3 id=10016 Microsoft-Windows-DistributedCOM: 应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 DESKTOP-NT9P61P\22186 SID (S-1-5-21-2001291667-2943734438-584985882-1001)授予针对 CLSID 为 {2593F
+[17:18:09] L=4 id=12 Microsoft-Windows-Kernel-General: 操作系统已在系统时间 ‎2026‎-‎09‎-‎20T09:18:08.500000000Z 启动。
+[17:18:09] L=4 id=153 Microsoft-Windows-Kernel-Boot: 基于虚拟化的安全性(策略: VBS Enabled,VSM Required,Hvci,Boot Chain Signer Soft Enforced)是 enabled due to VBS registry configuration。
+[17:18:09] L=4 id=20 Microsoft-Windows-Kernel-Boot: 上一次关机的成功状态为“false”。上一次引导的成功状态为“true”。
+[17:18:09] L=4 id=238 Microsoft-Windows-Kernel-Boot: EFI 时区偏差: 2047。夏令时标志: 0
+[17:18:09] L=4 id=25 Microsoft-Windows-Kernel-Boot: 引导菜单策略为 0x1。
+[17:18:09] L=4 id=27 Microsoft-Windows-Kernel-Boot: 引导类型为 0x0。
+[17:18:09] L=4 id=18 Microsoft-Windows-Kernel-Boot: 此系统有 0x1 个引导选项。
+[17:18:09] L=4 id=32 Microsoft-Windows-Kernel-Boot: bootmgr 花费了 0 毫秒等待用户输入。
+[17:18:09] L=4 id=30 Microsoft-Windows-Kernel-Boot: 固件报告了启动指标。
+[17:18:09] L=4 id=1 Microsoft-Windows-Hyper-V-Hypervisor: Hypervisor successfully started.
+[17:18:09] L=4 id=2 Microsoft-Windows-Hyper-V-Hypervisor: Hypervisor scheduler type is 0x4.
+[17:18:09] L=4 id=129 Microsoft-Windows-Hyper-V-Hypervisor: Hypervisor initialized I/O remapping. Hardware present: true Hardware enabled: true Policy: 0x0 Enabled features: 0x4A Internal information: 0x0 Problems: 0x0 A
+[17:18:09] L=4 id=156 Microsoft-Windows-Hyper-V-Hypervisor: Hypervisor configured mitigations for CVE-2018-3646 for virtual machines. Processor not affected: false Processor family not affected: false Processor supports 
+[17:18:09] L=4 id=165 Microsoft-Windows-Hyper-V-Hypervisor: Hypervisor configured mitigations for CVE-2019-11091, CVE-2018-12126, CVE-2018-12127, CVE-2018-12130 for virtual machines. Processor not affected: false Process
+[17:18:09] L=4 id=3 Microsoft-Windows-IsolatedUserMode: Secure Kernel started with status STATUS_SUCCESS and flags HvciEnabled,HvciStrictMode.
+[17:18:09] L=4 id=20 Microsoft-Windows-Kernel-General: 闰秒配置已更新。 原因: Leap second data initialized from registry during boot 已启用闰秒: true 新闰秒计数: 0 旧闰秒计数: 0
+[17:18:09] L=4 id=16 Microsoft-Windows-HAL: 已初始化 iommu 错误报告。
+[17:18:10] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“FileInfo”(10.0，‎2062‎-‎12‎-‎23T13:21:06.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:10] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“Wof”(10.0，‎2090‎-‎03‎-‎17T02:56:17.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:11] L=4 id=98 Microsoft-Windows-Ntfs: 卷 C: (\Device\HarddiskVolume3) 运行状况良好。无需执行任何操作。
+[17:18:11] L=2 id=161 volmgr: 由于在创建转储期间出错，创建转储文件失败。
+[17:18:11] L=2 id=161 volmgr: 由于在创建转储期间出错，创建转储文件失败。
+[17:18:11] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“FileCrypt”(10.0，‎2002‎-‎03‎-‎01T19:12:42.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:11] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“UCPD”(10.0，‎2006‎-‎08‎-‎28T19:56:22.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:11] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“sysdiag”(0.0，‎2026‎-‎08‎-‎26T15:33:15.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:11] L=4 id=7036 VfpExt:  服务处于 Driver load start 状态。
+[17:18:11] L=4 id=7036 VfpExt:  服务处于 Driver load complete 状态。
+[17:18:11] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“npsvctrig”(10.0，‎2025‎-‎01‎-‎06T10:41:12.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:11] L=1 id=41 Microsoft-Windows-Kernel-Power: 系统已在未先正常关机的情况下重新启动。如果系统停止响应、发生崩溃或意外断电，则可能会导致此错误。
+[17:18:11] L=4 id=172 Microsoft-Windows-Kernel-Power: 备用连接状态: Disconnected，原因: NIC compliance
+[17:18:11] L=4 id=10118 Microsoft-Windows-DriverFrameworks-UserMode: UMDF 反射器无法连接到服务控制管理器 (SCM)。如果 SCM 尚未启动，此情况应出现在引导期间。SCM 启动时将重试。
+[17:18:11] L=3 id=219 Microsoft-Windows-Kernel-PnP: 为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+[17:18:11] L=4 id=277 Microsoft-Windows-Hyper-V-VmSwitch: vmswitch.sys 内部版本 19041.amd64.vb_release_svc_prod1，调试 false，正式 true，1 1
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch) successfully connected to port C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Def
+[17:18:11] L=4 id=9 Microsoft-Windows-Hyper-V-VmSwitch: Switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch) successfully initialized.
+[17:18:11] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 3784F09C-3807-413C-8777-97920FC42B7C (Friendly Name: Container NIC e4187c6f) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly 
+[17:18:11] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 432A373A-CDA4-44DE-87ED-C62C731538A7 (Friendly Name: Container NIC 13be3ace) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly 
+[17:18:11] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 5B625497-73B2-48CF-B66D-1FEBFB897C69 (Friendly Name: Container NIC 53daee55) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly 
+[17:18:11] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 5EFE9D7B-A9E2-4BFB-AAE3-B00A9FB21795 (Friendly Name: Container NIC 7d14e259) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly 
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (Friendly Name: WSL).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (Friendly Name: WSL) successfully connected to port F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (Friendly Name: WSL) on switch
+[17:18:11] L=4 id=9 Microsoft-Windows-Hyper-V-VmSwitch: Switch F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (Friendly Name: WSL) successfully initialized.
+[17:18:11] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 2612D0C5-C743-4E8F-8136-AB6DE8124159 (Friendly Name: Container NIC 9ff26938) successfully created on switch F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (Friendly 
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2) successfully connected to port 3784F09C-3807-413C-8777-97920FC42B7C (Friendly Name: Container N
+[17:18:11] L=4 id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2) successfully enabled
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3) successfully connected to port 5B625497-73B2-48CF-B66D-1FEBFB897C69 (Friendly Name: Container NI
+[17:18:11] L=4 id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3) successfully enabled
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL) successfully connected to port 2612D0C5-C743-4E8F-8136-AB6DE8124159 (Friendly Name: Container NIC 
+[17:18:11] L=4 id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL) successfully enabled
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap) successfully connected to port 432A373A-CDA4-44DE-87ED-C62C731538A7 (Friendly Name: Container 
+[17:18:11] L=4 id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap) successfully enabled
+[17:18:11] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2).
+[17:18:11] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2) successfully connected to port 5EFE9D7B-A9E2-4BFB-AAE3-B00A9FB21795 (Friendly Name: Container NI
+[17:18:11] L=4 id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2) successfully enabled
+[17:18:11] L=4 id=98 Microsoft-Windows-Ntfs: 卷 D: (\Device\HarddiskVolume5) 运行状况良好。无需执行任何操作。
+[17:18:11] L=4 id=98 Microsoft-Windows-Ntfs: 卷 E: (\Device\HarddiskVolume6) 运行状况良好。无需执行任何操作。
+[17:18:12] L=4 id=98 Microsoft-Windows-Ntfs: 卷 \\?\Volume{b9e90737-a6b5-4daf-bc5f-22c99505b286} (\Device\HarddiskVolume4) 运行状况良好。无需执行任何操作。
+[17:18:12] L=4 id=24 Microsoft-Windows-Kernel-General: 已刷新时区信息，退出原因为 0。当前时区偏差为 -480。
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 0 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 1 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 137 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 2 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 3 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 4 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 5 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 141 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 6 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 7 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 157 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 8 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 9 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 145 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 10 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 11 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 153 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 12 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+[17:18:13] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 13 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 149 最低性能百分比: 51 最低限制百分比: 16
+[17:18:14] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 14 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3400 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+[17:18:14] L=4 id=55 Microsoft-Windows-Kernel-Processor-Power: 组 0 中的处理器 15 显示下列电源管理功能: 空闲状态类型: ACPI 空闲(C)状态 (2 状态) 性能状态类型: ACPI 协作处理器性能控制 标称频率(MHz): 3401 最佳性能百分比: 161 最低性能百分比: 51 最低限制百分比: 16
+[17:18:14] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap) successfully initialized.
+[17:18:14] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3) successfully initialized.
+[17:18:14] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2) successfully initialized.
+[17:18:14] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2) successfully initialized.
+[17:18:14] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL) successfully initialized.
+[17:18:14] L=4 id=8000 mtkwlex: 
+[17:18:18] L=4 id=18 BTHUSB: Windows 无法在本地适配器上存储蓝牙身份验证代码(链接密钥)。启动时，蓝牙键盘可能无法在系统 BIOS 中工作。
+[17:18:24] L=4 id=14 Microsoft-Windows-Wininit: Credential Guard 配置: 0x0、0
+[17:18:24] L=4 id=5 Microsoft-Windows-IsolatedUserMode: Secure Trustlet NULL Id 0 and Pid 0 started with status STATUS_SUCCESS.
+[17:18:24] L=4 id=1 Microsoft-Windows-IsolatedUserMode: Secure Trustlet \??\C:\Windows\system32\lsaiso.exe Id 1 and Pid 1172 started with status STATUS_SUCCESS.
+[17:18:24] L=4 id=18 Microsoft-Windows-Wininit: Key Guard 已启动，将保护 VSM 独立密钥。
+[17:18:24] L=4 id=16962 Microsoft-Windows-Directory-Services-SAM: 对 SAM 数据库进行远程调用时，受到默认安全描述符的限制: O:SYG:SYD:(A;;RC;;;BA)。 有关详细信息，请参阅 http://go.microsoft.com/fwlink/?LinkId=787651。
+[17:18:24] L=4 id=16977 Microsoft-Windows-Directory-Services-SAM: 使用以下最小密码长度的相关设置配置域。 MinimumPasswordLength: 0 RelaxMinimumPasswordLengthLimits: 0 MinimumPasswordLengthAudit: -1 有关详细信息，请访问 https://go.microsoft.com/fwlink/?Link
+[17:18:24] L=4 id=16983 Microsoft-Windows-Directory-Services-SAM: 安全帐户管理器现在将记录负责调用旧密码更改或设置 RPC 方法的远程客户端的定期摘要事件。 有关详细信息，请参阅 https://go.microsoft.com/fwlink/?linkid=2150956。 
+[17:18:24] L=4 id=6009 EventLog: Microsoft (R) Windows (R) 10.00. 19045 Multiprocessor Free。
+[17:18:24] L=2 id=6008 EventLog: 上一次系统的 下午5:11:24 在 ‎20/‎9/‎2026 上的关闭是意外的。
+[17:18:24] L=4 id=6005 EventLog: 事件日志服务已启动。
+[17:18:24] L=4 id=6013 EventLog: 系统启动时间为 16 秒。
+[17:18:24] L=2 id=7023 Service Control Manager: cplspcon 服务因下列错误而停止: 未指定的错误
+[17:18:24] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“wcifs”(10.0，‎2043‎-‎11‎-‎04T19:04:53.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:24] L=4 id=50036 Microsoft-Windows-Dhcp-Client: DHCPv4 客户端服务已启动
+[17:18:24] L=4 id=50103 Microsoft-Windows-Dhcp-Client: 已针对关闭通知注册 DHCPv4 客户端
+[17:18:24] L=4 id=51046 Microsoft-Windows-DHCPv6-Client: DHCPv6 客户端服务已启动
+[17:18:24] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“luafv”(10.0，‎1996‎-‎01‎-‎27T20:16:28.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:24] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“CldFlt”(10.0，‎2032‎-‎05‎-‎25T16:06:53.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:24] L=4 id=1 Microsoft-Windows-FilterManager: 文件系统筛选器“CldFlt”(版本 10.0，‎2032‎-‎05‎-‎25T16:06:53.000000000Z)已成功卸载。
+[17:18:24] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“CldFlt”(10.0，‎2032‎-‎05‎-‎25T16:06:53.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:24] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“storqosflt”(10.0，‎2038‎-‎12‎-‎03T17:18:20.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:24] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“bindflt”(10.0，‎2091‎-‎04‎-‎16T07:55:03.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 successfully disconnected from port C08CB7B8-9B3C-408E-8E30-5E16A3AEB444.
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC 1FB4571E-803D-466E-860D-EF1A7C97655A successfully disconnected from port 3784F09C-3807-413C-8777-97920FC42B7C.
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC C9ABAE90-49C7-47E2-864E-E4E23E68D078 successfully disconnected from port 432A373A-CDA4-44DE-87ED-C62C731538A7.
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC 7495B43B-5C9E-439C-BD25-4C089AC5D12A successfully disconnected from port 5B625497-73B2-48CF-B66D-1FEBFB897C69.
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC E9B0A348-3DBB-41DE-9D63-79978A7AF006 successfully disconnected from port 5EFE9D7B-A9E2-4BFB-AAE3-B00A9FB21795.
+[17:18:25] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch).
+[17:18:25] L=4 id=62 Microsoft-Windows-Hyper-V-VmSwitch: 已成功删除交换机 C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (友好名称: Default Switch)。
+[17:18:25] L=2 id=1001 Microsoft-Windows-WER-SystemErrorReporting: 计算机已经从检测错误后重新启动。检测错误: 0x00020001 (0x0000000000000026, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000)。已将转储的数据保存在: C:\Windows\Minidump\092026-16046-0
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 successfully disconnected from port F0D1F64D-ADC1-4C3B-98A3-F86666FB2172.
+[17:18:25] L=4 id=234 Microsoft-Windows-Hyper-V-VmSwitch: NIC C0769F78-9640-4677-AE85-6DD038540225 successfully disconnected from port 2612D0C5-C743-4E8F-8136-AB6DE8124159.
+[17:18:25] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (Friendly Name: WSL).
+[17:18:25] L=4 id=62 Microsoft-Windows-Hyper-V-VmSwitch: 已成功删除交换机 F0D1F64D-ADC1-4C3B-98A3-F86666FB2172 (友好名称: WSL)。
+[17:18:26] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2).
+[17:18:26] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3).
+[17:18:26] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL).
+[17:18:26] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap).
+[17:18:26] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Delete' succeeded on nic E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2).
+[17:18:26] L=4 id=7040 Service Control Manager: TabletInputService 服务的启动类型从 自动启动 更改为 按需启动。
+[17:18:26] L=4 id=10 VMnetBridge: () Starting up the Bridge Driver for VMware Virtual Networks.
+[17:18:26] L=4 id=1 VMnetuserif: () Starting up the User Interface Driver for VMware Virtual Networks.
+[17:18:28] L=4 id=4000 Microsoft-Windows-WLAN-AutoConfig: 已成功启动 WLAN 自动配置服务。 
+[17:18:28] L=4 id=10001 Microsoft-Windows-WLAN-AutoConfig: 已成功启动 WLAN 扩展模块。 模块路径: C:\Windows\system32\mtkihvx.dll 
+[17:18:28] L=4 id=34 vmx86: 
+[17:18:28] L=3 id=0 hcmon: Detected unrecognized USB driver (\Driver\hrdevmon).
+[17:18:28] L=3 id=0 hcmon: Detected unrecognized USB driver (\Driver\hrdevmon).
+[17:18:28] L=2 id=7009 Service Control Manager: 等待 AzureAttestService 服务的连接超时(180000 毫秒)。
+[17:18:28] L=2 id=7000 Service Control Manager: 由于下列错误，AzureAttestService 服务启动失败: 服务没有及时响应启动或控制请求。
+[17:18:28] L=4 id=26 Application Popup: 
+[17:18:28] L=2 id=7000 Service Control Manager: 由于下列错误，SSGDIO 服务启动失败: 证书已被颁发者直接吊销。
+[17:18:28] L=2 id=7009 Service Control Manager: 等待 Intel(R) Platform License Manager Service 服务的连接超时(180000 毫秒)。
+[17:18:28] L=2 id=7009 Service Control Manager: 等待 Intel(R) TPM Provisioning Service 服务的连接超时(180000 毫秒)。
+[17:18:28] L=4 id=5211 Microsoft-Windows-WAS: 已使用“ConfigurationSystem”在“Classic”模式下启动 Windows Process Activation Service (WAS)
+[17:18:28] L=3 id=2511 Server: 服务器服务无法重新创建 vmware_share 共享关系，因为 D:\vmware_share 目录已不再存在。请运行 "net share vmware_share /delete" 来删除此共享，或重新创建目录 D:\vmware_share。
+[17:18:28] L=4 id=7040 Service Control Manager: TabletInputService 服务的启动类型从 按需启动 更改为 自动启动。
+[17:18:29] L=4 id=1030 mtkwlex: 
+[17:18:30] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“FsDepends”(10.0，‎2001‎-‎03‎-‎29T10:25:43.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:30] L=4 id=98 Microsoft-Windows-Ntfs: 卷 \\?\Volume{629458e4-0000-0000-0000-010000000000} (\Device\HarddiskVolume7) 运行状况良好。无需执行任何操作。
+[17:18:30] L=3 id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[17:18:30] L=3 id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[17:18:30] L=3 id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[17:18:30] L=3 id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[17:18:30] L=4 id=7026 Service Control Manager: 以下引导启动或系统启动驱动程序未加载: bootsafe dam e kavbootc klim6
+[17:18:30] L=4 id=18 TPM: 此事件会触发受信任的平台模块(TPM)预配/状态检查运行。
+[17:18:31] L=4 id=6 Microsoft-Windows-FilterManager: 文件系统筛选器“gameflt”(10.0，‎2047‎-‎06‎-‎13T15:32:47.000000000Z)已成功加载并注册到筛选器管理器。
+[17:18:32] L=4 id=7001 Microsoft-Windows-Winlogon: 客户体验改善计划的用户登录通知
+[17:18:36] L=4 id=1282 Microsoft-Windows-TPM-WMI: 已生成 TBS 设备标识符。
+[17:18:36] L=4 id=1025 Microsoft-Windows-TPM-WMI: TPM 已成功预配，现在可以使用。
+[17:18:44] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch).
+[17:18:44] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch) successfully connected to port C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Def
+[17:18:44] L=4 id=9 Microsoft-Windows-Hyper-V-VmSwitch: Switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch) successfully initialized.
+[17:18:44] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 5425D5B4-CD52-4901-8DF7-801CB79D7613 (Friendly Name: Container NIC de429c66) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly 
+[17:18:44] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic BF11020D-7B6A-42C0-A343-DFDB29872D31 (Friendly Name: cfw-tap).
+[17:18:44] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC BF11020D-7B6A-42C0-A343-DFDB29872D31 (Friendly Name: cfw-tap) successfully initialized.
+[17:18:58] L=2 id=4207 Tcpip: 索引为 24 的 IPv6 TCP/IP 接口无法绑定到其提供程序。
+[17:18:58] L=2 id=4207 Tcpip: 索引为 24 的 IPv4 TCP/IP 接口无法绑定到其提供程序。
+[17:19:14] L=4 id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC BF11020D-7B6A-42C0-A343-DFDB29872D31 (Friendly Name: cfw-tap) successfully connected to port 5425D5B4-CD52-4901-8DF7-801CB79D7613 (Friendly Name: Container 
+[17:19:15] L=4 id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 6EBA9A3F-7347-4A0A-882F-CC7F884D5359 (Friendly Name: Container NIC c21d0ed9) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly 
+[17:19:15] L=4 id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC BF11020D-7B6A-42C0-A343-DFDB29872D31 (Friendly Name: ) successfully enabled
+[17:19:15] L=4 id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic 4F4BA71D-E039-4BEB-AEF2-F49D7C8B30B2 (Friendly Name: 以太网 3).
+[17:19:15] L=4 id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 4F4BA71D-E039-4BEB-AEF2-F49D7C8B30B2 (Friendly Name: 以太网 3) successfully initialized.
+
+--- 5. Application log around crash (16:58 - 17:19) ---
+[17:10:59] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:10:59] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:00] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:01] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:02] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:03] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:04] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:05] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:05] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:06] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:07] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:08] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:08] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:09] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:10] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:11] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:12] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:13] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:13] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:14] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:15] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:15] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:16] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:17] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:18] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:18] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:19] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:20] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:21] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:21] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:22] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:23] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:23] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:24] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:25] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:26] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:26] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:27] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:28] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:29] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:29] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:30] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:31] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:32] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:32] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:33] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:34] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:34] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:35] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:36] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:37] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:37] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:11:38] L=2 id=1000 Application Error: 错误应用程序名称: AUDIODG.EXE，版本: 10.0.19041.5794，时间戳: 0x7bf84fc0 错误模块名称: dtstech64.dll，版本: 4.0.3.0，时间戳: 0x5ad0fb6e 异常代码: 0xc0000409 错误偏移量: 0x00000000000245cc 错误进程 ID: 
+[17:18:30] L=3 id=2001 LMS: LMS cannot connect to Intel(R) MEI driver
+[17:18:31] L=3 id=63 Microsoft-Windows-WMI: 已在 Windows Management Instrumentation 命名空间 root\Intel_ME 中注册提供程序 IntelMEProv 以使用 LocalSystem 帐户。此帐户是特权帐户；如果没有正确模拟用户请求，该提供程序可能会导致违反安全策略。
+[17:18:31] L=3 id=63 Microsoft-Windows-WMI: 已在 Windows Management Instrumentation 命名空间 root\Intel_ME 中注册提供程序 IntelMEProv 以使用 LocalSystem 帐户。此帐户是特权帐户；如果没有正确模拟用户请求，该提供程序可能会导致违反安全策略。
+[17:18:31] L=3 id=63 Microsoft-Windows-WMI: 已在 Windows Management Instrumentation 命名空间 root\Intel_ME 中注册提供程序 IntelMEProv 以使用 LocalSystem 帐户。此帐户是特权帐户；如果没有正确模拟用户请求，该提供程序可能会导致违反安全策略。
+[17:18:36] L=2 id=11312 MsiInstaller: Product: Microsoft GameInput -- Error 1312. Cannot create the directory 'C:\Program Files\Microsoft GameInput'. A file with this name already exists. Please ren
+[17:18:40] L=2 id=86 Microsoft-Windows-CertificateServicesClient-CertEnroll: 通过 https://AMD-KeyId-907d65e9b562315997dd5ad086b2b7598957b92c.microsoftaik.azure.net/templates/Aik/scep 为 WORKGROUP\DESKTOP-NT9P61P$ 执行 SCEP 证书注册初始化失败: GetCACap
+[17:18:56] L=3 id=64 Microsoft-Windows-CertificateServicesClient-AutoEnrollment: 具有指纹 7a dc 75 fe dd 25 1c 60 8b b6 be aa 97 ae c8 c3 db 91 96 99 的 本地系统 的证书将到期或已到期。
+
+--- 6. GPU / display driver events last 2 days ---
+
+--- 7. WER reports for today (app crashes / GPU) ---
+09/20/2026 17:24:36  AppCrash_QQ.exe_b8ee9a9ffe9cdfd27fee221c5f34b2158d76510_bac7abba_fed41896-642a-49dc-a7ac-5d474c3502fc
+09/20/2026 17:20:11  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_1b0397f7-c0e0-4382-8556-0c6087948649
+09/20/2026 17:20:11  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_341c09a9-cfba-4be4-8009-20f9ccf6c115
+09/20/2026 17:20:09  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_33c4de90-0919-4c7d-95bd-15d48aec63e1
+09/20/2026 17:20:08  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_52d949cc-6d37-44a8-92b5-3b7acac7768a
+09/20/2026 17:20:07  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_92580de3-4718-4c98-9324-b6110ab5d297
+09/20/2026 17:20:06  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_fde1dbc7-4eb7-4b0d-8dd8-fa772d9e7d4c
+09/20/2026 17:20:05  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_a58d30bb-7f64-4936-8975-020cb45e6a73
+09/20/2026 17:20:04  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_a1eef1ba-9970-4d35-9fc8-7ce0aa8480ea
+09/20/2026 17:20:03  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_8350f62a-c353-4a4b-b246-d60a4c0abeda
+09/20/2026 17:20:02  Kernel_20001_35b468f5dd64ee8aefdbd72e2a41b161919cf45_00000000_cab_a47cc72b-0b1d-4ce6-bf84-6a2fffb78a6e
+09/20/2026 17:20:02  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_ad440b21-2457-4de9-8824-427a0eff1b7d
+09/20/2026 17:20:01  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_ada88419-badb-42bc-b2ef-d57eddda47cb
+09/20/2026 17:20:00  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_c30a33e6-ce1a-4c12-beea-ae8b428bbf07
+09/20/2026 17:19:58  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_af98028e-a9af-40bf-924c-7207daa6a03b
+09/20/2026 17:19:57  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_64884491-ea4a-4ba2-a1f4-59a4e757c918
+09/20/2026 17:19:56  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_7d3a5b3b-8770-477a-bf14-718accbfba75
+09/20/2026 17:19:55  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_08c3bccb-5422-434d-81a4-2165616eb32e
+09/20/2026 17:19:53  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_82d4b908-c6a0-42d8-9e39-8bb012064f28
+09/20/2026 17:19:52  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_1313f83c-6778-43c3-b30b-1b877a2a8ca1
+09/20/2026 17:19:51  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_61a4e3e6-d0af-49e8-aa18-a3421f4c84c0
+09/20/2026 17:19:50  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_e38c8ab8-85cc-4a48-8674-f54ca8d601cb
+09/20/2026 17:19:48  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_d050c976-2926-4005-aa07-a072c9ce0bfe
+09/20/2026 17:19:47  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_c47ace41-9d56-432a-bdfd-c35d597d39f3
+09/20/2026 17:19:46  AppCrash_AUDIODG.EXE_51ccd030d63a16c58c44cfe1ad78e1423b2ed25d_c09f6ee1_0861567b-e0a3-4f6d-873d-f6a6955bcb62
+
+--- 8. Kernel-Power 41 detail (both crashes today) ---
+[09/20/2026 17:18:11]
+  BugcheckCode=131073 P1=38 P2=0 P3=0 P4=0
+  PowerButton=0
+[09/20/2026 13:32:10]
+  BugcheckCode=0 P1=0 P2=0 P3=0 P4=0
+  PowerButton=0
+
+--- 9. WSL / vmmem state now ---
+
+Name          Id WorkingSetGB
+----          -- ------------
+vmmem      12840         0.00
+wslservice 15776         0.02
+
+
+--- 10. Current GPU state ---
+name, memory.used [MiB], memory.total [MiB], temperature.gpu, power.draw [W]
+NVIDIA GeForce RTX 5060 Ti, 771 MiB, 16311 MiB, 39, 10.49 W
+

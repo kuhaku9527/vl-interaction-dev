@@ -1,0 +1,120 @@
+=== BSOD deep dive 2026-09-20T17:28:44.5211707+08:00 ===
+
+--- 1. Physical disks ---
+
+Number FriendlyName          SizeGB BusType HealthStatus OperationalStatus
+------ ------------          ------ ------- ------------ -----------------
+     0 kimtigo SSD 512GB     476.90 NVMe    Healthy      Online
+     1 ZHITAI TiPlus7100 1TB 953.90 NVMe    Healthy      Online
+
+
+--- 2. Volumes ---
+
+DriveLetter FileSystemLabel FileSystem SizeGB HealthStatus
+----------- --------------- ---------- ------ ------------
+          D                 NTFS       401.80 Healthy
+          E                 NTFS       552.00 Healthy
+          C                 NTFS       476.30 Healthy
+
+
+--- 3. Pagefile configuration ---
+
+Name            InitialSize MaximumSize
+----            ----------- -----------
+C:\pagefile.sys       16384       24576
+
+
+Name            AllocatedBaseSize CurrentUsage PeakUsage
+----            ----------------- ------------ ---------
+C:\pagefile.sys             16384            0         1
+
+
+--- 4. WSL vhdx files ---
+
+--- 5. WSL status ---
+
+--- 6. Disk health / reliability ---
+
+DeviceId FriendlyName          MediaType HealthStatus SizeGB
+-------- ------------          --------- ------------ ------
+1        ZHITAI TiPlus7100 1TB SSD       Healthy      953.90
+2        Msft Virtual Disk     SSD       Healthy        8.00
+0        kimtigo SSD 512GB     SSD       Healthy      476.90
+
+
+--- 7. Disk error events (id 51/7/11/153, last 2 days) ---
+[09/20/2026 17:25:02] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 3EBF8F3C-E021-4E1A-9D83-7C18B5DE1DF4 (Friendly Name: WLAN 2) successfully initialized.
+[09/20/2026 17:24:59] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 79A45CB2-7DA3-4194-9B93-B981FEE5E572 (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 17:22:51] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC F2B444D3-BD9B-4ED3-9ED2-90D9A291F76B (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 17:22:20] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC DE09E67A-A87E-4134-93CD-43673CEC0F52 (Friendly Name: 以太网 2) successfully initialized.
+[09/20/2026 17:21:46] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 4F4BA71D-E039-4BEB-AEF2-F49D7C8B30B2 (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 17:21:46] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC BF11020D-7B6A-42C0-A343-DFDB29872D31 (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 17:21:42] id=153 Microsoft-Windows-Kernel-Boot: 基于虚拟化的安全性(策略: VBS Enabled,VSM Required,Hvci,Boot Chain Signer Soft Enforced)是 enabled due to VBS registry configuration。
+[09/20/2026 17:19:15] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 4F4BA71D-E039-4BEB-AEF2-F49D7C8B30B2 (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 17:18:44] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC BF11020D-7B6A-42C0-A343-DFDB29872D31 (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 17:18:30] id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:30] id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:30] id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:30] id=51 disk: 传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:14] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL) successfully initialized.
+[09/20/2026 17:18:14] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2) successfully initialized.
+[09/20/2026 17:18:14] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2) successfully initialized.
+[09/20/2026 17:18:14] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 17:18:14] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 17:18:09] id=153 Microsoft-Windows-Kernel-Boot: 基于虚拟化的安全性(策略: VBS Enabled,VSM Required,Hvci,Boot Chain Signer Soft Enforced)是 enabled due to VBS registry configuration。
+[09/20/2026 13:53:18] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C0769F78-9640-4677-AE85-6DD038540225 (Friendly Name: WSL) successfully initialized.
+[09/20/2026 13:35:27] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC E9B0A348-3DBB-41DE-9D63-79978A7AF006 (Friendly Name: 以太网 2) successfully initialized.
+[09/20/2026 13:35:26] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 1FB4571E-803D-466E-860D-EF1A7C97655A (Friendly Name: WLAN 2) successfully initialized.
+[09/20/2026 13:33:15] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 7495B43B-5C9E-439C-BD25-4C089AC5D12A (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 13:32:44] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC C9ABAE90-49C7-47E2-864E-E4E23E68D078 (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 13:32:13] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 478A8BA7-8911-4DC8-B78A-5F7D8F3BB88D (Friendly Name: WLAN 2) successfully initialized.
+[09/20/2026 13:32:13] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 2BA1575C-5BE9-4ACB-BC08-7DE2BCFD899C (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 13:32:13] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC AA3ED34D-2D54-49DE-B7E7-40C3549106FE (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 13:32:13] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 18D5CC21-CBFF-475D-8346-0C4498503D10 (Friendly Name: 以太网 2) successfully initialized.
+[09/20/2026 13:32:06] id=153 Microsoft-Windows-Kernel-Boot: 基于虚拟化的安全性(策略: VBS Enabled,VSM Required,Hvci,Boot Chain Signer Soft Enforced)是 enabled due to VBS registry configuration。
+[09/20/2026 09:46:44] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 478A8BA7-8911-4DC8-B78A-5F7D8F3BB88D (Friendly Name: WLAN 2) successfully initialized.
+
+--- 8. WHEA hardware error events ---
+
+--- 9. Hyper-V / virtualization events (last day) ---
+[09/20/2026 17:25:02] id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC 3EBF8F3C-E021-4E1A-9D83-7C18B5DE1DF4 (Friendly Name: WLAN 2) successfully connected to port 3EC8A53C-D1CF-40B0-A3C2-19E77334ADDF (Friendly Name: Container NIC d77d8de0) on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444(Friendly Name: Default Switch).
+[09/20/2026 17:25:02] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 3EBF8F3C-E021-4E1A-9D83-7C18B5DE1DF4 (Friendly Name: WLAN 2) successfully initialized.
+[09/20/2026 17:25:02] id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic 3EBF8F3C-E021-4E1A-9D83-7C18B5DE1DF4 (Friendly Name: WLAN 2).
+[09/20/2026 17:25:02] id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC F2B444D3-BD9B-4ED3-9ED2-90D9A291F76B (Friendly Name: ) successfully enabled
+[09/20/2026 17:25:02] id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC DE09E67A-A87E-4134-93CD-43673CEC0F52 (Friendly Name: ) successfully enabled
+[09/20/2026 17:25:02] id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 79A45CB2-7DA3-4194-9B93-B981FEE5E572 (Friendly Name: ) successfully enabled
+[09/20/2026 17:25:01] id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 3EC8A53C-D1CF-40B0-A3C2-19E77334ADDF (Friendly Name: Container NIC d77d8de0) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch).
+[09/20/2026 17:24:59] id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC 79A45CB2-7DA3-4194-9B93-B981FEE5E572 (Friendly Name: cfw-tap) successfully connected to port 12DF050C-3E7C-43F9-BA65-005FC3112009 (Friendly Name: Container NIC 437c5871) on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444(Friendly Name: Default Switch).
+[09/20/2026 17:24:59] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC 79A45CB2-7DA3-4194-9B93-B981FEE5E572 (Friendly Name: cfw-tap) successfully initialized.
+[09/20/2026 17:24:59] id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic 79A45CB2-7DA3-4194-9B93-B981FEE5E572 (Friendly Name: cfw-tap).
+[09/20/2026 17:24:59] id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC F2B444D3-BD9B-4ED3-9ED2-90D9A291F76B (Friendly Name: ) successfully enabled
+[09/20/2026 17:24:59] id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC DE09E67A-A87E-4134-93CD-43673CEC0F52 (Friendly Name: ) successfully enabled
+[09/20/2026 17:24:59] id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port 12DF050C-3E7C-43F9-BA65-005FC3112009 (Friendly Name: Container NIC 437c5871) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch).
+[09/20/2026 17:22:52] id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC F2B444D3-BD9B-4ED3-9ED2-90D9A291F76B (Friendly Name: 以太网 3) successfully connected to port ED477398-0C1E-4FF7-A544-127FFE94CBEF (Friendly Name: Container NIC 236c5761) on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444(Friendly Name: Default Switch).
+[09/20/2026 17:22:51] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC F2B444D3-BD9B-4ED3-9ED2-90D9A291F76B (Friendly Name: 以太网 3) successfully initialized.
+[09/20/2026 17:22:51] id=233 Microsoft-Windows-Hyper-V-VmSwitch: The operation 'Create' succeeded on nic F2B444D3-BD9B-4ED3-9ED2-90D9A291F76B (Friendly Name: 以太网 3).
+[09/20/2026 17:22:51] id=5 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC DE09E67A-A87E-4134-93CD-43673CEC0F52 (Friendly Name: ) successfully enabled
+[09/20/2026 17:22:51] id=264 Microsoft-Windows-Hyper-V-VmSwitch: Port ED477398-0C1E-4FF7-A544-127FFE94CBEF (Friendly Name: Container NIC 236c5761) successfully created on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444 (Friendly Name: Default Switch).
+[09/20/2026 17:22:50] id=232 Microsoft-Windows-Hyper-V-VmSwitch: NIC DE09E67A-A87E-4134-93CD-43673CEC0F52 (Friendly Name: 以太网 2) successfully connected to port 5428B32A-2ACE-4AC9-88D5-276E7094652F (Friendly Name: Container NIC eb5ba5b8) on switch C08CB7B8-9B3C-408E-8E30-5E16A3AEB444(Friendly Name: Default Switch).
+[09/20/2026 17:22:20] id=7 Microsoft-Windows-Hyper-V-VmSwitch: Miniport NIC DE09E67A-A87E-4134-93CD-43673CEC0F52 (Friendly Name: 以太网 2) successfully initialized.
+
+--- 10. Hyper-V / VBS enablement ---
+VBS status: 2
+Hyper-V-All: 
+VirtualMachinePlatform: 
+HypervisorPresent: True
+
+--- 11. Memory configuration ---
+TotalVisibleMemory: 31.93 GB
+FreePhysicalMemory: 25.08 GB
+TotalVirtualMemory: 47.93 GB
+FreeVirtualMemory: 33.81 GB
+
+BankLabel    DeviceLocator    GB Speed Manufacturer PartNumber
+---------    -------------    -- ----- ------------ ----------
+P0 CHANNEL A DIMM 0        16.00  3200 Unknown      S16G3200TCSBGHC18   
+P0 CHANNEL A DIMM 1         8.00  3200 Unknown      UCC418B C3600/8G    
+P0 CHANNEL B DIMM 1         8.00  3200 Unknown      UCC418B C3600/8G    
+
+
+--- 12. Memory diagnostic results (if any) ---

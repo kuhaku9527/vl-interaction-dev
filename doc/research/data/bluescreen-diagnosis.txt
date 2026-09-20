@@ -1,0 +1,119 @@
+=== 蓝屏诊断 2026-09-20T17:27:44.1281174+08:00 ===
+
+--- 1. Minidump 文件 ---
+
+Name                 Length LastWriteTime
+----                 ------ -------------
+092026-16046-01.dmp 4270176 2026/9/20 17:18:19
+
+
+--- 2. BugCheck 事件（最近 5 条）---
+TIME: 09/20/2026 17:18:25
+计算机已经从检测错误后重新启动。检测错误: 0x00020001 (0x0000000000000026, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000)。已将转储的数据保存在: C:\Windows\Minidump\092026-16046-01.dmp。报告 ID: 9b19323d-671a-4657-abfe-868ff2b713ac。
+---
+
+--- 3. Kernel-Power 41（非正常关机）最近 5 条 ---
+TIME: 09/20/2026 17:18:11
+  BugcheckCode: 131073
+  BugcheckParameter1: 38
+  BugcheckParameter2: 0
+  BugcheckParameter3: 0
+  BugcheckParameter4: 0
+  PowerButtonTimestamp: 0
+---
+TIME: 09/20/2026 13:32:10
+  BugcheckCode: 0
+  BugcheckParameter1: 0
+  BugcheckParameter2: 0
+  BugcheckParameter3: 0
+  BugcheckParameter4: 0
+  PowerButtonTimestamp: 0
+---
+
+--- 4. 蓝屏前后的应用/驱动错误（17:00-18:00）---
+[09/20/2026 17:26:57] id=1801 Microsoft-Windows-TPM-WMI
+    需要更新安全启动 CA/密钥。此设备签名信息包含在此处。
+[09/20/2026 17:24:02] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\SYSTEM SID (S-1-5-18)授予针对 CLSID 为 
+[09/20/2026 17:24:02] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\SYSTEM SID (S-1-5-18)授予针对 CLSID 为 
+[09/20/2026 17:23:46] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:23:46] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:23:46] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:23:46] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:22:29] id=4207 Tcpip
+    索引为 23 的 IPv4 TCP/IP 接口无法绑定到其提供程序。
+[09/20/2026 17:22:29] id=4207 Tcpip
+    索引为 23 的 IPv6 TCP/IP 接口无法绑定到其提供程序。
+[09/20/2026 17:21:59] id=7009 Service Control Manager
+    等待 Intel(R) TPM Provisioning Service 服务的连接超时(180000 毫秒)。
+[09/20/2026 17:21:59] id=7009 Service Control Manager
+    等待 Intel(R) Platform License Manager Service 服务的连接超时(180000 毫秒)。
+[09/20/2026 17:21:59] id=7000 Service Control Manager
+    由于下列错误，SSGDIO 服务启动失败: 
+[09/20/2026 17:21:59] id=7000 Service Control Manager
+    由于下列错误，AzureAttestService 服务启动失败: 
+[09/20/2026 17:21:59] id=7009 Service Control Manager
+    等待 AzureAttestService 服务的连接超时(180000 毫秒)。
+[09/20/2026 17:21:59] id=0 hcmon
+    Detected unrecognized USB driver (\Driver\hrdevmon).
+[09/20/2026 17:21:59] id=0 hcmon
+    Detected unrecognized USB driver (\Driver\hrdevmon).
+[09/20/2026 17:21:58] id=2511 Server
+    服务器服务无法重新创建 vmware_share 共享关系，因为 D:\vmware_share 目录已不再存在。请运行 "net share vmware_share /delete" 来删除此共享，或重新创建目录 D:\vmware_share。
+[09/20/2026 17:21:56] id=7023 Service Control Manager
+    cplspcon 服务因下列错误而停止: 
+[09/20/2026 17:21:44] id=219 Microsoft-Windows-Kernel-PnP
+    为设备 ROOT\DISPLAY\0000 加载驱动程序 \Driver\WudfRd 失败。
+[09/20/2026 17:21:21] id=10002 Microsoft-Windows-WLAN-AutoConfig
+    WLAN 扩展模块已停止。
+[09/20/2026 17:20:29] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:20:29] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:20:29] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:20:29] id=10016 Microsoft-Windows-DistributedCOM
+    应用程序-特定 权限设置并未向在应用程序容器 不可用 SID (不可用)中运行的地址 LocalHost (使用 LRPC) 中的用户 NT AUTHORITY\LOCAL SERVICE SID (S-1-5-19)授予针对 CLSID 为 
+[09/20/2026 17:18:58] id=4207 Tcpip
+    索引为 24 的 IPv4 TCP/IP 接口无法绑定到其提供程序。
+[09/20/2026 17:18:58] id=4207 Tcpip
+    索引为 24 的 IPv6 TCP/IP 接口无法绑定到其提供程序。
+[09/20/2026 17:18:30] id=51 disk
+    传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:30] id=51 disk
+    传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:30] id=51 disk
+    传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:30] id=51 disk
+    传呼期间在设备 \Device\Harddisk2\DR2 上检测到一个错误。
+[09/20/2026 17:18:28] id=7009 Service Control Manager
+    等待 Intel(R) TPM Provisioning Service 服务的连接超时(180000 毫秒)。
+[09/20/2026 17:18:28] id=7009 Service Control Manager
+    等待 Intel(R) Platform License Manager Service 服务的连接超时(180000 毫秒)。
+[09/20/2026 17:18:28] id=7000 Service Control Manager
+    由于下列错误，SSGDIO 服务启动失败: 
+[09/20/2026 17:18:28] id=7000 Service Control Manager
+    由于下列错误，AzureAttestService 服务启动失败: 
+[09/20/2026 17:18:28] id=7009 Service Control Manager
+    等待 AzureAttestService 服务的连接超时(180000 毫秒)。
+[09/20/2026 17:18:28] id=0 hcmon
+    Detected unrecognized USB driver (\Driver\hrdevmon).
+[09/20/2026 17:18:28] id=0 hcmon
+    Detected unrecognized USB driver (\Driver\hrdevmon).
+[09/20/2026 17:18:28] id=2511 Server
+    服务器服务无法重新创建 vmware_share 共享关系，因为 D:\vmware_share 目录已不再存在。请运行 "net share vmware_share /delete" 来删除此共享，或重新创建目录 D:\vmware_share。
+[09/20/2026 17:18:25] id=1001 Microsoft-Windows-WER-SystemErrorReporting
+    计算机已经从检测错误后重新启动。检测错误: 0x00020001 (0x0000000000000026, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000)。已将转储的数据保存在: C:\Windows\Minidump\092026-16046-01.dmp。报告 ID: 9b19323d-671a-4657-abfe-868ff2b713ac。
+[09/20/2026 17:18:24] id=7023 Service Control Manager
+    cplspcon 服务因下列错误而停止: 
+
+--- 5. Display/TDR 相关（显卡驱动超时）---
+
+--- 6. 系统信息 ---
+显卡驱动: 15.6.5.199
+OS: 10.0.19045
