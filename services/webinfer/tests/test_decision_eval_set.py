@@ -219,6 +219,45 @@ def test_legacy_view_matches_cases_one_to_one():
 
 
 # ---------------------------------------------------------------------------
+# 5b. 「一条命令」视图：计数 + 开卷清单 + 分母说明
+# ---------------------------------------------------------------------------
+
+
+def test_describe_reports_counts_and_open_book_list():
+    """★ 验收 #2/#3/#4：一条命令同时给出计数、开卷句清单与分母说明。
+
+    断言的是**内容**（关键事实都在），不是排版细节。
+    """
+    text = des.describe()
+
+    assert "total=56" in text
+    for group in des.GROUPS:
+        assert f"{group}={des.group_counts()[group]}" in text
+    counts = des.subset_counts(des.load_cases())
+    for subset in des.SUBSETS:
+        assert f"{subset}={counts[subset]}" in text
+
+    # 开卷清单必须**逐句列出**，不只是给个数
+    open_book = [c for c in des.load_cases() if c.is_open_book]
+    assert open_book, "开卷集为空，清单无从校验"
+    for case in open_book:
+        assert case.case_id in text, f"{case.case_id} 未出现在开卷清单里"
+        assert case.text in text
+
+    # 分母差异说明必须在场
+    assert "25" in text and "26" in text and "N01b" in text
+
+
+def test_describe_follows_the_prompt_it_is_given():
+    """★ 传入自定义 prompt 时清单随 prompt 变化（不是硬编码文本）。"""
+    base = des.describe()
+    probe = next(c for c in des.load_cases() if not c.is_open_book)
+    injected = des.describe(prompt=f"前言……{probe.text}……")
+    assert probe.case_id not in base
+    assert f"  {probe.case_id}" in injected
+
+
+# ---------------------------------------------------------------------------
 # 6. 负控：证明这些断言真的在分辨对错
 # ---------------------------------------------------------------------------
 

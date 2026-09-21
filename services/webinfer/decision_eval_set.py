@@ -398,6 +398,36 @@ def expected_by_id() -> dict[str, str]:
     return {cid: group for cid, _t, group, *_rest in CASES}
 
 
+def describe(prompt: str | None = None) -> str:
+    """Human-readable report of the asset under one prompt: counts + the
+    open-book list.
+
+    This is the "one command" view: it answers both "how many in each group /
+    subset" and "exactly which sentences are open-book" without anyone having
+    to open a REPL or read a test file.
+
+    Run:  python -m decision_eval_set
+    """
+    effective = production_live_prompt() if prompt is None else prompt
+    cases = load_cases(effective)
+    groups = group_counts(cases)
+    subsets = subset_counts(cases)
+    lines = [
+        "=== decision eval set (frozen asset) ===",
+        f"total={groups['total']}  " + "  ".join(f"{g}={groups[g]}" for g in GROUPS),
+        "subsets: " + "  ".join(f"{s}={subsets[s]}" for s in SUBSETS),
+        "",
+        f"open-book (逐字出现在被测 prompt 里, n={subsets[SUBSET_OPEN_BOOK]}):",
+    ]
+    for case in cases:
+        if case.is_open_book:
+            lines.append(f"  {case.case_id:5s} [{case.group:11s}] {case.text}")
+    lines.append("")
+    lines.append("denominator note:")
+    lines.append(f"  {HISTORICAL_DENOMINATOR_NOTE}")
+    return "\n".join(lines)
+
+
 __all__ = [
     "ACTION_DELEGATE",
     "ACTION_RESPOND",
@@ -416,6 +446,7 @@ __all__ = [
     "SUBSET_OPEN_BOOK",
     "DecisionCase",
     "canonical_counts_match",
+    "describe",
     "expected_by_id",
     "group_counts",
     "legacy_test_set",
@@ -427,3 +458,7 @@ __all__ = [
     "subset_counts",
     "subset_for",
 ]
+
+
+if __name__ == "__main__":
+    print(describe())
