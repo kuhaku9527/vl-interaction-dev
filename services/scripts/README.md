@@ -47,7 +47,7 @@
 | `build_negative_pool.py` | 构建负样本池 |
 | `ingest_esc50.py` | 导入 ESC-50 环境音数据集 |
 | `make_esc50_musan_layout.py` | 生成 ESC-50/MUSAN 目录布局 |
-| `benchmark_4state_notforme.py` | 四态 `not-for-me` 基准（addressee-detection Phase 2） |
+| `benchmark_4state_notforme.py` | 四态 `not-for-me` 基准（addressee-detection Phase 2）；测试集来自 `services/webinfer/decision_eval_set.py`（冻结资产，#155） |
 | `benchmark_campplus_addressee.py` | CAM++ 声学门控基准（Phase 1） |
 | `test_assemble_kws_corpus.py` | `assemble_kws_corpus.py` 的单测 |
 | `verify-services.ps1` | 服务探活（PowerShell 版） |

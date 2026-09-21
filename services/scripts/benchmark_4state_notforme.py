@@ -56,6 +56,19 @@ _WEBINFER_DIR = _REPO_ROOT / "services" / "webinfer"
 if str(_WEBINFER_DIR) not in sys.path:
     sys.path.insert(0, str(_WEBINFER_DIR))
 
+# ★ #155: the test set is no longer a literal in this script. It lives in the
+# frozen asset (services/webinfer/decision_eval_set.py), which also computes
+# the open-book/generalization split and pins the denominators. This script is
+# a *consumer*: changing the asset changes both benchmarks at once.
+from decision_eval_set import (  # noqa: E402
+    GROUP_DELEGATE,
+    GROUP_DIRECTED,
+    GROUP_NONDIRECTED,
+    GROUPS,
+    HISTORICAL_DENOMINATOR_NOTE,
+    legacy_test_set,
+    subset_by_id,
+)
 from prompt_constants import DEFAULT_SYSTEM_PROMPT_EN  # noqa: E402
 from system_prompts import compose_system_prompt, load_character_prompts  # noqa: E402
 
@@ -193,66 +206,20 @@ Transcript: 明天会不会下雨
 Output: </response> 我查一下。</delegation> 查一下明天是否下雨
 """.strip()
 
-# --- test set --------------------------------------------------------------
-# Each item: (id, text, expected, category, note)
-#   expected: "directed" (应 response/delegation) or "nondirected" (应 not-for-me/silence)
-#   category: question / command / address / self-talk / reply-other /
-#             exclamation / talk-other
-TEST_SET: list[tuple[str, str, str, str, str]] = [
-    # ---- 面向 AI (应 response / delegation) ------------------------------
-    ("D01", "玛尔基特怎么打？", "directed", "question", "提问"),
-    ("D02", "介绍一下你自己", "directed", "command", "指令"),
-    ("D03", "喂，帮我查一下明天的天气", "directed", "address", "带称呼+指令"),
-    ("D04", "帮我定个闹钟，早上七点", "directed", "command", "指令"),
-    ("D05", "现在几点了？", "directed", "question", "提问"),
-    ("D06", "BT，在吗？", "directed", "address", "带称呼"),
-    ("D07", "嘿，你听到了吗？", "directed", "address", "带称呼"),
-    ("D08", "艾尔登法环的黄金律法是什么？", "directed", "question", "提问"),
-    ("D09", "给我讲个笑话", "directed", "command", "指令"),
-    ("D10", "把音乐声音调大一点", "directed", "command", "指令"),
-    ("D11", "今天有什么安排？", "directed", "question", "提问"),
-    ("D12", "你叫什么名字？", "directed", "question", "提问"),
-    ("D13", "Can you help me with this boss fight?", "directed", "question", "提问 EN"),
-    ("D14", "Turn off the lights, please", "directed", "command", "指令 EN"),
-    ("D15", "What time is it?", "directed", "question", "提问 EN"),
-    ("D16", "Hey, what's the weather today?", "directed", "address", "带称呼 EN"),
-    ("D17", "帮我写个邮件草稿", "directed", "command", "指令"),
-    ("D18", "明天会议几点？", "directed", "question", "提问"),
-    ("D19", "推荐配置是什么？", "directed", "question", "提问"),
-    ("D20", "暂停一下，先听我说", "directed", "command", "指令"),
-    ("D21", "玛尔基特的出血抗性是多少？", "directed", "question", "提问"),
-    ("D22", "Show me how to beat Margit", "directed", "question", "提问 EN"),
-    ("D23", "记得提醒我买牛奶", "directed", "command", "指令"),
-    ("D24", "你觉得这个方案怎么样？", "directed", "question", "提问(你→AI)"),
-    ("D25", "Stop playing music", "directed", "command", "指令 EN"),
-    # ---- 非面向 (应 not-for-me / silence) ---------------------------------
-    ("N01", "这关怎么这么难啊", "nondirected", "self-talk", "自言自语"),
-    ("N01b", "哎呀，这关怎么那么难", "nondirected", "self-talk", "自言自语(真机失败句 08-13)"),
-    ("N02", "唉，好累", "nondirected", "exclamation", "感叹"),
-    ("N03", "对，我也觉得", "nondirected", "reply-other", "回应旁人"),
-    ("N04", "你把那个拿过来", "nondirected", "talk-other", "与他人对话(歧义)"),
-    ("N05", "今天天气真好啊", "nondirected", "exclamation", "感叹"),
-    ("N06", "完了完了，要迟到了", "nondirected", "self-talk", "自言自语"),
-    ("N07", "天哪，这都什么事啊", "nondirected", "exclamation", "感叹"),
-    ("N08", "你先走吧，我一会就来", "nondirected", "talk-other", "与他人对话"),
-    ("N09", "嗯，好的好的", "nondirected", "reply-other", "回应旁人"),
-    ("N10", "这个游戏真好玩", "nondirected", "exclamation", "感叹"),
-    ("N11", "你说得对，就这样吧", "nondirected", "reply-other", "回应旁人"),
-    ("N12", "啊，吓死我了", "nondirected", "exclamation", "感叹"),
-    ("N13", "我去拿个快递", "nondirected", "self-talk", "告知/自语"),
-    ("N14", "妈妈，我回来了", "nondirected", "talk-other", "与他人对话(称呼非AI)"),
-    ("N15", "老公，晚上吃什么？", "nondirected", "talk-other", "与他人对话(称呼非AI)"),
-    ("N16", "这孩子怎么又哭了", "nondirected", "self-talk", "自言自语"),
-    ("N17", "加油，你可以的", "nondirected", "self-talk", "自语/鼓励旁人"),
-    ("N18", "明天又要上班了，烦", "nondirected", "self-talk", "自言自语"),
-    ("N19", "哎，这日子什么时候是个头", "nondirected", "exclamation", "感叹"),
-    ("N20", "Oh no, I forgot my keys", "nondirected", "self-talk", "自言自语 EN"),
-    ("N21", "Yeah, I think so too", "nondirected", "reply-other", "回应旁人 EN"),
-    ("N22", "This game is so hard", "nondirected", "self-talk", "自言自语 EN"),
-    ("N23", "Honey, did you see my glasses?", "nondirected", "talk-other", "与他人对话 EN"),
-    ("N24", "Wow, that's amazing!", "nondirected", "exclamation", "感叹 EN"),
-    ("N25", "我先休息一下", "nondirected", "self-talk", "自言自语(告知)"),
-]
+# --- test set (from the frozen asset, #155) ---------------------------------
+# ★ The scenarios no longer live here. They live in the frozen asset
+#   ``services/webinfer/decision_eval_set.py``, which ALSO computes the
+#   open-book / generalization split against the production prompt and pins the
+#   denominators. Both benchmarks consume that one copy, so a change there
+#   reaches both at once.
+#
+#   ``TEST_SET`` keeps the historical 5-tuple shape
+#   (id, text, expected, category, note) so the existing scorers keep working
+#   unchanged. ``expected`` is now one of three groups: "directed" (应
+#   response/delegation), "nondirected" (应 not-for-me/silence), or "delegate"
+#   (应 delegation — the third ground-truth class added by #155; previously the
+#   delegate state had no class to expect it, so it could never be measured).
+TEST_SET: list[tuple[str, str, str, str, str]] = legacy_test_set()
 
 # --- decision parsing (4-state mirror of webinfer parse_model_decision) ----
 _DECISION_MARKERS = ("</response>", "</silence>", "</not-for-me>", "</delegation>", "<delegation>")
@@ -417,8 +384,13 @@ def run_variant(name: str, system_prompt: str) -> list[dict]:
 
 
 def summarize(rows: list[dict]) -> dict:
-    """Compute decision-matrix + key metrics for one variant."""
-    expected_order = ["directed", "nondirected"]
+    """Compute decision-matrix + key metrics for one variant.
+
+    Groups come from the frozen asset (#155) rather than a hardcoded pair, so
+    the third ground-truth class (``delegate``) is **counted** instead of
+    raising ``KeyError`` or being silently dropped.
+    """
+    expected_order = list(GROUPS)
     decisions = ["response", "silence", "delegation", "not-for-me", "error"]
     matrix: dict[str, dict[str, int]] = {
         e: dict.fromkeys(decisions, 0) for e in expected_order
@@ -428,40 +400,80 @@ def summarize(rows: list[dict]) -> dict:
         dec = row["decision"] if row.get("ok") else "error"
         matrix[exp][dec] += 1
 
-    n_dir = len([r for r in rows if r["expected"] == "directed"])
-    n_nondir = len([r for r in rows if r["expected"] == "nondirected"])
+    n_dir = len([r for r in rows if r["expected"] == GROUP_DIRECTED])
+    n_nondir = len([r for r in rows if r["expected"] == GROUP_NONDIRECTED])
+    n_del = len([r for r in rows if r["expected"] == GROUP_DELEGATE])
 
     def pct(num: int, den: int) -> float:
         return round(100.0 * num / den, 1) if den else 0.0
 
     # Baseline A: 误响应率 = non-directed -> response / all non-directed.
-    mis_response = matrix["nondirected"]["response"]
+    mis_response = matrix[GROUP_NONDIRECTED]["response"]
     # Enhanced B: not-for-me precision/recall.
-    pred_nfm = matrix["directed"]["not-for-me"] + matrix["nondirected"]["not-for-me"]
-    true_nfm = matrix["nondirected"]["not-for-me"]
-    miss_nfm = matrix["directed"]["not-for-me"]  # 漏判率 numerator
+    pred_nfm = matrix[GROUP_DIRECTED]["not-for-me"] + matrix[GROUP_NONDIRECTED]["not-for-me"]
+    true_nfm = matrix[GROUP_NONDIRECTED]["not-for-me"]
+    miss_nfm = matrix[GROUP_DIRECTED]["not-for-me"]  # 漏判率 numerator
+    # ★ #155: delegate recall — the state that previously had no ground truth,
+    # so it could never be scored. Judged as: expected delegate -> got delegation.
+    delegate_hit = matrix[GROUP_DELEGATE]["delegation"]
     return {
         "n_directed": n_dir,
         "n_nondirected": n_nondir,
+        "n_delegate": n_del,
         "matrix": matrix,
         "baseline_mis_response_rate_pct": pct(mis_response, n_nondir),
         "not_for_me_precision_pct": pct(true_nfm, pred_nfm) if pred_nfm else 0.0,
         "not_for_me_recall_pct": pct(true_nfm, n_nondir),
         "directed_miss_rate_pct": pct(miss_nfm, n_dir),
+        "delegate_recall_pct": pct(delegate_hit, n_del),
         "n_not_for_me_predicted": pred_nfm,
         "n_not_for_me_true": true_nfm,
         "n_directed_missed_as_notforme": miss_nfm,
+        "n_delegate_hit": delegate_hit,
         "errors": sum(1 for r in rows if not r.get("ok")),
     }
+
+
+def subset_breakdown(rows: list[dict], prompt: str) -> dict[str, dict]:
+    """Score the same rows split by open-book / generalization (#155).
+
+    A single blended number hides the fact that the production prompt is an
+    **open-book exam**: 10 of the test sentences appear verbatim in it. This
+    split is what makes the memorization effect visible instead of assumed.
+    """
+    mapping = subset_by_id(prompt)
+    out: dict[str, dict] = {}
+    for subset in ("generalization", "open-book"):
+        picked = [r for r in rows if mapping.get(r["id"]) == subset]
+        if not picked:
+            out[subset] = {"n": 0}
+            continue
+        out[subset] = {"n": len(picked), **summarize(picked)}
+    return out
+
+
+def print_subset_breakdown(name: str, breakdown: dict) -> None:
+    """Print the per-subset scores (the anti-open-book view)."""
+    print(f"  --- {name}: 子集分列（开卷 vs 泛化）---")
+    for subset, stats in breakdown.items():
+        if not stats.get("n"):
+            print(f"    {subset}: (空)")
+            continue
+        print(
+            f"    {subset:15s} n={stats['n']:3d}  "
+            f"误响应={stats['baseline_mis_response_rate_pct']}%  "
+            f"nfm_recall={stats['not_for_me_recall_pct']}%  "
+            f"漏判={stats['directed_miss_rate_pct']}%"
+        )
 
 
 def print_summary(name: str, stats: dict) -> None:
     """Human-readable summary of one variant."""
     print(f"\n===== {name} summary =====")
     print(f"directed={stats['n_directed']}  nondirected={stats['n_nondirected']}  "
-          f"errors={stats['errors']}")
+          f"delegate={stats['n_delegate']}  errors={stats['errors']}")
     print("confusion (expected x decision):")
-    for exp in ("directed", "nondirected"):
+    for exp in GROUPS:
         row = stats["matrix"][exp]
         print(
             f"  {exp:12s} "
@@ -474,6 +486,9 @@ def print_summary(name: str, stats: dict) -> None:
               f"(target >= 80%)")
         print(f"  not-for-me recall:    {stats['not_for_me_recall_pct']}%")
         print(f"  面向句漏判率 (directed->not-for-me): {stats['directed_miss_rate_pct']}%")
+    # delegate previously had no ground-truth class at all, so this line could
+    # not exist; it is the visible payoff of #155.
+    print(f"  delegate recall (delegate->delegation): {stats['delegate_recall_pct']}%")
 
 
 def main() -> None:
@@ -489,8 +504,7 @@ def main() -> None:
 
     print(f"[benchmark] model={LLAMA_MODEL} base={LLAMA_BASE_URL}")
     print(f"[benchmark] test set size={len(TEST_SET)} "
-          f"(directed={sum(1 for r in TEST_SET if r[2]=='directed')}, "
-          f"nondirected={sum(1 for r in TEST_SET if r[2]=='nondirected')})")
+          + "  ".join(f"{g}={sum(1 for r in TEST_SET if r[2] == g)}" for g in GROUPS))
 
     results: dict[str, dict] = {}
     for name, prompt in variants:
@@ -498,14 +512,22 @@ def main() -> None:
         rows = run_variant(name, prompt)
         stats = summarize(rows)
         print_summary(name, stats)
-        results[name] = {"stats": stats, "rows": rows}
+        breakdown = subset_breakdown(rows, prompt)
+        print_subset_breakdown(name, breakdown)
+        results[name] = {"stats": stats, "subsets": breakdown, "rows": rows}
 
     out_dir = _REPO_ROOT / "doc" / "research" / "data"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "benchmark_4state_notforme_results.json"
     out_path.write_text(
         json.dumps(
-            {"model": LLAMA_MODEL, "test_set_size": len(TEST_SET), "results": results},
+            {
+                "model": LLAMA_MODEL,
+                "test_set_size": len(TEST_SET),
+                "test_set_source": "services/webinfer/decision_eval_set.py::CASES",
+                "denominator_note": HISTORICAL_DENOMINATOR_NOTE,
+                "results": results,
+            },
             ensure_ascii=False,
             indent=2,
         ),

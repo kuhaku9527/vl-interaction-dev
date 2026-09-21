@@ -84,8 +84,44 @@ from benchmark_4state_notforme import (  # noqa: E402
     call_llm,
     parse_decision_4state,
     print_summary,
+    print_subset_breakdown,
+    subset_breakdown,
     summarize,
 )
+
+# ★ #155: the test set now has THREE ground-truth groups (directed /
+# nondirected / delegate). The old two-way ``correct`` flag treated every
+# non-nondirected row as "must not be not-for-me", which would have silently
+# mislabelled the delegate rows as correct no matter what they emitted.
+from decision_eval_set import (  # noqa: E402
+    ACTION_DELEGATE,
+    ACTION_RESPOND,
+    ACTION_SILENT,
+    GROUP_DELEGATE,
+    GROUP_DIRECTED,
+    GROUP_NONDIRECTED,
+)
+
+#: expected-action ground truth, per group.
+_EXPECTED_ACTION = {
+    GROUP_DIRECTED: ACTION_RESPOND,
+    GROUP_NONDIRECTED: ACTION_SILENT,
+    GROUP_DELEGATE: ACTION_DELEGATE,
+}
+
+
+def is_correct(expected_group: str, decision: str) -> bool:
+    """Whether ``decision`` satisfies the group's ground truth (#155).
+
+    Three-way, not two-way: the delegate group is scored as "delegation",
+    where the previous rule could not express it at all.
+    """
+    action = _EXPECTED_ACTION[expected_group]
+    if action == ACTION_SILENT:
+        return decision in ("not-for-me", "silence")
+    if action == ACTION_DELEGATE:
+        return decision == "delegation"
+    return decision in ("response", "delegation")
 
 # Language used by the production live route for the in-character tail.
 PROD_LANGUAGE = "en"
@@ -218,8 +254,7 @@ def run_variant_with_tokens(name: str, system_prompt: str) -> list[dict]:
                     "latency_s": result["latency_s"],
                     "emitted_token_ids": token_ids,
                     "emission": classify_emission(decision, token_ids),
-                    "correct": (decision == "not-for-me") if expected == "nondirected"
-                    else (decision != "not-for-me"),
+                    "correct": is_correct(expected, decision),
                 }
             )
             print(
@@ -238,7 +273,9 @@ def run_variant_with_tokens(name: str, system_prompt: str) -> list[dict]:
 def emission_breakdown(rows: list[dict]) -> dict:
     """Per-expected-class tally of decision x emission provenance."""
     out: dict[str, dict[str, int]] = {}
-    for expected in ("directed", "nondirected"):
+    # ★ #155: iterate every ground-truth group (the old pair hid ``delegate``
+    # rows from the provenance tally entirely).
+    for expected in (GROUP_DIRECTED, GROUP_NONDIRECTED, GROUP_DELEGATE):
         tally: dict[str, int] = {}
         for row in rows:
             if row["expected"] != expected or not row.get("ok"):
@@ -262,11 +299,13 @@ def category_breakdown(rows: list[dict]) -> dict:
 
 
 def main() -> None:
-    """Run the production live prompt over the shared 51-case test set."""
+    """Run the production live prompt over the shared frozen test set."""
     print("[prod-bench] production live prompt benchmark (LIVE_SYSTEM_PROMPT_EN)")
     print(f"[prod-bench] test set size={len(TEST_SET)} "
-          f"(directed={sum(1 for r in TEST_SET if r[2] == 'directed')}, "
-          f"nondirected={sum(1 for r in TEST_SET if r[2] == 'nondirected')})")
+          + "  ".join(
+              f"{g}={sum(1 for r in TEST_SET if r[2] == g)}"
+              for g in (GROUP_DIRECTED, GROUP_NONDIRECTED, GROUP_DELEGATE)
+          ))
 
     variants = [
         ("P_live4_prod_prompt", build_production_prompt(include_profile=False)),
@@ -285,8 +324,14 @@ def main() -> None:
         print("  emission provenance:")
         for expected, tally in breakdown.items():
             print(f"    {expected}: {tally}")
+        # ★ #155: this variant's own prompt decides which sentences are
+        # open-book — computed against the prompt actually under test, not a
+        # fixed label.
+        subsets = subset_breakdown(rows, vprompt)
+        print_subset_breakdown(vname, subsets)
         results[vname] = {
             "stats": stats,
+            "subsets": subsets,
             "emission_breakdown": breakdown,
             "category_breakdown": category_breakdown(rows),
             "rows": rows,
