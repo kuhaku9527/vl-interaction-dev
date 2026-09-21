@@ -375,20 +375,31 @@ JoyAI-VL-Interaction-main/
 **「勿为『合并成一个容器』回退这两次拍板」**的告诫。
 
 **验证**：目标测试全绿；全量 webui 套件仅剩 `test_qa_server_split_runtime.py` 的 10 个
-**本地路径 bug**（CI 里不出现，见下节，另案）；
+**本地路径 bug**（CI 里不出现，见下节 → 已立 **#151**）；
 布局未退化 —— `check-advanced-relocation` **12-0**（含「实时」双行 **54x52**）、
 `check-fullscreen-parity` **17-0**、`check-button-wrap` 全绿、`check-topbar-fixes` **10-0**、
 `check-idesign-mirror` **6-0**；`webui-invariants` id 新增 0/删除 0、div 配平。
 
-### 另发现：`test_qa_server_split_runtime.py` 的本地路径 bug（**未修，另案**）
+### `test_qa_server_split_runtime.py` 的本地路径 bug（**代码未修；已立工单 #151**）
 
 该文件 `WEBUI_ROOT = Path(__file__).resolve().parents[2]` 解析到 `services/`（应为 `parents[1]`
 = `services/webui`），于是 `SRC = services/src` **不存在** ⇒ 裸跑 `pytest services/webui/tests`
 时 10 个用例因 `ModuleNotFoundError` 失败。
 **CI 不报**：CI 在该目录内 `pip install -e ".[dev]"`，包已可导入。
-⇒ 属**测试自身缺陷**（在裸跑路径下失效），不在 CI 失败名单内，**建议另立工单**。
-> 2026-09-20 复核：`pytest (webui)` 现已在 CI **全绿**；本地裸跑仍会看到这 10 个，
-> **属预期**，不是回归。
+⇒ 属**测试自身缺陷**（在裸跑路径下失效），不在 CI 失败名单内。
+
+> **2026-09-21 已立工单 → [#151](https://github.com/kuhaku9527/vl-interaction-dev/issues/151)**
+> （wayfinder:task，挂地图 #142）。本轮取证**修正了此处原先的两个判断**：
+> 1. **不是「CI 更严格」，而是「CI 更宽松」**。配对对照（`afa3594`）：未修代码
+>    `877 passed / 10 failed`；修 `parents[1]` 后 **`887 passed / 0 failed`**；
+>    而在**未修**代码上仅从外部补 `PYTHONPATH` 即 `10 passed`
+>    ⇒ CI 的 `pip install -e .` 提供了该测试本应自建的导入通道，
+>    **该文件在 CI 里从未验证过自己的前置条件**。
+> 2. **本地残留的 10 个失败 == 本缺陷的 10 个**，一一对应（非「属预期」的独立现象）。
+> 修法已验证为 **1 行 + 一句 `SRC.is_dir()` 守卫**（该文件当前**无任何存在性断言**，
+> fails-open：路径写错时报 10 条同源 `ModuleNotFoundError`，读起来像「契约坏了」）。
+> 另：31 个同用 `parents[2]` 当 `REPO` 的文件**不失败**（conftest 兜底），
+> ⇒ 真因是「把 `SRC` 当唯一导入通道且无守卫」，**不是「下标写错」**（详见工单）。
 
 ### 另发现两个 webinfer 的"假通过"测试（子代理诊断）
 
