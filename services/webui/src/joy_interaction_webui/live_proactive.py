@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -21,10 +22,31 @@ from .turn_controller import TurnState
 
 try:  # ADR-0014 event stream; reuse the fail-open wrapper from live_llm.
     from .live_llm import _record_live_decision as _record_decision
-except Exception:  # pragma: no cover - import guard only
+    from .live_llm import resolve_latency_ms
+except ImportError:  # pragma: no cover - import guard only
+    # Same contract as ``live_llm.resolve_latency_ms``: ``float | None`` in,
+    # ``int | None`` out, and ``None`` in ⇒ ``None`` out. Returning a bare
+    # ``None`` for ANY input would silently erase the timing axis, which is the
+    # exact failure #156 exists to remove — so the signature is preserved even
+    # in the degraded path (约法三章: degrade loudly, keep the contract).
+    logging.getLogger(__name__).warning(
+        "live_llm event sink unavailable; proactive live_decision events will NOT be written"
+    )
 
     def _record_decision(**_kwargs: Any) -> None:
-        """Fail-open no-op when the shared event sink is unavailable."""
+        """Degraded no-op — logged loudly above, never silently."""
+
+    def resolve_latency_ms(
+        turn_started_at: float | None,
+        ended_at: float | None = None,
+        clock: Callable[[], float] | None = None,
+    ) -> int | None:
+        """Degraded fallback honouring the real ``int | None`` contract."""
+        if turn_started_at is None:
+            return None
+        if ended_at is None:
+            ended_at = clock() if clock is not None else time.monotonic()
+        return max(0, round((ended_at - turn_started_at) * 1000.0))
 
 
 #: Default seconds between proactive visual checks (env
@@ -126,12 +148,15 @@ async def send_proactive_prompt(
     tts_reply_seq: int,
     llm_reply_epoch: int,
     turn_state: Callable[[], Any],
-    call_proactive_vlm: Callable[[list], Awaitable[tuple[str, str]]],
+    call_proactive_vlm: Callable[[list], Awaitable[Any]],
     spawn_sentence_tts: Callable[[str, int, int], None],
     on_llm_response: Callable[[str, str], None] | None,
     ctrl: Any,
     wait_tts_turn_done: Callable[[], Awaitable[None]],
     logger: logging.Logger,
+    session_id: str | None = None,
+    turn_started_at: float | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> tuple[int, int, asyncio.Task | None]:
     """Ask webinfer whether the latest frame deserves a spoken comment.
 
@@ -140,6 +165,11 @@ async def send_proactive_prompt(
     controller -> SPEAKING -> LISTENING via ``wait_tts_turn_done``);
     silence / not-for-me / empty -> stay quiet.  Any failure fails open
     (log + skip) and never disturbs the user dialog.
+
+    ``session_id`` / ``turn_started_at`` (#156) feed the decision record: the
+    proactive loop had no session attribution and no round-start stamp either,
+    so its decisions could be neither grouped nor timed. ``clock`` must be the
+    same clock the stamp came from (see ``resolve_latency_ms``).
 
     Returns ``(tts_reply_seq, llm_reply_epoch, tts_turn_task)`` — the
     caller applies them to its own state (``tts_turn_task`` is None when
@@ -153,7 +183,7 @@ async def send_proactive_prompt(
         len(frames),
         llm_reply_epoch,
     )
-    decision, response = await call_proactive_vlm(frames)
+    decision, response, raw_text = _unpack_vlm_result(await call_proactive_vlm(frames))
     logger.info(
         "[live-proactive] VLM decision=%s response=%r",
         decision,
@@ -172,11 +202,12 @@ async def send_proactive_prompt(
         text="",
         response=response,
         delegation_question=None,
-        session_id=None,
-        latency_ms=None,
+        session_id=session_id,
+        latency_ms=resolve_latency_ms(turn_started_at, clock=clock),
         logger=logger,
         round_kind="proactive",
         frames_n=len(frames),
+        raw_text=raw_text,
     )
 
     if decision != "response" or not (response or "").strip():
@@ -222,12 +253,18 @@ async def call_proactive_vlm(
     config: Any,
     frames: list,
     logger: logging.Logger,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     """POST a lightweight non-streaming VLM visual round to webinfer.
 
-    Returns ``(decision, response)``. Fail-open: on any error log and
-    return ``("silence", "")`` so a proactive round never disturbs the
-    dialog.
+    Returns ``(decision, response, raw_text)`` where ``raw_text`` is what the
+    decision parser saw (webinfer's ``streamingharness.raw_content``, i.e. the
+    model's output before its special tokens were stripped) and ``response`` is
+    the cleaned body. The two differ for ``not-for-me`` / ``silence`` rounds,
+    whose body is empty by construction — measuring the body would record a
+    real non-addressed judgement as "the model emitted nothing" (#156).
+
+    Fail-open: on any error log and return ``("silence", "", "")`` so a
+    proactive round never disturbs the dialog.
     """
     import httpx
 
@@ -252,11 +289,31 @@ async def call_proactive_vlm(
             response = (choice.get("message") or {}).get("content") or ""
             response = response.strip() if isinstance(response, str) else ""
             harness = payload.get("streamingharness") or {}
+            harness_raw = harness.get("raw_content")
+            # ``or response``: an empty harness value means "not supplied", not
+            # "the parser saw nothing" — see ``_record_live_decision``'s note on
+            # the ``raw_text_len >= response_chars`` invariant.
+            raw_text = (harness_raw if isinstance(harness_raw, str) else "") or response
             decision = harness.get("decision") or ("response" if response else "silence")
-            return decision, response
+            return decision, response, raw_text
     except Exception as exc:
         logger.error("[live-proactive] VLM call failed; fail-open: %s", exc)
-        return "silence", ""
+        return "silence", "", ""
+
+
+def _unpack_vlm_result(result: Any) -> tuple[str, str, str | None]:
+    """Normalize a ``call_proactive_vlm`` result across both arities.
+
+    Production returns ``(decision, response, raw_text)``. Callers that inject
+    their own ``call_proactive_vlm`` (the tests do, in several places) return
+    the older 2-tuple. Accepting both keeps the injected-callable contract
+    intact; a 2-tuple means "no separate raw text", which is signalled as
+    ``None`` so the record falls back to the body rather than guessing.
+    """
+    items = tuple(result)
+    if len(items) >= 3:
+        return str(items[0]), str(items[1]), str(items[2])
+    return str(items[0]), str(items[1]), None
 
 
 __all__ = [

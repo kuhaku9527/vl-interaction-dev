@@ -131,7 +131,47 @@ PII 严守：webui 的 `chat_request` 事件 extra 字段**最多**含 `{message
 - 决策：`决策/服务-日志.md` D-2026-08-01-060 (schema 锁定) / D-061 (PII 红线)
 - ADR：`doc/adr/0014-log-event-schema.md`
 - 现有日志：Commit A (`logs/drift-gate-history/`) / Commit B (`logs/launcher-<ts>.log`) / Commit C (`logs/vlm-probes/`) / Commit D (`logs/webui-access-*.log`) — 这些是 4 个 Q1 补漏；本 spec 是**把它们统一到 JSONL 事件流**的下一阶段
-- 工具：`scripts/log_query.py`（TBD，按本 spec 实现） <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
+- 工具：通用 `scripts/log_query.py` **仍未落盘**（跨服务任意查询，TBD） <!-- known-absent: 命令示例/记录事实，非仓库根路径 -->
+
+## 决策事件的读侧（2026-09-21 新增，工单 #156）
+
+本 spec 的通用查询工具仍缺席，但**决策轮次**这一具体用途已有专用读取方：
+`services/webinfer/decision_events.py`（`python -m decision_events --events-dir logs/events`）。
+它只做决策聚合，按 **会话 × 轮次** 输出 `decision` / `ts` / `latency_ms` / `frames_n`，
+用**输出长度**（`raw_text_len`）而不是 content 区分「判定沉默」与「空输出」。
+范围边界照旧：**不做**通用 log_query、**不做**索引 / 告警 / 看板。
+
+### `raw_text_len` 与 `response_chars` 的语义（★ 本轮修正）
+
+- `raw_text_len` = **决策解析器的输入**长度（模型原始输出，剥 special token 之前）；
+- `response_chars` = **清洗后正文**长度。
+
+**硬不变量：`raw_text_len >= response_chars`。** 解析器的输入必然包含正文，
+所以小于关系是结构性不可能，出现即记录不可信。
+
+⚠️ **先前记录的 24 行「`raw_text_len=0` 而 `response_chars>0`」是缺陷产物，不是真实信号。**
+在写入侧接上「解析器输入」之前，记录的指纹取自消费端清洗后的正文；
+而正文由 `content` 帧累积、`raw_text` 却默认空串 ⇒ 两者被混为一谈，
+读侧会把**已经开口**的轮次报成「失效输出」。
+2026-09-21 已修正（空串视为「未提供」而非「真零输出」），并固化为不变量测试。
+⇒ **不变量被违反时，应当怀疑记录管道，而不是把那些轮次当作评测结论。**
+
+### ★ 本次查清的一处静默失效（已修，值得当作教训）
+
+`live_decision` 事件此前**从未真正落过盘**，尽管写入点的单元测试全绿。原因：
+`event_json` 位于 `services/common/`，而 webui 以
+`PYTHONPATH=<repo>/services/webui/src` 启动（`services/scripts/run-windows.ps1` → `Start-Webui`）。
+顶层 `import event_json` 因此**每次都抛 `ModuleNotFoundError`**，被 `except` 兜底成一个
+**静默 no-op**；而测试因为 pytest 会把仓库根放进 `sys.path`，永远看不到这个失败。
+实测证据：`logs/events/webui-*.jsonl` 里只有 `config.services.patch`
+（那条走的是另一个直接开文件的路径），`live_decision` **零条**。
+
+⇒ 修法：写入侧按 `infer_loop.py` 的既有做法，从自身位置向上搜索
+`services/common/event_json.py` 并放入 `sys.path`；**降级路径必须打日志**
+（原来的静默 no-op 正是本缺陷得以隐藏的原因）；并补一条**在生产
+`PYTHONPATH` 下另起子进程**的回归测试 + 其负控。
+**判据有效性**：测试里放仓库根会掩盖生产路径解析失败 —— 这正是
+「CI 全绿只证明 CI 跑到的断言成立」的又一实例。
 
 ## Migration Plan (Q1 → Q2 路径)
 

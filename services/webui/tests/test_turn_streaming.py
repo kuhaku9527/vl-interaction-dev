@@ -364,3 +364,92 @@ def test_cancel_flag_stops_consumption_and_returns_cancelled():
         result = asyncio.run(consumer.consume("hello", interaction_mode="jarvis", reply_session=0))
     assert result.cancelled is True
     assert sentences == []
+
+
+# ---------------------------------------------------------------------------
+# webinfer `done` frame -> `raw_text` (#156)
+#
+# The decision record needs what the PARSER saw, which is not the cleaned body:
+# a `not-for-me` / `silence` round speaks nothing (empty body) while its raw
+# output carried the marker plus prose. webinfer already puts that value in the
+# `done` frame; these tests pin the hop that carries it into the result. Without
+# them the `raw_text_len` pipeline is unverified end-to-end — mutating this read
+# to `if False:` left every other test in the repo green.
+# ---------------------------------------------------------------------------
+
+
+def test_done_frame_raw_text_is_carried_into_the_result():
+    consumer = _consumer()
+    raw = " 这是您自己在说话，未针对 BT-7274 发出指令。 </not-for-me>"
+    lines = [
+        _frame(type="decision", decision="not-for-me", delegation_question=None),
+        _frame(
+            type="done",
+            decision="not-for-me",
+            delegation_question=None,
+            full_text="",
+            raw_text=raw,
+        ),
+    ]
+    result = _run(consumer, lines)
+    assert result.decision == "not-for-me"
+    assert result.full_response == ""
+    assert result.raw_text == raw, (
+        "the parser's input was not carried through the done frame — the "
+        "decision record would report this real judgement as a zero-length output"
+    )
+
+
+def test_done_frame_raw_text_differs_from_the_body_for_response():
+    """A normal response: raw carries the marker, the cleaned body does not."""
+    consumer = _consumer()
+    lines = [
+        _frame(type="decision", decision="response", delegation_question=None),
+        _frame(type="content", token="你好。"),
+        _frame(
+            type="done",
+            decision="response",
+            delegation_question=None,
+            full_text="你好。",
+            raw_text="</response> 你好。",
+        ),
+    ]
+    result = _run(consumer, lines)
+    assert result.full_response == "你好。"
+    assert result.raw_text == "</response> 你好。"
+    assert len(result.raw_text) >= len(result.full_response)
+
+
+def test_absent_done_raw_text_falls_back_to_the_body():
+    """A server predating the field (or a turn with no done frame) still yields a
+    usable lower bound — the body was certainly part of the parser's input."""
+    consumer = _consumer()
+    lines = [
+        _frame(type="decision", decision="response", delegation_question=None),
+        _frame(type="content", token="你好。"),
+        _frame(type="done", decision="response", delegation_question=None, full_text="你好。"),
+    ]
+    result = _run(consumer, lines)
+    assert result.full_response == "你好。"
+    assert result.raw_text == "你好。", (
+        "the fallback must never leave a spoken round at zero length"
+    )
+
+
+def test_empty_raw_text_in_the_done_frame_falls_back_to_the_body():
+    """An explicitly empty `raw_text` means "not supplied", not "saw nothing"."""
+    consumer = _consumer()
+    lines = [
+        _frame(type="decision", decision="response", delegation_question=None),
+        _frame(type="content", token="你好。"),
+        _frame(
+            type="done",
+            decision="response",
+            delegation_question=None,
+            full_text="你好。",
+            raw_text="",
+        ),
+    ]
+    result = _run(consumer, lines)
+    assert result.raw_text == "你好。"
+    assert len(result.raw_text) >= len(result.full_response)

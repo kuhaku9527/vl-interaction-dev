@@ -14,18 +14,73 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
+import sys
+import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .turn_controller import TurnState
 
+logger = logging.getLogger(__name__)
+
+
+def _ensure_event_json_importable() -> str | None:
+    """Put ``services/common`` on ``sys.path`` so the shared emitter can be found.
+
+    ★ THIS IS THE ROOT-CAUSE FIX for a silent observability failure.
+
+    ``event_json`` lives in ``services/common/`` and is imported here as a
+    TOP-LEVEL module. webui starts with ``PYTHONPATH=<repo>/services/webui/src``
+    (see ``services/scripts/run-windows.ps1`` → ``Start-Webui``), so before this
+    helper existed the import below raised ``ModuleNotFoundError`` on every
+    real start and the guard silently installed the no-op fallback. The result:
+    **no ``live_decision`` event was ever written to disk by a real session**,
+    while the unit tests (which put the repo root on ``sys.path``) passed.
+
+    That is the same class of defect as the pre-#146 state — and it is exactly
+    why "CI green" does not prove an instrumentation works. It is fixed by
+    locating the directory structurally (walk up from this file), the same
+    approach ``services/webinfer/infer_loop.py`` already uses.
+
+    Returns
+    -------
+        The directory that was added to ``sys.path``, or ``None`` when
+        ``services/common/event_json.py`` could not be located.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    cur = here
+    while True:
+        common = os.path.join(cur, "services", "common")
+        if os.path.exists(os.path.join(common, "event_json.py")):
+            if common not in sys.path:
+                sys.path.insert(0, common)
+            return common
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
+
+
+_EVENT_JSON_DIR = _ensure_event_json_importable()
+
 try:  # ADR-0014 event stream (services/common); optional in stripped checkouts.
     from event_json import emit_event as _emit_event
-except Exception:  # pragma: no cover - import guard only
+except ImportError:  # pragma: no cover - import guard only
+    # ★ NEVER silent. The whole point of this module's #156 fix is that a
+    # swallowed ImportError previously cost us every decision event on the real
+    # path; degrading quietly here would reintroduce exactly that. Mirrors
+    # ``services/webinfer/infer_loop.py``, which logs the same condition.
+    logger.warning(
+        "event_json emitter unavailable (searched from %r, found dir=%r); "
+        "live_decision events will NOT be written",
+        __file__,
+        _EVENT_JSON_DIR,
+    )
 
     def _emit_event(*_args: Any, **_kwargs: Any) -> None:
-        """Fail-open no-op when the shared event sink is unavailable."""
+        """Degraded no-op — logged loudly above, never silently (约法三章)."""
 
 
 def emit_event(*args: Any, **kwargs: Any) -> None:
@@ -40,7 +95,7 @@ def emit_event(*args: Any, **kwargs: Any) -> None:
     try:
         _emit_event(*args, **kwargs)
     except Exception:
-        logging.getLogger(__name__).warning("live_decision event emit failed", exc_info=True)
+        logger.warning("live_decision event emit failed", exc_info=True)
 
 
 def _text_fingerprint(text: str | None) -> tuple[int, str]:
@@ -56,6 +111,36 @@ def _text_fingerprint(text: str | None) -> tuple[int, str]:
     return len(raw), digest
 
 
+def resolve_latency_ms(
+    turn_started_at: float | None,
+    ended_at: float | None = None,
+    clock: Callable[[], float] | None = None,
+) -> int | None:
+    """Turn latency from a stamped round-start, or ``None`` when there is none.
+
+    #156: the live chain had **no** round-start stamp at all, so the timing
+    axis had no data source. The stamp is a monotonic reading taken where the
+    round opens; the latency is that span up to the decision record.
+
+    ★ Both ends MUST come from the SAME clock. ``clock`` is the reader's own
+    clock function (``LiveStateMachine._clock``, injectable in tests); falling
+    back to ``time.monotonic`` while the stamp came from somewhere else would
+    produce a nonsense span (measured: 98,263,125 ms — i.e. days — from a test
+    clock stamped at 100.0 s). A caller that stamps from a custom clock must
+    resolve with that same clock.
+
+    ★ ``None`` in, ``None`` out — a missing stamp must NEVER become ``0``.
+    A fabricated zero would read as "instantaneous" and pollute the timing axis
+    with a value that means the opposite of the truth (unknown). The reader
+    (``decision_events``) counts missing values explicitly for this reason.
+    """
+    if turn_started_at is None:
+        return None
+    if ended_at is None:
+        ended_at = clock() if clock is not None else time.monotonic()
+    return max(0, round((ended_at - turn_started_at) * 1000.0))
+
+
 def _record_live_decision(
     *,
     decision: str,
@@ -68,14 +153,35 @@ def _record_live_decision(
     interaction_mode: str = "live",
     round_kind: str = "user",
     frames_n: int | None = None,
+    raw_text: str | None = None,
 ) -> None:
     """Record one live-turn decision to the ADR-0014 JSONL event stream.
 
     MUST be called BEFORE the caller rewrites ``delegation`` to ``silence`` —
     otherwise delegation never appears in the record (see the ordering note in
     ``finish_llm_turn``).
+
+    ``raw_text`` is what the DECISION PARSER saw (the model's raw output, before
+    the server stripped its special tokens); it falls back to ``response`` when
+    the caller cannot supply it. The distinction is load-bearing for the
+    reader: a ``not-for-me`` round has an EMPTY body (content frames only
+    accumulate for ``response``) while its raw output carried the marker plus
+    prose — measuring only the body would misread a real decision as "the model
+    emitted nothing" (#156).
+
+    ★ The fallback is ``if not raw_text``, **not** ``if raw_text is None``.
+    An empty string does not mean "the parser saw nothing" — it means "the
+    caller did not supply it": the streaming result's ``raw_text`` defaults to
+    ``""`` and duck-typed consumers may omit it entirely. Measured on real data
+    (96 rows in ``logs/events/webui-2026-09-21.jsonl``), treating ``""`` as a
+    genuine zero produced **24 rounds recorded as ``raw_text_len=0`` while their
+    bodies held text** — reads that the reader then reported as *failed outputs*
+    even though the assistant had plainly spoken. The invariant this restores is
+    ``raw_text_len >= response_chars``: whatever the body holds, the parser must
+    have seen at least that much.
     """
-    raw_len, raw_hash = _text_fingerprint(response)
+    parser_input = raw_text or response
+    raw_len, raw_hash = _text_fingerprint(parser_input)
     extra: dict[str, Any] = {
         "decision": decision,
         "round_kind": round_kind,
@@ -115,6 +221,8 @@ async def send_to_llm(
     on_retry_non_streaming: Callable[..., Awaitable[None]],
     on_silence_wake: Callable[[], None] | None = None,
     logger: logging.Logger,
+    session_id: str | None = None,
+    turn_started_at: float | None = None,
 ) -> tuple[int, int]:
     """Send ASR text to webinfer (interaction_mode='live', stream=True).
 
@@ -124,6 +232,10 @@ async def send_to_llm(
     visual path (layer 1).  Fail-open: pre-frame stream failure falls back
     to the single-shot call; mid-stream failure keeps the flushed sentences
     (consumer already handled).
+
+    ``session_id`` / ``turn_started_at`` (#156) are carried through to the
+    decision record: the first attributes the round to a conversation, the
+    second is the monotonic round-start stamp the latency is measured from.
 
     Returns ``(llm_reply_epoch, tts_reply_seq)`` — the caller applies them
     to its own state.  The caller resets ``_llm_stream_cancel`` /
@@ -161,6 +273,13 @@ async def send_to_llm(
 
     if result.needs_non_streaming_retry:
         logger.info("[live-mode] fail-open -> non-streaming retry")
+        # NB: no session_id / turn_started_at are passed here. The retry
+        # callback is the live machine's own facade, which reads BOTH from its
+        # own state (``self.session_id`` / ``self._turn_started_at``); the
+        # round-start stamp was taken at the round's entry point, so the
+        # recorded latency honestly covers the failed stream plus the retry —
+        # the user waited for exactly that span. Keeping this call shape
+        # unchanged also preserves the existing fail-open contract test.
         await on_retry_non_streaming(
             text,
             interaction_mode=interaction_mode,
@@ -180,6 +299,12 @@ async def send_to_llm(
         decision=result.decision,
         delegation_question=result.delegation_question,
         reply_epoch=turn_reply_epoch,
+        session_id=session_id,
+        turn_started_at=turn_started_at,
+        # Duck-typed consumers (tests inject their own ``consumer_cls``) may not
+        # carry ``raw_text``; treat its absence as "not supplied" so the record
+        # falls back to the body rather than raising inside the turn.
+        raw_text=getattr(result, "raw_text", None),
     )
     return llm_reply_epoch, tts_reply_seq
 
@@ -195,6 +320,8 @@ async def send_to_llm_non_streaming(
     max_history_turns: int,
     on_finish_turn: Callable[..., Awaitable[None]],
     logger: logging.Logger,
+    session_id: str | None = None,
+    turn_started_at: float | None = None,
 ) -> None:
     """Single-shot LLM fallback (fail-open, never lose the reply)."""
     messages: list[dict] = [{"role": "system", "content": config.llm_system_prompt}]
@@ -205,6 +332,7 @@ async def send_to_llm_non_streaming(
     response = ""
     decision = "silence"
     delegation_question = None
+    raw_text: str | None = None
     try:
         import httpx
 
@@ -228,6 +356,12 @@ async def send_to_llm_non_streaming(
             response = (choice.get("message") or {}).get("content") or ""
             response = response.strip() if isinstance(response, str) else ""
             harness = payload.get("streamingharness") or {}
+            # #156: the harness carries the parser's own input verbatim. Taking
+            # it here keeps raw_text_len meaningful on the fail-open path too —
+            # otherwise the retry path would report the (possibly empty) body
+            # and look like an "empty output" round.
+            harness_raw = harness.get("raw_content")
+            raw_text = harness_raw if isinstance(harness_raw, str) else None
             decision = harness.get("decision") or ("response" if response else "silence")
             delegation_question = harness.get("delegation_question")
     except Exception as exc:
@@ -241,6 +375,9 @@ async def send_to_llm_non_streaming(
         decision=decision,
         delegation_question=delegation_question,
         reply_epoch=reply_epoch,
+        session_id=session_id,
+        turn_started_at=turn_started_at,
+        raw_text=raw_text,
     )
 
 
@@ -260,8 +397,19 @@ async def finish_llm_turn(
     tts_turn_task: asyncio.Task | None,
     wait_tts_turn_done: Callable[[], Awaitable[None]],
     logger: logging.Logger,
+    session_id: str | None = None,
+    turn_started_at: float | None = None,
+    raw_text: str | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> tuple[int, asyncio.Task | None]:
     """Shared post-LLM turn completion (controller, delegation, broadcast).
+
+    ``session_id`` / ``turn_started_at`` / ``raw_text`` feed the decision
+    record (#156) and are keyword-only additions — callers that omit them keep
+    working, but then the record cannot attribute the round to a session and
+    the latency field stays ``None`` (the reader reports both explicitly).
+    ``clock`` must be the SAME clock the stamp came from (see
+    :func:`resolve_latency_ms`).
 
     Returns ``(current_turn_reply_epoch, tts_turn_task)`` — the caller
     applies them to its own state.
@@ -280,9 +428,10 @@ async def finish_llm_turn(
         text=text,
         response=response,
         delegation_question=delegation_question,
-        session_id=None,
-        latency_ms=None,
+        session_id=session_id,
+        latency_ms=resolve_latency_ms(turn_started_at, clock=clock),
         logger=logger,
+        raw_text=raw_text,
     )
 
     # Feed the controller: PROCESSING -> THINKING (even for empty output).

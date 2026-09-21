@@ -58,6 +58,14 @@ class StreamingTurnResult:
     reply_session: int
     sentence_count: int
     needs_non_streaming_retry: bool = False
+    #: What the DECISION PARSER saw (webinfer's ``done`` frame ``raw_text``),
+    #: i.e. the model output before user-facing stripping. Distinct from
+    #: ``full_response`` (the cleaned body): a ``not-for-me`` round has an empty
+    #: body but a non-empty raw output, and an "empty output" round has both
+    #: empty. The decision record (#156) must measure the former, not the body,
+    #: or a real non-addressed judgement reads as "the model emitted nothing".
+    #: Defaults to ``""``; callers that lack it should pass ``full_response``.
+    raw_text: str = ""
 
 
 class StreamingTurnConsumer:
@@ -152,6 +160,13 @@ class StreamingTurnConsumer:
         decision_received = False
         done_received = False
         cancelled = False
+        # #156: webinfer's ``done`` frame carries ``raw_text`` — the model
+        # output the decision parser actually saw, before the server stripped
+        # its special tokens. Kept separately from ``full_response`` because a
+        # not-for-me / silence round has an empty body but (usually) a
+        # non-empty raw output; measuring only the body would report those
+        # rounds as "the model emitted nothing".
+        raw_text = ""
 
         self._log.info(
             "[tts-stream] LLM stream start: '%s' (session=%d, history_turns=%d)",
@@ -249,6 +264,8 @@ class StreamingTurnConsumer:
                         done_received = True
                         if "full_text" in frame:
                             full_response = frame["full_text"] or ""
+                        if isinstance(frame.get("raw_text"), str):
+                            raw_text = frame["raw_text"]
                         if frame.get("decision"):
                             decision = frame["decision"]
                         if frame.get("delegation_question") is not None:
@@ -325,6 +342,12 @@ class StreamingTurnConsumer:
                 seq += 1
             full_response = full_response or remaining or ""
 
+        # #156: a server that predates the raw_text frame (or a turn that ended
+        # without one) still has a usable lower bound — whatever the body held
+        # was certainly part of the parser's input. Never let a *spoken* round
+        # be recorded as a zero-length output.
+        raw_text = raw_text or full_response
+
         # sentence_buffer may still hold text if neither path flushed it.
         if not sentence_buffer.is_empty:
             remaining = sentence_buffer.flush_remaining()
@@ -346,6 +369,7 @@ class StreamingTurnConsumer:
             cancelled=False,
             reply_session=reply_session,
             sentence_count=seq,
+            raw_text=raw_text,
         )
 
     def _spawn(self, sentence: str, seq: int, reply_session: int) -> None:

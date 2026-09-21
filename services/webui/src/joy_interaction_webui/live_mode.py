@@ -227,6 +227,16 @@ class LiveStateMachine:
         self._llm_reply_epoch: int = 0
         self._current_turn_reply_epoch: int = 0
 
+        # #156 round-start stamp: the live chain had NO record of when a round
+        # opened, so "how long from deciding to speak to actually speaking?"
+        # had no data source. A monotonic reading is taken at the two round
+        # entry points (user commit, proactive tick) and turned into a latency
+        # at the decision record. Monotonic (not wall clock) so a clock
+        # adjustment cannot produce a negative or absurd span.
+        # ``self._clock`` is injectable so tests can pin the span exactly.
+        self._clock: Callable[[], float] = time.monotonic
+        self._turn_started_at: float | None = None
+
         # Pending-action flags drained by feed_audio (sync FSM → async bridge).
         self._commit_pending: bool = False
         self._barge_in_pending: bool = False
@@ -1048,6 +1058,13 @@ class LiveStateMachine:
         utterance = self._current_asr_text
         self._reset_asr()
 
+        # #156: mark the round start FIRST — before the garbage guard and
+        # before any network work — so the recorded latency covers the whole
+        # decision round ("from the moment we decided to speak until we
+        # actually did"), not just the parser call. Taking it after the guard
+        # would silently leave a stale stamp from an earlier round in place.
+        self._turn_started_at = self._clock()
+
         if _is_garbage_text(utterance):
             logger.info("[live-mode] ASR endpoint reached, dropping garbage: %r", utterance)
             self._realign_controller_to_listening()
@@ -1119,6 +1136,10 @@ class LiveStateMachine:
             on_retry_non_streaming=self._send_to_llm_non_streaming,
             on_silence_wake=self._play_silence_wake_wav,
             logger=logger,
+            # #156: attribute the round + carry the round-start stamp so the
+            # decision record has a real session id and a real latency.
+            session_id=self.session_id,
+            turn_started_at=self._turn_started_at,
         )
 
     async def _send_to_llm_non_streaming(
@@ -1128,10 +1149,16 @@ class LiveStateMachine:
         interaction_mode: str = "live",
         reply_epoch: int | None = None,
         frames: list | None = None,
+        session_id: str | None = None,
+        turn_started_at: float | None = None,
     ) -> None:
         """Single-shot LLM fallback (fail-open, never lose the reply).
 
-        Delegated to ``live_llm.send_to_llm_non_streaming``.
+        Delegated to ``live_llm.send_to_llm_non_streaming``. ``session_id`` /
+        ``turn_started_at`` are forwarded from the streaming attempt so the
+        fail-open retry records the SAME round identity and the SAME start
+        stamp (the latency then covers the failed stream too, which is the
+        honest measurement — the user waited for it).
         """
         await send_to_llm_non_streaming(
             text=text,
@@ -1143,6 +1170,8 @@ class LiveStateMachine:
             max_history_turns=self._max_history_turns,
             on_finish_turn=self._finish_llm_turn,
             logger=logger,
+            session_id=session_id if session_id is not None else self.session_id,
+            turn_started_at=turn_started_at,
         )
 
     async def _finish_llm_turn(
@@ -1153,12 +1182,17 @@ class LiveStateMachine:
         decision: str,
         delegation_question: str | None,
         reply_epoch: int | None = None,
+        session_id: str | None = None,
+        turn_started_at: float | None = None,
+        raw_text: str | None = None,
     ) -> None:
         """Shared post-LLM turn completion (controller, delegation, broadcast).
 
         Delegated to ``live_llm.finish_llm_turn``; the returned
         ``current_turn_reply_epoch`` / ``tts_turn_task`` are applied to the
-        local state.
+        local state. When the caller did not supply a round-start stamp (e.g.
+        a test driving this facade directly), the live machine's own reading
+        is used so the record is never needlessly missing a latency.
         """
         self._current_turn_reply_epoch, self._tts_turn_task = await finish_llm_turn(
             text=text,
@@ -1175,6 +1209,14 @@ class LiveStateMachine:
             tts_turn_task=self._tts_turn_task,
             wait_tts_turn_done=self._wait_tts_turn_done,
             logger=logger,
+            session_id=session_id if session_id is not None else self.session_id,
+            turn_started_at=turn_started_at
+            if turn_started_at is not None
+            else self._turn_started_at,
+            raw_text=raw_text,
+            # The stamp came from ``self._clock``; the span must be resolved
+            # with the SAME clock or the two ends are incomparable.
+            clock=self._clock,
         )
 
     async def _wait_tts_turn_done(self) -> None:
@@ -1225,7 +1267,12 @@ class LiveStateMachine:
 
         Delegated to ``live_proactive.send_proactive_prompt``; the returned
         seq/epoch/task are applied to the local state.
+
+        #156: the round-start stamp is taken here (a proactive round has no
+        commit event to hang it on) and the session id is passed down, so the
+        proactive decisions are both attributable and measurable.
         """
+        self._turn_started_at = self._clock()
         self._tts_reply_seq, self._llm_reply_epoch, tts_turn_task = await send_proactive_prompt(
             frames=frames,
             tts_reply_seq=self._tts_reply_seq,
@@ -1237,16 +1284,22 @@ class LiveStateMachine:
             ctrl=self._ctrl,
             wait_tts_turn_done=self._wait_tts_turn_done,
             logger=logger,
+            session_id=self.session_id,
+            turn_started_at=self._turn_started_at,
+            clock=self._clock,
         )
         if tts_turn_task is not None:
             self._tts_turn_task = tts_turn_task
 
-    async def _call_proactive_vlm(self, frames: list) -> tuple[str, str]:
+    async def _call_proactive_vlm(self, frames: list) -> tuple[str, str, str]:
         """POST a lightweight non-streaming VLM visual round to webinfer.
 
-        Returns ``(decision, response)``. Fail-open: on any error log and
-        return ``("silence", "")`` so a proactive round never disturbs the
-        dialog. Delegated to ``live_proactive.call_proactive_vlm``.
+        Returns ``(decision, response, raw_text)`` — ``raw_text`` is what the
+        decision parser saw, which the decision record needs because a
+        ``not-for-me`` / ``silence`` round has an empty body (#156).
+        Fail-open: on any error log and return ``("silence", "", "")`` so a
+        proactive round never disturbs the dialog. Delegated to
+        ``live_proactive.call_proactive_vlm``.
         """
         return await call_proactive_vlm(config=self._config, frames=frames, logger=logger)
 

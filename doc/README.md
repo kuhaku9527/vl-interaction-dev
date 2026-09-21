@@ -117,7 +117,7 @@
 | [`adr/0008-p0-adapter-fixes-design.md`](adr/0008-p0-adapter-fixes-design.md) | P0 adapter 修复 | ✅ 已落地（状态待改 Accepted） |
 | [`adr/0011-phased-lint-gate.md`](adr/0011-phased-lint-gate.md) | 分阶段 lint 门禁 | ✅（Batch 2/3 已落地） |
 | [`adr/0013-webinfer-memory-client-resilience.md`](adr/0013-webinfer-memory-client-resilience.md) | memory 客户端韧性 | ✅ Accepted |
-| [`adr/0014-log-event-schema.md`](adr/0014-log-event-schema.md) | 日志事件 schema | ⚠️ 引用的 `scripts/log_query.py` 不存在 |
+| [`adr/0014-log-event-schema.md`](adr/0014-log-event-schema.md) | 日志事件 schema | ⚠️ 通用 `scripts/log_query.py` **不存在**；决策轮次读取方已补（`services/webinfer/decision_events.py`，2026-09-21） |
 | [`adr/0015-memory-store-health-observability.md`](adr/0015-memory-store-health-observability.md) | memory-store 健康可观测性 | ✅ Accepted |
 | [`adr/0016-live-adapter-drift-gate-safe-batch.md`](adr/0016-live-adapter-drift-gate-safe-batch.md) | drift-gate 安全批 | ✅ Accepted |
 | [`adr/0017-drift-gate-launcher-wiring.md`](adr/0017-drift-gate-launcher-wiring.md) | drift-gate launcher 接线 | ✅ 已落地（状态待改 Accepted） |
@@ -304,7 +304,7 @@ JoyAI-VL-Interaction-main/
 | 4 | `doc/subsystems/voice-ui.md` §1.1 的 HUD 徽章 **5/7 元素已不存在**（`llmBadge`/`ttsBadge`/`kwsBadge` 全仓 0 命中） | 仅 §9 Design Tokens 仍被 ADR-0019 依赖 |
 | 5 | 5 个 `draft-*` spec 的功能**已全部上线但状态仍写"草稿"** | 状态头只朝一个方向衰减（详见下） |
 | 6 | `doc/specs/README.md` 称"7 份 draft 已删除"，实际仍有 8 个 `draft-*.md` | draft→正式 的转正流程自 2026-08-13 停摆 |
-| 7 | `scripts/log_query.py` 被 ADR-0014 与 `决策/服务-日志.md` 引为校验工具，**从未落盘** <!-- known-absent --> | 已锁定决策的验收检查无法执行 |
+| 7 | 通用 `scripts/log_query.py` 被 ADR-0014 与 `决策/服务-日志.md` 引为校验工具，**仍未落盘** <!-- known-absent --> | 已锁定决策的通用验收检查仍不可执行；**决策轮次聚合**这一具体用途已于 2026-09-21 由 `services/webinfer/decision_events.py` 补上（工单 #156） |
 
 ---
 
