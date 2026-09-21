@@ -206,3 +206,30 @@ cd services/webui && npm ci --cache="D:/AI/workspace/JoyAI-VL-Interaction-main/.
 ---
 
 *建立于 2026-09-14。所有命令均在 DSH 环境下实测通过。*
+
+---
+
+## §7 两类「看起来验证了、其实没验证」的坑（2026-09-20 实测）
+
+> 从 `AGENTS.md` 移入：这两条是**踩过才知道**的，仓库里原先只有 `memory/`（不入库）记过。
+
+### 7.1 用显式解码「验证」编码问题 = 无效验证
+
+判定 `.ps1` 编码是否会被 PowerShell 5.1 读乱时，**不要**用
+`[Text.Encoding]::UTF8.GetString($bytes)` 去断言「内容能被正确解码」——
+它**绕过了真实运行时的解码路径**（真实路径是按系统 ANSI 代码页 / GBK 解码）。
+本轮据此把真缺陷误判成「假阳性」。
+
+> **正解**：用**用户实际使用的解释器**（`powershell` 5.1，**不是 `pwsh`**）**真跑一次**脚本。
+
+### 7.2 取证调试器：AppX 的 **GUI** 跑不起来，但它的 **`cdb.exe` 可用**
+
+- ❌ `Microsoft.WinDbg` 的 **AppX 版 GUI** 实测启动失败（`ApplicationFailedException`）；
+  第三方「图吧工具箱」的 `windbg.exe` 只有 642KB、**缺 `dbgeng.dll`**，也不可用。
+- ✅ 但 **AppX 目录下的 `cdb.exe` 能正常工作** —— 本轮实际成功的那次分析用的就是它：
+  `C:\Program Files\WindowsApps\Microsoft.WinDbg_*\amd64\cdb.exe`
+  （见 `doc/research/dump-analysis.txt` 第 2 行 `debugger:` 字段）。
+- ✅ 亦可 `winget install Microsoft.WindowsSDK`，用
+  `C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe`.
+
+⇒ **结论**：需要的是 **`cdb.exe`**，不是 WinDbg GUI。完整步骤见 `doc/research/dump-analysis-howto.md`。
