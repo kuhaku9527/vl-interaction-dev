@@ -20,9 +20,25 @@ import sys
 import textwrap
 from pathlib import Path
 
-WEBUI_ROOT = Path(__file__).resolve().parents[2]
+# parents[0] = services/webui/tests, parents[1] = services/webui.
+# NOT parents[2] (= services): that made SRC resolve to services/src, which
+# does not exist, so all 10 cases died with ModuleNotFoundError. CI never
+# caught it because `pip install -e .` made the package importable
+# environment-wide -- i.e. the suite passed for a reason unrelated to its
+# own preconditions (#151).
+WEBUI_ROOT = Path(__file__).resolve().parents[1]
 SRC = WEBUI_ROOT / "src"
 PY = sys.executable
+
+# Fail closed. SRC is this file's ONLY import channel -- it is injected into
+# every subprocess PYTHONPATH -- so a wrong path must announce itself as a
+# path error. Without this guard it surfaced as 10 identical
+# ModuleNotFoundErrors, which read like a broken reverse-import contract
+# rather than a typo in a parents index.
+assert SRC.is_dir(), (
+    f"SRC does not exist: {SRC} -- check the WEBUI_ROOT parents index "
+    f"(expected parents[1] = services/webui, NOT parents[2] = services)"
+)
 
 
 def _run_py(code: str) -> subprocess.CompletedProcess:
