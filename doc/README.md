@@ -408,6 +408,29 @@ JoyAI-VL-Interaction-main/
 | `test_summarizer_routing.py:219` `test_flush_chunk_fail_open_when_summary_raises` | 桩被写成 `async def _boom`，但真实 `_build_mid_term_summary_entry` 是**同步**函数（经 `asyncio.to_thread` 调用）→ 桩返回**未被 await 的 coroutine**，**永不 raise**。测试通过，但它宣称锁住的失败模式**从未被执行**（把守卫从 `except Exception` 收窄仍会通过）。**生产代码本身正确**，是测试缺陷。修法：把桩改成同步 `def` | ✅ **已修**（commit `a90fc97`）。复核方式：桩现为同步 `def`；**负控实测** —— 把 `summarizer_routing.py` 的 `except Exception` 收窄为 `except ValueError`，该测试**立即转红**（`1 failed`），证明失败模式**真的被执行**了 |
 | `pyproject.toml:93` | 声明 `timeout = 60`，但 **pytest-timeout 未安装** → 该超时**实际失效**（`PytestConfigWarning: Unknown config option: timeout`） | ⚠️ **仍成立**。`pyproject.toml:51` 已把 `pytest-timeout>=2.1.0` 列进 dev 依赖，但**本机 venv 未装**，故警告照旧。CI 的 `pip install -e ".[dev]"` 会装上 ⇒ **本地不生效、CI 生效**，属「环境差异」类（见 `doc/standards/webui-design-standards.md` §9.14） |
 
+### 测试可信度普查（2026-09-21，#151 范围 C）
+
+起因：#151 那个回归测试「**为与自身断言无关的原因**通过」（CI 绿、本地红）。
+按同一问题域分四轴普查全部测试（webui / webinfer / memory-store / background-agent /
+tts / asr / voice-clone / kws-training / scripts），结论与处置：
+
+| 类别 | 实测发现 | 处置 |
+|---|---|---|
+| **零断言用例** | 3 个用例**一条断言都没有**，只有注释宣称行为；唯一可能失败方式是挂死/连接报错 ⇒ 改坏被测行为仍绿。关键：`ws_handler` 把整段分发包在宽泛 `except Exception` 里，**「没抛异常」什么都证明不了** | ✅ 已修。新断言落在 catch-all **无法伪造**的可观测物上：`get_live_session` 探针调用记录、catch-all 未记 ERROR、以及**同一 session 的控制消息 `update_model` 仍能收到回复**（能抓 `return`/`break`/循环中止）。第 3 个用例原先用**return** 假装「webinfer 不可达」，现改为打**死端口**跑真代理 + 新增一条钉住 PUT 调用方仍得 200 |
+| **测试存在但从未被收集** | `services/asr` 的两个 provider 套件放在 `jarvis/`（贴着被测代码），而 `testpaths=["tests"]` ⇒ **声明 46 个、收集 2 个** | ✅ 已修（`testpaths` 加 `jarvis` ⇒ 收集数 2→48，全绿） |
+| **陈旧断言（因未收集而无人见）** | 承上：生产重构（`b0991cc` 引入 `ProviderRegistry`）改了错误消息后，`test_factory_invalid_raises` **一直红着没人看见**（旧措辞现已全仓不存在） | ✅ 已修，并改为断**契约**（`ValueError` + 消息含冒犯值与注册表名）而非整句措辞 |
+| **因错误原因而跳过** | `test_available_true_with_real_model` 在函数体读 `JARVIS_VAD_MODEL_DIR`，但本模块 autouse fixture 会给**每个**用例删掉它 ⇒ 恒得 `''` → `Path('')` → `.` ⇒ 守卫实际在拿 **CWD** 判断，而 skip 原因却写「asset not present」。**本机确有真模型**（643KB）且 `sherpa_onnx` 可导入 ⇒ 该用例本可真正执行 | ✅ 已修（改为 import 期由 `JOYAI_MODELS_ROOT` 解析 + skip 打印实际路径）⇒ **从「恒跳过」变为真正执行**，负控可失败 |
+| **路径错标（#151 同族）** | `services/voice-clone/tests/test_list_voices_endpoint.py` 同样把 `parents[2]` 当 service root ⇒ 自建的两条 `sys.path` 插入**全是死代码**，能导入**只因 pytest 自插 rootdir**；且该服务**无 conftest**、**不在 CI 矩阵** | ✅ 已修（`parents[1]` + fail-closed 守卫，负控已验证） |
+| **CI 矩阵盲区** | `asr` / `voice-clone` 等有套件但**不在 pytest 矩阵**，只受 ruff **format** 约束 ⇒ 「格式合格」被误当「已受检」 | 📋 已立工单 **#152**（含「清单一致性」门禁建议：断言每个含测试的服务都在矩阵中或显式豁免） |
+| **31 个同族错标** | `parents[2]` 当 `REPO` 的 31 个文件：**全部无害**（conftest 已注入正确的 `parents[3]`，追加的错误路径是冗余）。经验证**无一**用于真实文件 I/O | ⛔ **不修**。真因是「把路径当唯一通道且无守卫」的**语义**问题，不是「下标写错」——31 处都写错照样绿 |
+| **stub 形态失配** | 专项普查 **0 个确认缺陷**；唯一的真实实例（webinfer 同步/异步桩）**已修**。`-W error::RuntimeWarning` 全量跑与基线一致 ⇒ 无未 await 的协程 | ✅ 无需处置 |
+
+> **两处被普查误报、经复核推翻**（记录下来防止后人照抄错结论）：
+> 1. `assert bp.is_speech() is True or bp.is_speech() is False` **不是恒真式** ——
+>    实测对 `1` / `0` / `'str'` / `None` **均会失败**，它钉的是「返回真 bool」。曾是误报。
+> 2. `test_smart_turn.py` 的 `skipif(HAS_MODEL)` **不是「写反了」** ——
+>    该用例断言 `available is False`（即需要模型**缺失**），故「模型在就跳过」与它自述的原因一致。曾是误报。
+
 > **教训（写入本文件防重犯）**：
 > **改了代码就必须跑测试。** 本轮 6 个提交、约 60 个文件全程未跑测试，若这 9 个失败中有任何一个是我引入的，就会带着它提交。
 > 好在二分证明了不是；但**这是运气，不是纪律**。
