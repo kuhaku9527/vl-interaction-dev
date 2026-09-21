@@ -32,4 +32,11 @@ py-modules = ["asr_adapter"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+# `jarvis` added 2026-09-21 (#151): the two provider suites live beside the code
+# they test (services/asr/jarvis/) rather than under tests/, so they were NEVER
+# collected -- 46 tests declared, 2 collected. That is how a stale assertion
+# (test_factory_invalid_raises) stayed red-and-unseen after a refactor changed
+# the production error message. Do not "tidy" these files back under tests/
+# without re-deriving their `parents[...]` depth: they use parents[3] = repo
+# root, which is correct only at this nesting.
+testpaths = ["tests", "jarvis"]

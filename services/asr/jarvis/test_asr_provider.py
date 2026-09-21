@@ -376,9 +376,31 @@ def test_factory_cloud_explicit_overrides_env(monkeypatch):
 
 
 def test_factory_invalid_raises(monkeypatch):
+    """An unknown provider must fail loud, naming the offending value.
+
+    Updated 2026-09-21 (#151): this assertion was stale, and nothing noticed
+    because the file was never collected (see ``testpaths`` in
+    ``services/asr/pyproject.toml``). The factory now delegates name resolution
+    to the shared ``ProviderRegistry`` (``services/provider_base.py``, commit
+    ``b0991cc``), which raises
+    ``unknown ASR provider provider 'bogus' (expected one of: cloud, local)``.
+    The old wording (``invalid JARVIS_ASR_PROVIDER``) no longer exists anywhere
+    in the source.
+
+    We assert the *contract* — a ``ValueError`` that names the bad value — rather
+    than the full sentence, so cosmetic rewording does not silently rot this
+    again. The doubled "provider provider" in the real message is a pre-existing
+    cosmetic wart in ``provider_base.py``; it is deliberately NOT asserted here
+    (and is separately locked by
+    ``services/background-agent/tests/test_provider_base.py``), so fixing that
+    wording later will not have to touch this test.
+    """
     monkeypatch.setenv("JARVIS_ASR_PROVIDER", "bogus")
-    with pytest.raises(ValueError, match="invalid JARVIS_ASR_PROVIDER"):
+    with pytest.raises(ValueError) as exc_info:
         ap.create_asr_provider()
+    message = str(exc_info.value)
+    assert "bogus" in message, f"error must name the offending value; got: {message!r}"
+    assert "ASR provider" in message, f"error must identify the registry; got: {message!r}"
 
 
 def test_allow_local_failover_gate(monkeypatch):
