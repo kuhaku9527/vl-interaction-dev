@@ -403,10 +403,10 @@ JoyAI-VL-Interaction-main/
 
 ### 另发现两个 webinfer 的"假通过"测试（子代理诊断）
 
-| 位置 | 问题 |
-|---|---|
-| `test_summarizer_routing.py:219` `test_flush_chunk_fail_open_when_summary_raises` | 桩被写成 `async def _boom`，但真实 `_build_mid_term_summary_entry` 是**同步**函数（经 `asyncio.to_thread` 调用）→ 桩返回**未被 await 的 coroutine**，**永不 raise**。测试通过，但它宣称锁住的失败模式**从未被执行**（把守卫从 `except Exception` 收窄仍会通过）。**生产代码本身正确**，是测试缺陷。修法：把桩改成同步 `def` |
-| `pyproject.toml:87` | 声明 `timeout = 60`，但 **pytest-timeout 未安装** → 该超时**实际失效**（`PytestConfigWarning: Unknown config option: timeout`） |
+| 位置 | 问题 | 状态（2026-09-21 复核） |
+|---|---|---|
+| `test_summarizer_routing.py:219` `test_flush_chunk_fail_open_when_summary_raises` | 桩被写成 `async def _boom`，但真实 `_build_mid_term_summary_entry` 是**同步**函数（经 `asyncio.to_thread` 调用）→ 桩返回**未被 await 的 coroutine**，**永不 raise**。测试通过，但它宣称锁住的失败模式**从未被执行**（把守卫从 `except Exception` 收窄仍会通过）。**生产代码本身正确**，是测试缺陷。修法：把桩改成同步 `def` | ✅ **已修**（commit `a90fc97`）。复核方式：桩现为同步 `def`；**负控实测** —— 把 `summarizer_routing.py` 的 `except Exception` 收窄为 `except ValueError`，该测试**立即转红**（`1 failed`），证明失败模式**真的被执行**了 |
+| `pyproject.toml:93` | 声明 `timeout = 60`，但 **pytest-timeout 未安装** → 该超时**实际失效**（`PytestConfigWarning: Unknown config option: timeout`） | ⚠️ **仍成立**。`pyproject.toml:51` 已把 `pytest-timeout>=2.1.0` 列进 dev 依赖，但**本机 venv 未装**，故警告照旧。CI 的 `pip install -e ".[dev]"` 会装上 ⇒ **本地不生效、CI 生效**，属「环境差异」类（见 `doc/standards/webui-design-standards.md` §9.14） |
 
 > **教训（写入本文件防重犯）**：
 > **改了代码就必须跑测试。** 本轮 6 个提交、约 60 个文件全程未跑测试，若这 9 个失败中有任何一个是我引入的，就会带着它提交。
