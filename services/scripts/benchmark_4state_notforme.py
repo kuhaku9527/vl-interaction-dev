@@ -56,18 +56,21 @@ _WEBINFER_DIR = _REPO_ROOT / "services" / "webinfer"
 if str(_WEBINFER_DIR) not in sys.path:
     sys.path.insert(0, str(_WEBINFER_DIR))
 
+# ★ #155: scoring lives in services/webinfer (CI-visible) so it can be unit
+# tested. `services/scripts` is NOT in the CI pytest matrix, which is why the
+# scorer went untested before. Re-exported here so both benchmarks and any
+# existing caller keep a single import path.
+from decision_eval_score import subset_breakdown, summarize  # noqa: E402
+
 # ★ #155: the test set is no longer a literal in this script. It lives in the
 # frozen asset (services/webinfer/decision_eval_set.py), which also computes
 # the open-book/generalization split and pins the denominators. This script is
 # a *consumer*: changing the asset changes both benchmarks at once.
 from decision_eval_set import (  # noqa: E402
-    GROUP_DELEGATE,
-    GROUP_DIRECTED,
-    GROUP_NONDIRECTED,
     GROUPS,
     HISTORICAL_DENOMINATOR_NOTE,
+    group_counts,
     legacy_test_set,
-    subset_by_id,
 )
 from prompt_constants import DEFAULT_SYSTEM_PROMPT_EN  # noqa: E402
 from system_prompts import compose_system_prompt, load_character_prompts  # noqa: E402
@@ -383,75 +386,6 @@ def run_variant(name: str, system_prompt: str) -> list[dict]:
     return rows
 
 
-def summarize(rows: list[dict]) -> dict:
-    """Compute decision-matrix + key metrics for one variant.
-
-    Groups come from the frozen asset (#155) rather than a hardcoded pair, so
-    the third ground-truth class (``delegate``) is **counted** instead of
-    raising ``KeyError`` or being silently dropped.
-    """
-    expected_order = list(GROUPS)
-    decisions = ["response", "silence", "delegation", "not-for-me", "error"]
-    matrix: dict[str, dict[str, int]] = {
-        e: dict.fromkeys(decisions, 0) for e in expected_order
-    }
-    for row in rows:
-        exp = row["expected"]
-        dec = row["decision"] if row.get("ok") else "error"
-        matrix[exp][dec] += 1
-
-    n_dir = len([r for r in rows if r["expected"] == GROUP_DIRECTED])
-    n_nondir = len([r for r in rows if r["expected"] == GROUP_NONDIRECTED])
-    n_del = len([r for r in rows if r["expected"] == GROUP_DELEGATE])
-
-    def pct(num: int, den: int) -> float:
-        return round(100.0 * num / den, 1) if den else 0.0
-
-    # Baseline A: 误响应率 = non-directed -> response / all non-directed.
-    mis_response = matrix[GROUP_NONDIRECTED]["response"]
-    # Enhanced B: not-for-me precision/recall.
-    pred_nfm = matrix[GROUP_DIRECTED]["not-for-me"] + matrix[GROUP_NONDIRECTED]["not-for-me"]
-    true_nfm = matrix[GROUP_NONDIRECTED]["not-for-me"]
-    miss_nfm = matrix[GROUP_DIRECTED]["not-for-me"]  # 漏判率 numerator
-    # ★ #155: delegate recall — the state that previously had no ground truth,
-    # so it could never be scored. Judged as: expected delegate -> got delegation.
-    delegate_hit = matrix[GROUP_DELEGATE]["delegation"]
-    return {
-        "n_directed": n_dir,
-        "n_nondirected": n_nondir,
-        "n_delegate": n_del,
-        "matrix": matrix,
-        "baseline_mis_response_rate_pct": pct(mis_response, n_nondir),
-        "not_for_me_precision_pct": pct(true_nfm, pred_nfm) if pred_nfm else 0.0,
-        "not_for_me_recall_pct": pct(true_nfm, n_nondir),
-        "directed_miss_rate_pct": pct(miss_nfm, n_dir),
-        "delegate_recall_pct": pct(delegate_hit, n_del),
-        "n_not_for_me_predicted": pred_nfm,
-        "n_not_for_me_true": true_nfm,
-        "n_directed_missed_as_notforme": miss_nfm,
-        "n_delegate_hit": delegate_hit,
-        "errors": sum(1 for r in rows if not r.get("ok")),
-    }
-
-
-def subset_breakdown(rows: list[dict], prompt: str) -> dict[str, dict]:
-    """Score the same rows split by open-book / generalization (#155).
-
-    A single blended number hides the fact that the production prompt is an
-    **open-book exam**: 10 of the test sentences appear verbatim in it. This
-    split is what makes the memorization effect visible instead of assumed.
-    """
-    mapping = subset_by_id(prompt)
-    out: dict[str, dict] = {}
-    for subset in ("generalization", "open-book"):
-        picked = [r for r in rows if mapping.get(r["id"]) == subset]
-        if not picked:
-            out[subset] = {"n": 0}
-            continue
-        out[subset] = {"n": len(picked), **summarize(picked)}
-    return out
-
-
 def print_subset_breakdown(name: str, breakdown: dict) -> None:
     """Print the per-subset scores (the anti-open-book view)."""
     print(f"  --- {name}: 子集分列（开卷 vs 泛化）---")
@@ -503,8 +437,10 @@ def main() -> None:
         variants.append(("A_live3_clean", build_live_prompt_3state(include_persona=False)))
 
     print(f"[benchmark] model={LLAMA_MODEL} base={LLAMA_BASE_URL}")
+    # Counts come from the asset (single source), not an inline re-count.
+    _counts = group_counts()
     print(f"[benchmark] test set size={len(TEST_SET)} "
-          + "  ".join(f"{g}={sum(1 for r in TEST_SET if r[2] == g)}" for g in GROUPS))
+          + "  ".join(f"{g}={_counts[g]}" for g in GROUPS))
 
     results: dict[str, dict] = {}
     for name, prompt in variants:

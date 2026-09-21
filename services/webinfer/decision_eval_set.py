@@ -303,11 +303,6 @@ def overlapping_ids(prompt: str) -> frozenset[str]:
     return frozenset(cid for cid, text, *_rest in CASES if text and text in prompt)
 
 
-def subset_for(case_id: str, prompt: str) -> str:
-    """该 case 在给定 prompt 下属于哪个子集."""
-    return SUBSET_OPEN_BOOK if case_id in overlapping_ids(prompt) else SUBSET_GENERALIZATION
-
-
 def load_cases(prompt: str | None = None) -> tuple[DecisionCase, ...]:
     """返回全部场景，**子集归属已按 ``prompt`` 算得**.
 
@@ -378,24 +373,9 @@ def legacy_test_set() -> list[tuple[str, str, str, str, str]]:
     return [(cid, text, group, category, note) for cid, text, group, category, note, _ in CASES]
 
 
-def scored_groups() -> tuple[str, ...]:
-    """需要进入混淆矩阵的分组（= 全部三组，**不静默跳过任何一组**）.
-
-    既有 ``summarize()`` 只认 ``directed`` / ``nondirected`` 两组，
-    新增的 ``delegate`` 会让它在 ``matrix[exp]`` 上 **KeyError**。
-    该函数的用途就是让计分侧显式取用完整分组，而不是各自硬编码一个列表。
-    """
-    return GROUPS
-
-
 def subset_by_id(prompt: str | None = None) -> dict[str, str]:
     """``case_id -> 子集`` 映射（供计分侧按子集拆分，无需自行重算）."""
     return {case.case_id: case.subset for case in load_cases(prompt)}
-
-
-def expected_by_id() -> dict[str, str]:
-    """``case_id -> 分组`` 映射（计分侧的 ground truth）."""
-    return {cid: group for cid, _t, group, *_rest in CASES}
 
 
 def describe(prompt: str | None = None) -> str:
@@ -447,16 +427,13 @@ __all__ = [
     "DecisionCase",
     "canonical_counts_match",
     "describe",
-    "expected_by_id",
     "group_counts",
     "legacy_test_set",
     "load_cases",
     "overlapping_ids",
     "production_live_prompt",
-    "scored_groups",
     "subset_by_id",
     "subset_counts",
-    "subset_for",
 ]
 
 

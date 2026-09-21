@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Benchmark: the PRODUCTION live system prompt (``LIVE_SYSTEM_PROMPT_EN``).
 
 Why this script exists
@@ -14,8 +13,9 @@ The production route is:
 so the number that matters for the shipped product was never measured. This
 script closes that gap: it imports the *real* ``LIVE_SYSTEM_PROMPT_EN`` from
 ``services/webinfer/prompt_constants.py`` (no copy, no edit) and runs it over
-the *same* 51-case test set, imported from ``benchmark_4state_notforme``
-(``from benchmark_4state_notforme import TEST_SET``) — no test-set duplication.
+the shared test set (``from benchmark_4state_notforme import TEST_SET``, which
+re-exports the frozen asset) — no test-set duplication. The set grew from 51 to
+56 cases in #155 when the ``delegate`` ground-truth group was added.
 
 Variants
 --------
@@ -57,12 +57,11 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-
-import sys
 
 # ``_REPO_ROOT`` mirrors the existing benchmark: parents[2] of
 # services/scripts/<this file>.
@@ -73,55 +72,38 @@ for _dir in (_WEBINFER_DIR, _SCRIPTS_DIR):
     if str(_dir) not in sys.path:
         sys.path.insert(0, str(_dir))
 
-# --- production prompt + production assembly helper (read-only import) ------
-from prompt_constants import LIVE_SYSTEM_PROMPT_EN  # noqa: E402
-from system_prompts import compose_system_prompt, load_character_prompts  # noqa: E402
-
 # --- reuse the existing benchmark's test set, parser, metrics --------------
 import benchmark_4state_notforme as base_bench  # noqa: E402
 from benchmark_4state_notforme import (  # noqa: E402
     TEST_SET,
-    call_llm,
     parse_decision_4state,
-    print_summary,
     print_subset_breakdown,
+    print_summary,
     subset_breakdown,
     summarize,
 )
 
 # ★ #155: the test set now has THREE ground-truth groups (directed /
-# nondirected / delegate). The old two-way ``correct`` flag treated every
-# non-nondirected row as "must not be not-for-me", which would have silently
-# mislabelled the delegate rows as correct no matter what they emitted.
+# nondirected / delegate). The scorer — including the three-way ``correct``
+# rule — lives in services/webinfer/decision_eval_score.py, which IS in the CI
+# pytest matrix, so it is unit-tested (this file's own directory is not).
+# We import it rather than keep a second copy.
+from decision_eval_score import is_correct  # noqa: E402
+
+# NOTE on comparability: this ``correct`` is NOT the same rule the historical
+# results file used. The old rule was two-way and scored "silence" as WRONG
+# for a non-directed utterance; the new one treats silence as a correct
+# non-response. Rows therefore differ from the stored artifact's ``correct``
+# field. See decision_eval_score.LEGACY_CORRECT_SEMANTICS.
 from decision_eval_set import (  # noqa: E402
-    ACTION_DELEGATE,
-    ACTION_RESPOND,
-    ACTION_SILENT,
     GROUP_DELEGATE,
     GROUP_DIRECTED,
     GROUP_NONDIRECTED,
+    GROUPS,
+    group_counts,
 )
-
-#: expected-action ground truth, per group.
-_EXPECTED_ACTION = {
-    GROUP_DIRECTED: ACTION_RESPOND,
-    GROUP_NONDIRECTED: ACTION_SILENT,
-    GROUP_DELEGATE: ACTION_DELEGATE,
-}
-
-
-def is_correct(expected_group: str, decision: str) -> bool:
-    """Whether ``decision`` satisfies the group's ground truth (#155).
-
-    Three-way, not two-way: the delegate group is scored as "delegation",
-    where the previous rule could not express it at all.
-    """
-    action = _EXPECTED_ACTION[expected_group]
-    if action == ACTION_SILENT:
-        return decision in ("not-for-me", "silence")
-    if action == ACTION_DELEGATE:
-        return decision == "delegation"
-    return decision in ("response", "delegation")
+from prompt_constants import LIVE_SYSTEM_PROMPT_EN  # noqa: E402
+from system_prompts import compose_system_prompt, load_character_prompts  # noqa: E402
 
 # Language used by the production live route for the in-character tail.
 PROD_LANGUAGE = "en"
@@ -301,11 +283,10 @@ def category_breakdown(rows: list[dict]) -> dict:
 def main() -> None:
     """Run the production live prompt over the shared frozen test set."""
     print("[prod-bench] production live prompt benchmark (LIVE_SYSTEM_PROMPT_EN)")
+    # Counts come from the asset (single source), not an inline re-count.
+    _counts = group_counts()
     print(f"[prod-bench] test set size={len(TEST_SET)} "
-          + "  ".join(
-              f"{g}={sum(1 for r in TEST_SET if r[2] == g)}"
-              for g in (GROUP_DIRECTED, GROUP_NONDIRECTED, GROUP_DELEGATE)
-          ))
+          + "  ".join(f"{g}={_counts[g]}" for g in GROUPS))
 
     variants = [
         ("P_live4_prod_prompt", build_production_prompt(include_profile=False)),

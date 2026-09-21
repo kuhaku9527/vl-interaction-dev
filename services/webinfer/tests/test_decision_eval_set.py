@@ -278,12 +278,26 @@ def test_negcontrol_overlap_detection_actually_reads_prompt(monkeypatch):
 
 
 def test_negcontrol_production_prompt_contains_the_teaching_section():
-    """★ 负控：被匹配的 prompt 确实是**生产 live prompt**（含 persona 组装）。
+    """★ 负控：生产 prompt 确实是**组装好的** live prompt，不是空串/半成品。
 
-    若有人把 prompt 解析改成读一个空串，开卷集会变空、上面那条转红。
-    这里额外钉住：prompt 非空且确实含有被判定为开卷的句子。
+    独立锚点（**不是**「开卷句在 prompt 里」——那按定义恒真）：
+    组装的产物必须同时含有 BT-7274 persona 块与 live 的四态教学段。
+    若有人把 prompt 解析改成读空串，或漏掉 persona 组装，本条转红。
     """
     prompt = des.production_live_prompt()
     assert len(prompt) > 1000, "生产 prompt 异常短 —— 组装可能坏了"
-    sample = next(c for c in des.load_cases() if c.is_open_book)
-    assert sample.text in prompt
+    # persona 块由 compose_system_prompt 注入
+    assert "<character_profile>" in prompt, "缺少 persona 块 —— 组装路径可能没走"
+    # live 四态教学段（生产 prompt 的来源常量）
+    from prompt_constants import LIVE_SYSTEM_PROMPT_EN
+
+    assert LIVE_SYSTEM_PROMPT_EN.strip()[:200] in prompt, (
+        "组装产物里找不到 LIVE_SYSTEM_PROMPT_EN —— 用的可能不是 live 那份 prompt"
+    )
+
+
+def test_production_live_prompt_without_profile_omits_persona():
+    """对照：``include_profile=False`` 必须**不含** persona 块。"""
+    bare = des.production_live_prompt(include_profile=False)
+    assert "<character_profile>" not in bare
+    assert len(bare) < len(des.production_live_prompt())
