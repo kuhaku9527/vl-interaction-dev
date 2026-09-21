@@ -18,9 +18,21 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-VC_SRC = REPO / "services" / "voice-clone" / "src"
-for _p in (str(REPO), str(VC_SRC)):
+# parents[0] = services/voice-clone/tests, parents[1] = services/voice-clone.
+# NOT parents[2] (= services): that built services/services/voice-clone/src,
+# which does not exist, so both insertions below were dead code -- the suite
+# only imported because pytest inserts the rootdir for us. Same defect class
+# as issue #151, and this service has no conftest.py to lean on (#151).
+SERVICE_ROOT = Path(__file__).resolve().parents[1]
+
+# Fail closed: the package must be importable through the paths THIS file
+# provides, not through whatever pytest happens to add (#151).
+assert (SERVICE_ROOT / "voice_clone_api").is_dir(), (
+    f"voice_clone_api not found under {SERVICE_ROOT} -- check the SERVICE_ROOT "
+    f"parents index (expected parents[1] = services/voice-clone, NOT "
+    f"parents[2] = services)"
+)
+for _p in (str(SERVICE_ROOT),):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
