@@ -96,18 +96,34 @@ def test_fail_open_enabled_but_model_missing(tmp_path):
     bp.accept_waveform([0.0] * 1600)
 
 
+# Resolved at import time, BEFORE any fixture runs: the autouse
+# `_isolate_vad_env` below deletes JARVIS_VAD_MODEL_DIR, so reading that var
+# inside the test body always yielded "" -> Path("") -> "." and the guard
+# silently checked ./silero_vad.onnx against the CWD instead (issue #151
+# sweep, 2026-09-21). JOYAI_MODELS_ROOT is not in the isolation list and is
+# the same root smart_turn_adapter.py uses.
+_MODELS_ROOT = Path(os.environ.get("JOYAI_MODELS_ROOT", "D:/AI/models"))
+_VAD_MODEL_DIR = _MODELS_ROOT / "sherpa-onnx" / "models" / "vad"
+
+
 def test_available_true_with_real_model(tmp_path):
     """If a silero_vad.onnx exists, VadBypass loads and is available.
 
-    Skipped when the asset is absent (mirrors the repo's 'auto-skip until
-    asset fetched' convention for optional ONNX weights).
+    Skipped when the asset is absent, naming the path actually checked
+    (mirrors the repo's 'auto-skip until asset fetched' convention for
+    optional ONNX weights).
     """
-    model_dir = Path(os.environ.get("JARVIS_VAD_MODEL_DIR", "")).expanduser()
-    if not (model_dir / "silero_vad.onnx").is_file():
-        pytest.skip("silero_vad.onnx not present; fail-open path covered above")
+    model_file = _VAD_MODEL_DIR / "silero_vad.onnx"
+    if not model_file.is_file():
+        pytest.skip(
+            f"silero_vad.onnx not present at {model_file}; "
+            f"fail-open path covered above"
+        )
 
-    bp = VadBypass(enabled=True, model_dir=str(model_dir))
+    bp = VadBypass(enabled=True, model_dir=str(_VAD_MODEL_DIR))
     assert bp.available is True
+    # NOTE: `is True or is False` is NOT a tautology (it fails for 1, 0,
+    # "str", None) -- it pins that is_speech() returns a real bool.
     assert bp.is_speech() is True or bp.is_speech() is False  # bool, no raise
 
 
