@@ -36,7 +36,8 @@ asyncio_mode = "auto"
 # they test (services/asr/jarvis/) rather than under tests/, so they were NEVER
 # collected -- 46 tests declared, 2 collected. That is how a stale assertion
 # (test_factory_invalid_raises) stayed red-and-unseen after a refactor changed
-# the production error message. Do not "tidy" these files back under tests/
-# without re-deriving their `parents[...]` depth: they use parents[3] = repo
-# root, which is correct only at this nesting.
+# the production error message.
+# Note: moving them under tests/ would NOT change their parents[...] depth --
+# services/asr/jarvis/x.py and services/asr/tests/x.py sit at the same depth, so
+# parents[3] (repo root) holds either way. Moving is fine; just re-run the suite.
 testpaths = ["tests", "jarvis"]

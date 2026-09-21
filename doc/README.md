@@ -416,7 +416,8 @@ tts / asr / voice-clone / kws-training / scripts），结论与处置：
 
 | 类别 | 实测发现 | 处置 |
 |---|---|---|
-| **零断言用例** | 3 个用例**一条断言都没有**，只有注释宣称行为；唯一可能失败方式是挂死/连接报错 ⇒ 改坏被测行为仍绿。关键：`ws_handler` 把整段分发包在宽泛 `except Exception` 里，**「没抛异常」什么都证明不了** | ✅ 已修。新断言落在 catch-all **无法伪造**的可观测物上：`get_live_session` 探针调用记录、catch-all 未记 ERROR、以及**同一 session 的控制消息 `update_model` 仍能收到回复**（能抓 `return`/`break`/循环中止）。第 3 个用例原先用**return** 假装「webinfer 不可达」，现改为打**死端口**跑真代理 + 新增一条钉住 PUT 调用方仍得 200 |
+| **零断言用例** | 3 个用例**一条断言都没有**，只有注释宣称行为；唯一可能失败方式是挂死/连接报错 ⇒ 改坏被测行为仍绿。关键：`ws_handler` 把整段分发包在宽泛 `except Exception` 里，**「没抛异常」什么都证明不了** | ✅ 已修。新断言落在 catch-all **无法伪造**的可观测物上：`get_live_session` 探针调用记录、`live frame route failed`（内层 except）为空、catch-all 未记 ERROR、以及**在同一条 socket 上**再发控制消息 `update_model` 必须仍收到回复（能抓 `return`/`break`/循环中止 —— **必须同一条连接**，见下）。第 3 个用例原先用**return** 假装「webinfer 不可达」，现改为打**死端口**跑真代理 + 新增一条钉住 PUT 调用方仍得 200 |
+| **★「同一连接」这个限定是复核时补的** | 初版探针用**另开一条 WS** 来证明「处理帧的循环还活着」，并在注释与本文档里宣称能抓 `break`/`return`。**这是假的**：`websocket_handler` 的 `async for msg in ws` 是**每连接各一份**，新连接会拿到**全新的 handler 与全新的循环** ⇒ 旧连接循环已死也照样回包。**变异实测**：在转发之后插入 `break`（只杀本连接循环、不影响转发），旧探针下 **4 个用例全绿** | ✅ 已改为**在同一条 socket 上**发控制消息（循环死了则 socket 关闭 ⇒ `receive_json` 读到关闭而非回复）。同一变异下**现在 2 个用例转红**，干净时 4 个全绿 ⇒ 该断言**这次是真的** |
 | **测试存在但从未被收集** | `services/asr` 的两个 provider 套件放在 `jarvis/`（贴着被测代码），而 `testpaths=["tests"]` ⇒ **声明 46 个、收集 2 个** | ✅ 已修（`testpaths` 加 `jarvis` ⇒ 收集数 2→48，全绿） |
 | **陈旧断言（因未收集而无人见）** | 承上：生产重构（`b0991cc` 引入 `ProviderRegistry`）改了错误消息后，`test_factory_invalid_raises` **一直红着没人看见**（旧措辞现已全仓不存在） | ✅ 已修，并改为断**契约**（`ValueError` + 消息含冒犯值与注册表名）而非整句措辞 |
 | **因错误原因而跳过** | `test_available_true_with_real_model` 在函数体读 `JARVIS_VAD_MODEL_DIR`，但本模块 autouse fixture 会给**每个**用例删掉它 ⇒ 恒得 `''` → `Path('')` → `.` ⇒ 守卫实际在拿 **CWD** 判断，而 skip 原因却写「asset not present」。**本机确有真模型**（643KB）且 `sherpa_onnx` 可导入 ⇒ 该用例本可真正执行 | ✅ 已修（改为 import 期由 `JOYAI_MODELS_ROOT` 解析 + skip 打印实际路径）⇒ **从「恒跳过」变为真正执行**，负控可失败 |

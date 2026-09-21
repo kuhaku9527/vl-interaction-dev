@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import sys
 from pathlib import Path
@@ -196,32 +197,43 @@ async def _open_ws(url, session_id: str):
     return session, ws
 
 
-async def _assert_handler_survived(url, session_id: str) -> str:
-    """Prove the handler is still serving ``session_id`` after the frame.
+async def _assert_same_connection_alive(ws, session_id: str) -> str:
+    """Prove the connection that processed the frame is still dispatching.
 
-    Sends a deterministic control message (``update_model``) over a SECOND WS
-    bound to the same session; the reply is sent by the same handler loop that
-    processed the frame, so receiving it means the loop is still alive and
-    dispatching. A wedged, ``return``-ed or crashed handler cannot produce it.
-    The handshake messages (``status`` / ``server_config``) are drained first.
+    The control message (``update_model``) is sent over the **SAME** socket that
+    sent the frame, and the reply must come back on it. This matters:
+    ``websocket_handler`` owns ``async for msg in ws`` **per connection**, so a
+    freshly-opened second WS gets its own handler and its own loop — a probe
+    over a new socket would keep passing even if this connection's loop had
+    ``break``-ed or returned, i.e. it would be vacuous (#151 review, 2026-09-21).
+    Sending on the same socket is what makes a dead loop observable: the handler
+    having exited closes the socket, so ``receive_json`` sees the close instead
+    of a reply.
+
+    2026-09-21: an earlier version of this helper used a second WS and claimed
+    exactly this guarantee while not providing it; the mutation "break the loop
+    after forwarding" passed under it. It now fails, as intended.
     """
-    session, ws = await _open_ws(url, session_id)
-    try:
-        await ws.send_json({"type": "update_model", "model": "stub-model"})
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + 5.0
-        reply = None
-        while reply is None or reply.get("type") != "model_updated":
-            remaining = deadline - loop.time()
-            assert remaining > 0, f"handler never answered update_model (last={reply!r})"
-            reply = await asyncio.wait_for(ws.receive_json(), timeout=remaining)
-            if reply.get("type") == "status":
-                assert reply["session_id"] == session_id, reply
-        assert reply == {"type": "model_updated", "model": "stub-model"}, reply
-        return reply["model"]
-    finally:
-        await ws.close()
-        await session.close()
+    await ws.send_json({"type": "update_model", "model": "stub-model"})
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 5.0
+    while True:
+        remaining = deadline - loop.time()
+        assert remaining > 0, "same connection stopped dispatching after the frame"
+        msg = await asyncio.wait_for(ws.receive(), timeout=remaining)
+        assert msg.type != aiohttp.WSMsgType.CLOSED, (
+            "handler loop exited after the frame (socket closed, no reply)"
+        )
+        assert msg.type != aiohttp.WSMsgType.CLOSING, "handler loop is closing the socket"
+        if msg.type != aiohttp.WSMsgType.TEXT:
+            continue
+        reply = json.loads(msg.data)
+        if reply.get("type") == "status":
+            assert reply["session_id"] == session_id, reply
+            continue
+        if reply.get("type") == "model_updated":
+            assert reply == {"type": "model_updated", "model": "stub-model"}, reply
+            return reply["model"]
 
 
 @pytest.mark.asyncio
@@ -256,28 +268,29 @@ async def test_ws_frame_not_forwarded_when_no_live_session(monkeypatch, caplog):
     session_id = "qa-no-live"
     try:
         with caplog.at_level(logging.WARNING):
-            async with (
-                aiohttp.ClientSession() as session,
-                session.ws_connect(url, params={"session_id": session_id}) as ws,
-            ):
+            session, ws = await _open_ws(url, session_id)
+            try:
                 await ws.send_json({"type": "frame", "data": B64_GARBAGE, "ts": 12345})
                 await asyncio_sleep(0.1)
-            # Non-vacuous: the frame really reached the live-visual branch and
-            # consulted the manager (a missing guard call would show up here).
-            assert manager.get_live_session_calls == [session_id]
-            # Nothing forwarded: no live session was handed out, so no
-            # handle_frame call was made on the recorded session.
-            assert live.frames == []
-            # ...and the branch did not call handle_frame on the None session
-            # either (that would be swallowed as a "live frame route failed"
-            # warning by the forward's own inner except).
-            assert _live_route_failures(caplog) == []
-            # The frame did not raise inside the branch: an exception there is
-            # swallowed by ws_handler's broad `except Exception`, so the only
-            # observable is the catch-all's ERROR record.
-            assert _handler_errors(caplog) == []
-        # Survived: the loop still serves this session (control-message probe).
-        await _assert_handler_survived(url, session_id)
+                # Non-vacuous: the frame really reached the live-visual branch and
+                # consulted the manager (a missing guard call would show up here).
+                assert manager.get_live_session_calls == [session_id]
+                # Nothing forwarded: no live session was handed out, so no
+                # handle_frame call was made on the recorded session.
+                assert live.frames == []
+                # ...and the branch did not call handle_frame on the None session
+                # either (that would be swallowed as a "live frame route failed"
+                # warning by the forward's own inner except).
+                assert _live_route_failures(caplog) == []
+                # The frame did not raise inside the branch: an exception there is
+                # swallowed by ws_handler's broad `except Exception`, so the only
+                # observable is the catch-all's ERROR record.
+                assert _handler_errors(caplog) == []
+                # Survived: the SAME socket still gets served (control-message probe).
+                await _assert_same_connection_alive(ws, session_id)
+            finally:
+                await ws.close()
+                await session.close()
     finally:
         await runner.cleanup()
 
@@ -289,24 +302,26 @@ async def test_ws_frame_skipped_when_manager_none(monkeypatch, caplog):
 
     The manager is genuinely absent (``request.app.get("jarvis_manager")`` is
     None), so there is no stub spy to read; the observables are the absence of
-    an ERROR record from the handler's catch-all and a still-serving loop.
+    an ERROR record from the handler's catch-all and a still-dispatching
+    connection.
     """
     app, _vlm = _build_app(manager=None)
     runner, url = await _start_server(app)
     session_id = "qa-no-manager"
     try:
         with caplog.at_level(logging.WARNING):
-            async with (
-                aiohttp.ClientSession() as session,
-                session.ws_connect(url, params={"session_id": session_id}) as ws,
-            ):
+            session, ws = await _open_ws(url, session_id)
+            try:
                 await ws.send_json({"type": "frame", "data": B64_GARBAGE, "ts": 12345})
                 await asyncio_sleep(0.1)
-            # No AttributeError on None: the manager-None guard held, so the
-            # frame branch completed without hitting the catch-all.
-            assert _handler_errors(caplog) == []
-        # Survived: the loop still serves this session (control-message probe).
-        await _assert_handler_survived(url, session_id)
+                # No AttributeError on None: the manager-None guard held, so the
+                # frame branch completed without hitting the catch-all.
+                assert _handler_errors(caplog) == []
+                # Survived: the SAME socket still gets served.
+                await _assert_same_connection_alive(ws, session_id)
+            finally:
+                await ws.close()
+                await session.close()
     finally:
         await runner.cleanup()
 

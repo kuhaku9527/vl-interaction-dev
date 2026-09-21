@@ -115,10 +115,7 @@ def test_available_true_with_real_model(tmp_path):
     """
     model_file = _VAD_MODEL_DIR / "silero_vad.onnx"
     if not model_file.is_file():
-        pytest.skip(
-            f"silero_vad.onnx not present at {model_file}; "
-            f"fail-open path covered above"
-        )
+        pytest.skip(f"silero_vad.onnx not present at {model_file}; fail-open path covered above")
 
     bp = VadBypass(enabled=True, model_dir=str(_VAD_MODEL_DIR))
     assert bp.available is True
