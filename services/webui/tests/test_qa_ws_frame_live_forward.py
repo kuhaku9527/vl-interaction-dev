@@ -271,7 +271,13 @@ async def test_ws_frame_not_forwarded_when_no_live_session(monkeypatch, caplog):
             session, ws = await _open_ws(url, session_id)
             try:
                 await ws.send_json({"type": "frame", "data": B64_GARBAGE, "ts": 12345})
-                await asyncio_sleep(0.1)
+                # ORDERING BARRIER, not a sleep: the handler consumes messages
+                # from this socket sequentially, so a control message answered on
+                # the SAME socket proves the frame message was fully processed
+                # before any negative assertion below runs. Asserting the
+                # negatives after a fixed sleep would let a slow handler report
+                # "no error" simply because it had not got there yet.
+                await _assert_same_connection_alive(ws, session_id)
                 # Non-vacuous: the frame really reached the live-visual branch and
                 # consulted the manager (a missing guard call would show up here).
                 assert manager.get_live_session_calls == [session_id]
@@ -286,8 +292,6 @@ async def test_ws_frame_not_forwarded_when_no_live_session(monkeypatch, caplog):
                 # swallowed by ws_handler's broad `except Exception`, so the only
                 # observable is the catch-all's ERROR record.
                 assert _handler_errors(caplog) == []
-                # Survived: the SAME socket still gets served (control-message probe).
-                await _assert_same_connection_alive(ws, session_id)
             finally:
                 await ws.close()
                 await session.close()
@@ -301,9 +305,9 @@ async def test_ws_frame_skipped_when_manager_none(monkeypatch, caplog):
     frame does not crash the handler.
 
     The manager is genuinely absent (``request.app.get("jarvis_manager")`` is
-    None), so there is no stub spy to read; the observables are the absence of
-    an ERROR record from the handler's catch-all and a still-dispatching
-    connection.
+    None), so there is no stub spy to read; the observables are a
+    still-dispatching connection and the absence of an ERROR record from the
+    handler's catch-all.
     """
     app, _vlm = _build_app(manager=None)
     runner, url = await _start_server(app)
@@ -313,12 +317,12 @@ async def test_ws_frame_skipped_when_manager_none(monkeypatch, caplog):
             session, ws = await _open_ws(url, session_id)
             try:
                 await ws.send_json({"type": "frame", "data": B64_GARBAGE, "ts": 12345})
-                await asyncio_sleep(0.1)
+                # Same ordering barrier as above: the control message is only
+                # answered after the frame has been processed.
+                await _assert_same_connection_alive(ws, session_id)
                 # No AttributeError on None: the manager-None guard held, so the
                 # frame branch completed without hitting the catch-all.
                 assert _handler_errors(caplog) == []
-                # Survived: the SAME socket still gets served.
-                await _assert_same_connection_alive(ws, session_id)
             finally:
                 await ws.close()
                 await session.close()

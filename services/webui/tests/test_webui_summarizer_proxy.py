@@ -248,7 +248,15 @@ async def test_propagate_unreachable_webinfer_logs_warning(monkeypatch, caplog):
         concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool,
     ):
         fut = pool.submit(_drive)
+        # Bounded: an unbounded `while not fut.done()` would HANG CI rather than
+        # fail it (webui installs no pytest-timeout, so the `timeout = 60`
+        # declared in pyproject is inert here). A deadline turns a stall into a
+        # test failure instead of a stuck job.
+        deadline = asyncio.get_running_loop().time() + 30.0
         while not fut.done():
+            assert asyncio.get_running_loop().time() < deadline, (
+                "propagation driver did not settle within 30s"
+            )
             await asyncio.sleep(0.05)
         # (a) Must not raise to the propagation caller.
         outcome = fut.result()

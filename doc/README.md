@@ -380,7 +380,7 @@ JoyAI-VL-Interaction-main/
 `check-fullscreen-parity` **17-0**、`check-button-wrap` 全绿、`check-topbar-fixes` **10-0**、
 `check-idesign-mirror` **6-0**；`webui-invariants` id 新增 0/删除 0、div 配平。
 
-### `test_qa_server_split_runtime.py` 的本地路径 bug（**代码未修；已立工单 #151**）
+### `test_qa_server_split_runtime.py` 的本地路径 bug（**✅ 已修（`975ea15`）**；工单 [#151](https://github.com/kuhaku9527/vl-interaction-dev/issues/151)）
 
 该文件 `WEBUI_ROOT = Path(__file__).resolve().parents[2]` 解析到 `services/`（应为 `parents[1]`
 = `services/webui`），于是 `SRC = services/src` **不存在** ⇒ 裸跑 `pytest services/webui/tests`
@@ -420,7 +420,7 @@ tts / asr / voice-clone / kws-training / scripts），结论与处置：
 | **★「同一连接」这个限定是复核时补的** | 初版探针用**另开一条 WS** 来证明「处理帧的循环还活着」，并在注释与本文档里宣称能抓 `break`/`return`。**这是假的**：`websocket_handler` 的 `async for msg in ws` 是**每连接各一份**，新连接会拿到**全新的 handler 与全新的循环** ⇒ 旧连接循环已死也照样回包。**变异实测**：在转发之后插入 `break`（只杀本连接循环、不影响转发），旧探针下 **4 个用例全绿** | ✅ 已改为**在同一条 socket 上**发控制消息（循环死了则 socket 关闭 ⇒ `receive_json` 读到关闭而非回复）。同一变异下**现在 2 个用例转红**，干净时 4 个全绿 ⇒ 该断言**这次是真的** |
 | **测试存在但从未被收集** | `services/asr` 的两个 provider 套件放在 `jarvis/`（贴着被测代码），而 `testpaths=["tests"]` ⇒ **声明 46 个、收集 2 个** | ✅ 已修（`testpaths` 加 `jarvis` ⇒ 收集数 2→48，全绿） |
 | **陈旧断言（因未收集而无人见）** | 承上：生产重构（`b0991cc` 引入 `ProviderRegistry`）改了错误消息后，`test_factory_invalid_raises` **一直红着没人看见**（旧措辞现已全仓不存在） | ✅ 已修，并改为断**契约**（`ValueError` + 消息含冒犯值与注册表名）而非整句措辞 |
-| **因错误原因而跳过** | `test_available_true_with_real_model` 在函数体读 `JARVIS_VAD_MODEL_DIR`，但本模块 autouse fixture 会给**每个**用例删掉它 ⇒ 恒得 `''` → `Path('')` → `.` ⇒ 守卫实际在拿 **CWD** 判断，而 skip 原因却写「asset not present」。**本机确有真模型**（643KB）且 `sherpa_onnx` 可导入 ⇒ 该用例本可真正执行 | ✅ 已修（改为 import 期由 `JOYAI_MODELS_ROOT` 解析 + skip 打印实际路径）⇒ **从「恒跳过」变为真正执行**，负控可失败 |
+| **因错误原因而跳过** | `test_available_true_with_real_model` 在函数体读 `JARVIS_VAD_MODEL_DIR`，但本模块 autouse fixture 会给**每个**用例删掉它 ⇒ 恒得 `''` → `Path('')` → `.` ⇒ 守卫实际在拿 **CWD** 判断，而 skip 原因却写「asset not present」。**本机确有真模型**（643KB）且 `sherpa_onnx` 可导入 ⇒ 该用例本可真正执行 | ✅ 已修（改为 import 期由 `JOYAI_MODELS_ROOT` 解析 —— 与 `smart_turn_adapter.py` 同一约定 —— 且 skip 消息打印**实际检查的路径**）。**限定**：在本机（`D:/AI/models` 有该模型）由「恒跳过」变为**真正执行**（`10 passed, 0 skipped`，负控可失败）；**在 Linux CI 上仍会跳过**（无该资产）—— 但此时**跳过原因是真的**（指向实际检查的路径），而修复前的原因**是假的**。这正是本条要治的缺陷 |
 | **路径错标（#151 同族）** | `services/voice-clone/tests/test_list_voices_endpoint.py` 同样把 `parents[2]` 当 service root ⇒ 自建的两条 `sys.path` 插入**全是死代码**，能导入**只因 pytest 自插 rootdir**；且该服务**无 conftest**、**不在 CI 矩阵** | ✅ 已修（`parents[1]` + fail-closed 守卫，负控已验证） |
 | **CI 矩阵盲区** | `asr` / `voice-clone` 等有套件但**不在 pytest 矩阵**，只受 ruff **format** 约束 ⇒ 「格式合格」被误当「已受检」 | 📋 已立工单 **#152**（含「清单一致性」门禁建议：断言每个含测试的服务都在矩阵中或显式豁免） |
 | **31 个同族错标** | `parents[2]` 当 `REPO` 的 31 个文件：**全部无害**（conftest 已注入正确的 `parents[3]`，追加的错误路径是冗余）。经验证**无一**用于真实文件 I/O | ⛔ **不修**。真因是「把路径当唯一通道且无守卫」的**语义**问题，不是「下标写错」——31 处都写错照样绿 |
