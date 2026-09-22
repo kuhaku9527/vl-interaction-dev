@@ -61,6 +61,7 @@
 |---|---|---|
 | `draft-live-empathy-tuning.md` | 四态共情类误响应调优 | 功能部分已落盘，但「persona 文件级弱化」待**真机 benchmark** 决定 |
 | `draft-mode-isolation-boundaries.md` | 三模式隔离决策边界澄清 | 澄清性文档（非实施合同）；结论已并入 `决策/交互模式与决策token规范.md`，无需转正 |
+| `draft-test-evidence-baseline.md` | **测试证据基线化** + 补齐三条从未真机验证的链路 | 台账（`doc/standards/test-baseline.md`）已落地；三条链路（帧 / proactive / 多轮取中位）的真机验证**待做**，转正条件见 spec §5 |
 
 > 其余原 `draft-*` 已于 2026-09-14 转正（见 §1 加粗行）。**转正记录可 git 追溯**（`git log --follow`）。
 

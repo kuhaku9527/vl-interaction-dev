@@ -142,6 +142,7 @@
 | [`standards/coding-standards.md`](standards/coding-standards.md) | ✅ | 编码规范 |
 | [`standards/code-review-checklist.md`](standards/code-review-checklist.md) | ✅ | 代码审查清单 |
 | [`standards/lint-baseline.md`](standards/lint-baseline.md) | ✅ | Lint 基线（ADR-0011 分阶段门禁） |
+| [`standards/test-baseline.md`](standards/test-baseline.md) | ✅ **2026-09-22 新建** | **测试与验收现状基线**（滚动台账）：跑过什么 / 什么结果 / **何时测的** / **真机还是离线**。含「尚无任何记录」的欠账清单与两处曾致误判的取证陷阱（审计脚本假数字 / `static*.bak` 干扰） |
 | [`standards/workspace-isolation.md`](standards/workspace-isolation.md) | ✅ | 工作区隔离规范 |
 
 ### 前端专题（`frontend/`）
