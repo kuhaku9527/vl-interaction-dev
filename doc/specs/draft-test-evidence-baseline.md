@@ -146,9 +146,23 @@
    与「测了但全错」**数值相同、含义相反**（真机撞到精确率 stdev 虚高 47.14；
    存量历史文件撞到 `delegate_recall=0.0` 其实是「当年没测」）。
    ⇒ `metrics_note.degenerate_rounds` + 逐条登记分母的 `RATIO_DENOMINATORS`。
-2. **跨 CI 边界的契约必须有离线守卫**：`services/scripts` **不在** pytest 矩阵内，
-   一次结果块键名不匹配在**跑完 336 次推理后**才崩（≈7 分钟白跑、文件零字节）。
-   ⇒ 组装抽成纯函数 + 静态 AST 扫描 `main()` 的下标读取（`tests/test_benchmark_multiround_contract.py`）。
+2. **跨 CI 边界的契约必须有离线守卫**：`services/scripts` **不在** pytest 矩阵内
+   （也不在 ruff 范围内），一次结果块键名不匹配在**跑完 336 次推理后**才崩
+   （≈7 分钟白跑、文件零字节）。
+   ⇒ 组装抽成纯函数 + 静态 AST 扫描 `main()` 的下标读取
+   （``tests/test_benchmark_multiround_contract.py``）。
+
+**`/code-review` 两轴随后查出的 6 处**（各自跑了变异测试），其中三处属本节同一病根：
+- **「0.0 = 测到 0 还是没测」再次出现**，这次在**成本**字段：从已落盘文件重聚合时
+  没有耗时数据，实现用 `[0.0]*n` 填充 ⇒ 报告声称「单轮 0.0 秒」。
+  ⇒ 统一 `None` + `measured: false`。
+- **守卫本身恒真**：`RATIO_DENOMINATORS` 的守卫只断言「分母是某个已聚合指标」，
+  对 3/5 条比率恒真 —— 把三条分母改错**全绿通过**。⇒ 独立金标 + 行为正/负控，
+  三个变异体逐一实测被杀死。**这是 §1「CI 全绿 ≠ 断言有效」在本票内部的复现。**
+- **静态扫描漏嵌套层**：`payload["rounds_report"]["case_stabilty"]` 扫不出，
+  而 docstring 声称守「整类」⇒ 改为递归校验，并**如实写明覆盖边界**。
+另三处：CRLF 污染（`Path.write_text` 在 Windows 的默认行为）、
+`BENCH_ROUNDS=1` 被静默改成 2、两处自述不实（含指向不存在的键）。
 
 ### D6. 每个新判据配负控（继承 #154 / #151 的硬约束）
 

@@ -160,7 +160,7 @@ verdict: PASS
 | 契约测试（真机脚本的结果形状） | `cd services/webinfer && python -m pytest tests/test_benchmark_multiround_contract.py -q` | **13 passed**（含跨 CI 边界的静态 AST 扫描 + 两层负控 + 产物自足性端到端 + BENCH_ROUNDS 坏值判红） | 离线 | 2026-09-22T13:5x |
 | webinfer 全量单测 | `cd services/webinfer && python -m pytest -o asyncio_mode=auto -q` | **602 passed**（#155 时 535 → 本轮 +67：54 例 aggregator + 13 例跨 CI 契约） | 离线 | 2026-09-22T13:5x |
 | scripts 单测（#162/#163 的） | `python -m pytest scripts/tests/ -q` | **89 passed**（与本轮改动前一致，无回归） | 离线 | 2026-09-22T13:2x |
-| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,D102,D103,D205,D401,SIM105` + `ruff format --check services/webinfer` | **All checks passed** / 73 files already formatted | 离线 | 2026-09-22T13:5x |
+| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,D102,D103,D205,D401,SIM105` + `ruff format --check services/webinfer` | **All checks passed** / **72 files already formatted** | 离线 | 2026-09-22T13:5x |
 | **行尾核验**（AGENTS.md 字节核验） | `git ls-files --eol` + `git diff --numstat` 对比 `--ignore-cr-at-eol` | 全部 `i/lf w/lf`（评审查出产物与 2 个新文件曾被写成 CRLF，已修，见上表第四类①） | 离线 | 2026-09-22T13:5x |
 | **变异测试**（守卫生效性，评审要求） | 逐个把 `RATIO_DENOMINATORS` 的分母改错（3 个曾**全绿通过**的变异体） | **3/3 已被杀死**，各由 `test_ratio_denominators_match_an_independent_oracle` / `…_zeroing_the_registered_denominator…` / `…_a_zero_denominator_does_not_flag_unrelated_ratios` 杀死 | 离线 | 2026-09-22T13:5x |
 
