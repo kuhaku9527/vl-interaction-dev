@@ -1,3 +1,7 @@
+# ruff: noqa: RUF001
+# (RUF001 = ambiguous fullwidth punctuation. This script's prose is Chinese and
+# quotes real test sentences; same convention as the sibling
+# benchmark_4state_notforme.py.)
 """Benchmark: the PRODUCTION live system prompt (``LIVE_SYSTEM_PROMPT_EN``).
 
 Why this script exists
@@ -83,6 +87,20 @@ from benchmark_4state_notforme import (  # noqa: E402
     summarize,
 )
 
+# ★ #165: multi-round median + dispersion. The aggregator lives in
+# services/webinfer (CI-visible) so it is unit-tested offline — this script
+# only *runs* the rounds and feeds the per-round stats in. Single-round runs
+# are the defect this closes: at temperature=0.8, 12-14 of the 26
+# non-directed cases flip between two rounds, so a one-round number cannot
+# tell "stable" from "lucky".
+from decision_eval_rounds import (  # noqa: E402
+    DEFAULT_ROUNDS,
+    build_rounds_report,
+    diff_reports,
+    historical_comparable_view,
+    open_book_report,
+)
+
 # ★ #155: the test set now has THREE ground-truth groups (directed /
 # nondirected / delegate). The scorer — including the three-way ``correct``
 # rule — lives in services/webinfer/decision_eval_score.py, which IS in the CI
@@ -100,6 +118,7 @@ from decision_eval_set import (  # noqa: E402
     GROUP_DIRECTED,
     GROUP_NONDIRECTED,
     GROUPS,
+    HISTORICAL_DENOMINATOR_NOTE,
     group_counts,
 )
 from prompt_constants import LIVE_SYSTEM_PROMPT_EN  # noqa: E402
@@ -121,6 +140,14 @@ _OUT_PATH = (
 # Optional override so a repeat run (temperature=0.8 is stochastic) can be
 # written beside the primary result and diffed against it.
 _OUT_PATH = Path(os.environ.get("BENCH_PROD_OUT", str(_OUT_PATH)))
+
+# ★ #165: how many rounds to run. Default 3 (> 2 as the ticket requires);
+# 2 rounds can only say "agree/disagree" — 3 is the first round count with a
+# real middle value. Override with BENCH_ROUNDS.
+ROUNDS = max(2, int(os.environ.get("BENCH_ROUNDS", str(DEFAULT_ROUNDS))))
+# Optional path to a previous multi-round results file: when set, the script
+# prints the per-metric diff at the end (AC#3 "differences visible at a glance").
+_DIFF_AGAINST = os.environ.get("BENCH_DIFF_AGAINST", "")
 
 _HISTORICAL_VARIANTS = (
     "A_live3_prod",
@@ -211,8 +238,7 @@ def run_variant_with_tokens(name: str, system_prompt: str) -> list[dict]:
     total = len(TEST_SET)
     for index, (sid, text, expected, category, note) in enumerate(TEST_SET, 1):
         print(
-            f"[{name}] {index}/{total} {sid} {text!r} "
-            f"(expected={expected}, {note})",
+            f"[{name}] {index}/{total} {sid} {text!r} (expected={expected}, {note})",
             flush=True,
         )
         row: dict = {
@@ -280,13 +306,135 @@ def category_breakdown(rows: list[dict]) -> dict:
     return dict(sorted(out.items()))
 
 
+def print_rounds_block(name: str, report: dict, stability: dict) -> None:
+    """Print the multi-round median + dispersion table for one variant (#165)."""
+    print(f"  --- {name}: {report['rounds_completed']} 轮中位数 + 离散度 ---")
+    print(
+        "    "
+        + "metric".ljust(32)
+        + "median".rjust(9)
+        + "single".rjust(9)
+        + "stdev".rjust(9)
+        + "range".rjust(9)
+        + "  per_round"
+    )
+    for metric, series in report["metrics"].items():
+        disp = series["dispersion"]
+        print(
+            "    "
+            + metric.ljust(32)
+            + f"{series['median']}".rjust(9)
+            + f"{series['single_round_first']}".rjust(9)
+            + f"{disp['stdev']}".rjust(9)
+            + f"{disp['range']}".rjust(9)
+            + "  "
+            + str(series["per_round"])
+        )
+    print(
+        f"    逐句稳定性: stable={stability['n_stable']}  "
+        f"unstable={stability['n_unstable']}  "
+        f"(by group {stability['n_unstable_by_group']})"
+    )
+    if stability["unstable_ids"]:
+        print(f"    不稳定句: {', '.join(stability['unstable_ids'])}")
+    # ★ A ratio whose denominator is 0 is recorded as 0.0 — numerically
+    # identical to "measured and got zero", semantically the opposite. Real
+    # runs hit this both ways (a round predicting no not-for-me at all, and
+    # the historical files having no delegate group). Say it out loud so a
+    # reader does not read the inflated stdev as model instability.
+    for ratio, round_numbers in (
+        (report.get("metrics_note") or {}).get("degenerate_rounds") or {}
+    ).items():
+        print(
+            f"    ⚠️ {ratio} 在轮 {round_numbers} 的**分母为 0** ⇒ 该轮读数无意义"
+            "（记作 0.0，与「测了但全错」数值相同、含义相反）；"
+            "跨轮离散度会因此虚高，别当成模型抖动。"
+        )
+    cost = report["cost"]
+    print(
+        f"    成本: total={cost['wall_seconds_total']}s  "
+        f"mean/round={cost['wall_seconds_per_round_mean']}s  "
+        f"calls={cost['llm_calls']}  s/call={cost['seconds_per_llm_call']}"
+    )
+
+
+def variant_result_payload(
+    *,
+    rows: list[dict],
+    per_round_stats: list[dict],
+    per_round_rows: list[list[dict]],
+    per_round_wall: list[float],
+    prompt: str,
+    rounds_requested: int,
+) -> dict:
+    """Assemble one variant's result block (pure; no I/O, no model calls).
+
+    ★ Extracted so the *shape* of the result is testable. This exact code path
+    crashed a full real-machine run during #165: the assembly was inline in
+    ``main()``, a refactor renamed a key, and the mismatch only surfaced after
+    all 336 inferences had already been spent — ``services/scripts`` is not in
+    the CI pytest matrix, so nothing guarded it.
+
+    Now the assembly is a pure function and
+    ``services/webinfer/tests/test_benchmark_multiround_contract.py`` asserts
+    the keys the printing/writing code reads actually exist, offline.
+    """
+    stats = per_round_stats[-1]
+    breakdown = emission_breakdown(rows)
+    subsets = subset_breakdown(rows, prompt)
+    # ★ #165: the deliverable — median + single-round values + dispersion.
+    report = build_rounds_report(
+        per_round_stats,
+        per_round_rows,
+        prompt=prompt,
+        round_case_ids=[[r["id"] for r in rws] for rws in per_round_rows],
+        round_wall_seconds=per_round_wall,
+        llm_calls=len(rows) * len(per_round_rows),
+        rounds_requested=rounds_requested,
+    )
+    return {
+        "stats": stats,
+        "subsets": subsets,
+        "emission_breakdown": breakdown,
+        "category_breakdown": category_breakdown(rows),
+        "rows": rows,
+        # ★ #165: every round's rows, so the artifact is **self-sufficient**.
+        # Without this the file keeps only the last round and
+        # ``decision_eval_rounds --from-results`` cannot re-aggregate it
+        # (it would refuse with "fewer than 2 rounds" even though the file
+        # visibly holds three). Re-analysis must not require a re-run: the
+        # whole point of multi-round evidence is that it can be re-read.
+        "per_round_rows": per_round_rows,
+        # ★ #165: the multi-round block. ``median`` sits next to ``per_round``
+        # and ``dispersion``; the single-round-only fields above come from the
+        # LAST round.
+        "rounds_report": report,
+        "historical_comparable_stats": summarize(historical_comparable_view(rows)),
+    }
+
+
 def main() -> None:
-    """Run the production live prompt over the shared frozen test set."""
+    """Run the production live prompt over the shared frozen test set.
+
+    ★ #165: every variant is run ``ROUNDS`` times and the report carries the
+    **median side by side with the single-round values and the dispersion**.
+    A single round cannot distinguish "stable" from "lucky" — at
+    temperature=0.8, 12-14 of the 26 non-directed cases were observed to flip
+    between two rounds.
+    """
     print("[prod-bench] production live prompt benchmark (LIVE_SYSTEM_PROMPT_EN)")
     # Counts come from the asset (single source), not an inline re-count.
     _counts = group_counts()
-    print(f"[prod-bench] test set size={len(TEST_SET)} "
-          + "  ".join(f"{g}={_counts[g]}" for g in GROUPS))
+    print(
+        f"[prod-bench] test set size={len(TEST_SET)} "
+        + "  ".join(f"{g}={_counts[g]}" for g in GROUPS)
+    )
+    print(f"[prod-bench] rounds={ROUNDS} (multi-round median + dispersion, #165)")
+    _ob = open_book_report(build_production_prompt(include_profile=True))
+    print(
+        f"[prod-bench] open-book exam: {_ob['is_open_book']}  "
+        f"逐字重叠 {_ob['n_overlapping']} 句（非面向 {_ob['n_overlapping_nondirected']}）"
+    )
 
     variants = [
         ("P_live4_prod_prompt", build_production_prompt(include_profile=False)),
@@ -298,25 +446,45 @@ def main() -> None:
     results: dict[str, dict] = {}
     for vname, vprompt in variants:
         print(f"\n[prod-bench] === variant {vname} (system prompt len={len(vprompt)}) ===")
-        rows = run_variant_with_tokens(vname, vprompt)
-        stats = summarize(rows)
-        print_summary(vname, stats)
-        breakdown = emission_breakdown(rows)
-        print("  emission provenance:")
-        for expected, tally in breakdown.items():
+        per_round_stats: list[dict] = []
+        per_round_rows: list[list[dict]] = []
+        per_round_wall: list[float] = []
+        for round_index in range(1, ROUNDS + 1):
+            print(f"[prod-bench] --- round {round_index}/{ROUNDS} ---")
+            round_started = time.perf_counter()
+            rows = run_variant_with_tokens(f"{vname}#r{round_index}", vprompt)
+            per_round_wall.append(round(time.perf_counter() - round_started, 2))
+            per_round_stats.append(summarize(rows))
+            per_round_rows.append(rows)
+            print_summary(f"{vname} round {round_index}", per_round_stats[-1])
+
+        # The last round's rows give the representative single-round views
+        # (emission / category / subset breakdowns); the multi-round block
+        # inside ``variant_result_payload`` is what carries the conclusion.
+        payload = variant_result_payload(
+            rows=per_round_rows[-1],
+            per_round_stats=per_round_stats,
+            per_round_rows=per_round_rows,
+            per_round_wall=per_round_wall,
+            prompt=vprompt,
+            rounds_requested=ROUNDS,
+        )
+        print("  emission provenance (末轮):")
+        for expected, tally in payload["emission_breakdown"].items():
             print(f"    {expected}: {tally}")
-        # ★ #155: this variant's own prompt decides which sentences are
-        # open-book — computed against the prompt actually under test, not a
-        # fixed label.
-        subsets = subset_breakdown(rows, vprompt)
-        print_subset_breakdown(vname, subsets)
-        results[vname] = {
-            "stats": stats,
-            "subsets": subsets,
-            "emission_breakdown": breakdown,
-            "category_breakdown": category_breakdown(rows),
-            "rows": rows,
-        }
+        print_subset_breakdown(vname, payload["subsets"])
+        print_rounds_block(
+            vname, payload["rounds_report"], payload["rounds_report"]["case_stability"]
+        )
+        comparable = payload["historical_comparable_stats"]
+        print("  ★ 同口径历史可比视图（统一到 25/25，排除 delegate）：")
+        print(
+            f"    directed={comparable['n_directed']}  nondirected={comparable['n_nondirected']}  "
+            f"mis_resp={comparable['baseline_mis_response_rate_pct']}%  "
+            f"nfm_recall={comparable['not_for_me_recall_pct']}%  "
+            f"directed_miss={comparable['directed_miss_rate_pct']}%"
+        )
+        results[vname] = payload
 
     # --- comparison block: historical variants (recorded, not re-measured) ---
     comparison: dict[str, dict] = {}
@@ -330,8 +498,13 @@ def main() -> None:
         comparison[ename] = payload["stats"]
 
     print("\n===== production live prompt vs historical variants =====")
-    print("variant".ljust(30) + "mis_resp%".rjust(10) + "nfm_prec%".rjust(11)
-          + "nfm_recall%".rjust(13) + "dir_miss%".rjust(11))
+    print(
+        "variant".ljust(30)
+        + "mis_resp%".rjust(10)
+        + "nfm_prec%".rjust(11)
+        + "nfm_recall%".rjust(13)
+        + "dir_miss%".rjust(11)
+    )
     for key in (*_HISTORICAL_VARIANTS, *[n for n, _ in variants]):
         stats = comparison.get(key)
         if not stats:
@@ -343,33 +516,76 @@ def main() -> None:
             + f"{stats['not_for_me_recall_pct']}".rjust(13)
             + f"{stats['directed_miss_rate_pct']}".rjust(11)
         )
+    print(
+        "  ⚠️ 上表的历史行取自 doc/research/data/benchmark_4state_notforme_results.json，"
+        "其分母是 25/25 且无 delegate 组；"
+        "本轮的**同口径**数字见各 variant 的 historical_comparable_stats。"
+    )
 
+    # ★ #165 AC#6: cost of N rounds, so N can be decided from data not taste.
+    for ename, payload in results.items():
+        cost = payload["rounds_report"]["cost"]
+        print(
+            f"[prod-bench] cost {ename}: rounds={cost['rounds']}  "
+            f"total={cost['wall_seconds_total']}s  "
+            f"mean/round={cost['wall_seconds_per_round_mean']}s  "
+            f"calls={cost['llm_calls']}  s/call={cost['seconds_per_llm_call']}"
+        )
+
+    payload_out = {
+        "model": base_bench.LLAMA_MODEL,
+        "test_set_size": len(TEST_SET),
+        "prompt_source": "services/webinfer/prompt_constants.py::LIVE_SYSTEM_PROMPT_EN",
+        "prompt_route": "prompt_assembly._resolve_base_system_prompt (interaction_mode=live)",
+        "prompt_length_bare": len(LIVE_SYSTEM_PROMPT_EN),
+        "prompt_length_with_profile": len(build_production_prompt(True)),
+        "judgment": "not-for-me precision >= 80%",
+        # ★ #165: how many rounds produced these numbers. A reader who does
+        # not know this cannot tell a stable score from a lucky one.
+        "rounds_per_variant": ROUNDS,
+        "rounds_semantics": (
+            "每个 variant 跑 ROUNDS 轮；results[<variant>].rounds 里 median 与单轮值并列，"
+            "并含 dispersion(stdev/range/mad/relative)。"
+            "仅有单轮值的字段（rows/emission_breakdown/subsets/category_breakdown）取自**末轮**，"
+            "结论请看 rounds 块。"
+        ),
+        "decoding": {
+            "max_tokens": base_bench.MAX_TOKENS,
+            "temperature": base_bench.TEMPERATURE,
+            "top_p": base_bench.TOP_P,
+            "top_k": base_bench.TOP_K,
+        },
+        "denominator": {
+            "note": HISTORICAL_DENOMINATOR_NOTE,
+            "canonical": {group: _counts[group] for group in GROUPS},
+            "historical_comparable": "见各 variant 的 historical_comparable_stats（25/25，无 delegate）",
+        },
+        "open_book": open_book_report(build_production_prompt(include_profile=True)),
+        "results": results,
+        "comparison_stats": comparison,
+    }
     _OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     _OUT_PATH.write_text(
-        json.dumps(
-            {
-                "model": base_bench.LLAMA_MODEL,
-                "test_set_size": len(TEST_SET),
-                "prompt_source": "services/webinfer/prompt_constants.py::LIVE_SYSTEM_PROMPT_EN",
-                "prompt_route": "prompt_assembly._resolve_base_system_prompt (interaction_mode=live)",
-                "prompt_length_bare": len(LIVE_SYSTEM_PROMPT_EN),
-                "prompt_length_with_profile": len(build_production_prompt(True)),
-                "judgment": "not-for-me precision >= 80%",
-                "decoding": {
-                    "max_tokens": base_bench.MAX_TOKENS,
-                    "temperature": base_bench.TEMPERATURE,
-                    "top_p": base_bench.TOP_P,
-                    "top_k": base_bench.TOP_K,
-                },
-                "results": results,
-                "comparison_stats": comparison,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
+        json.dumps(payload_out, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     print(f"\n[prod-bench] results written to {_OUT_PATH}")
+
+    # ★ #165 AC#3: the diff between two runs, one line per moved metric.
+    if _DIFF_AGAINST:
+        previous_path = Path(_DIFF_AGAINST)
+        if not previous_path.exists():
+            print(f"[prod-bench] ⚠️ BENCH_DIFF_AGAINST 指向的文件不存在：{previous_path}")
+            return
+        previous = json.loads(previous_path.read_text(encoding="utf-8"))
+        print(f"\n===== diff vs {previous_path} =====")
+        for ename, payload in results.items():
+            old = (previous.get("results") or {}).get(ename)
+            if not old or "rounds_report" not in old:
+                print(f"[{ename}] 对照文件里没有多轮块（旧格式？）—— 无法 diff")
+                continue
+            print(f"[{ename}]")
+            print(diff_reports(old["rounds_report"], payload["rounds_report"]))
 
 
 if __name__ == "__main__":

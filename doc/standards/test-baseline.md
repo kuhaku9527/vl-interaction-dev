@@ -21,6 +21,147 @@
 
 ## §1 当日新增（倒序，最新在上）
 
+### 2026-09-22（★ 多轮取中位 + 离散度：把「单轮结论」升级为可判稳的读数；工单 #165）
+
+> **这是欠账清单 §4 #3 的那一条**（「❌ 未做。存量只有 2 轮」），也是 **#157 的硬前置**
+> （#157 的验收明写「多轮取中位并记录轮数与离散度」）。
+>
+> **前置**：llama-server (7060) 在位（`/v1/models` 200，模型 `joyai-vl-interaction-preview`）；
+> 本项**只需 7060**，不需要其余 5 个服务、不需要浏览器（是**离线可复算的模型层评测**，
+> 不是端到端链路）。执行解释器 `D:\AI\envs\joyai-main\python.exe`（3.12.13）。
+>
+> **本轮结论一句话**：**中位数确实稳住了结论，而离散度证明单轮结论本来就不可信** ——
+> 单轮之间的 stdev 达 **4.8–7.9 个百分点**，而「不稳定句」在三轮里有 **26–28 句**
+> （共 56 句）**决策不一致**。⇒ 此前所有单轮得分都应视为**该分布的一次抽样**，不是能力的点估计。
+>
+> ⚠️ **注**：本节数字取自入库产物
+> `doc/research/data/benchmark_production_live_prompt_rounds.json`（**同一次**真机跑的读数）。
+> 本票全程跑了**两次**真机 3 轮，两次的绝对数字**明显不同**（例：`P` 的误响应率中位
+> 38.5 → 26.9）—— 这**正是本票要证明的那件事**：单轮数字不可作为点估计。
+> 故引用时必须认准是哪一次（本文引用的是入库文件的那一次）。
+
+**★ 真机三轮（每 variant × 3 轮 × 56 例 = 168 次推理，两个 variant 共 336 次）**
+
+**命令**：`BENCH_ROUNDS=3 BENCH_PROD_OUT=doc/research/data/benchmark_production_live_prompt_rounds.json \
+  python services/scripts/benchmark_production_live_prompt.py`　**退出码**：`0`
+
+| metric | variant | median | 单轮值(首轮) | **stdev** | range | per_round |
+|---|---|---|---|---|---|---|
+| 误响应率 | `P_live4_prod_prompt`（裸 prompt） | **26.9** | 26.9 | **7.933** | 19.3 | [26.9, 38.5, 19.2] |
+| 误响应率 | `P2_…_profile`（带 persona） | **30.8** | 19.2 | **6.55** | 15.4 | [19.2, 30.8, 34.6] |
+| nfm 精确率 | `P` | **100.0** | 100.0 | 47.14 ⚠️ | 100.0 | [100.0, **0.0**, 100.0] |
+| nfm 精确率 | `P2` | **100.0** | 100.0 | 0.0 | 0.0 | [100.0, 100.0, 100.0] |
+| nfm 召回率 | `P` | **3.8** | 3.8 | 1.791 | 3.8 | [3.8, 0.0, 3.8] |
+| nfm 召回率 | `P2` | **15.4** | 15.4 | **4.784** | 11.5 | [15.4, 19.2, 7.7] |
+| 面向句漏判率 | 两者 | **0.0** | 0.0 | 0.0 | 0.0 | 三轮全 0 |
+| delegate 召回 | `P` | **100.0** | 100.0 | 0.0 | 0.0 | [100, 100, 100] |
+| delegate 召回 | `P2` | **100.0** | 100.0 | 0.0 | 0.0 | [100, 100, 100] |
+
+**★ 逐句稳定性（本票把「12–14 例不一致」变成字段的那一项）**
+
+| variant | stable | **unstable** | 按组 | 成本 |
+|---|---|---|---|---|
+| `P_live4_prod_prompt` | 30 | **26** | directed 9 / **nondirected 17** / delegate 0 | 79.54 s / 168 calls → **0.473 s/call** |
+| `P2_…_profile` | 28 | **28** | directed 9 / **nondirected 19** / delegate 0 | 85.71 s / 168 calls → **0.510 s/call** |
+
+⇒ **56 句里有 26–28 句跨三轮决策不一致**。非面向组（26 句）里 17–19 句不稳定 ——
+与工单正文「26 例非面向中 **12–14** 例两轮不一致」**同量级且更严重**（三轮自然更多机会不一致）。
+
+> ⚠️ **`P` 的 nfm 精确率（stdev 47.14）不是模型剧烈抖动，是分母退化。**
+> 第 2 轮**一条 not-for-me 都没预测**（`n_not_for_me_predicted=0`），而
+> `summarize` 在分母为 0 时把比率记作 **0.0** —— 与「预测了但全错」的 0.0
+> **数值相同、含义相反**。本轮据此在结果结构里加了 `metrics_note.degenerate_rounds`
+> 显式点名退化轮（见下「本轮修的两处」）。**读这张表时勿把该 stdev 当成抖动。**
+
+**★ 同口径（AC#4：历史 25 vs 现 26 的差异必须显式处理）**
+
+| 口径 | 句数（directed/nondirected/delegate） | `P` 误响应率 | `P2` 误响应率 | `P` nfm召回 | `P2` nfm召回 |
+|---|---|---|---|---|---|
+| **本资产（权威）** | 25 / **26** / 5（共 56） | 26.9%（中位，本页上表） | 30.8%（中位，本页上表） | 3.8% | 15.4% |
+| **同口径历史可比**（排 `N01b` + 整组 delegate） | **25 / 25 / 0**（共 50） | 16.0% | 36.0% | 4.0% | 4.0% |
+
+⇒ 两行的**分母不同（56 vs 50）**，这正是 #155 记录的「25 vs 26」在整组 delegate 加入后的完整形态；
+⇒ 跨这两行比较**无效**，必须先统一分母 —— `denominator.historical_comparable`
+把该口径连同「为什么」一起写进结果文件，于是这件事不再靠人记得。
+（上表「本资产」两列取自本轮 3 轮读数；「同口径」两列取自 `historical_comparable_stats`，
+即**末轮**在排除 `N01b` 与 delegate 后重算的值 —— 与历史文件同分母，故可比。）
+
+**★ 开卷标注（AC#7）**：两 variant 均为 **开卷考**，与生产 prompt 逐字重叠 **10 句**（非面向 8 句）。
+
+| variant | generalization（n=46） | open-book（n=10） |
+|---|---|---|
+| `P`（裸 prompt） | 误响应 **16.7%** / nfm_recall **0.0%** | 误响应 25.0% / nfm_recall **12.5%** |
+| `P2`（带 persona） | 误响应 **27.8%** / nfm_recall **5.6%** | 误响应 50.0% / nfm_recall 12.5% |
+
+⇒ 泛化子集 nfm_recall **0–5.6%**，与 #155 记录的「扣掉记忆效应后泛化 recall 仅 0–5.6%」**逐字吻合**
+（独立复现，非引用）。⚠️ 这两列取自**末轮**（单轮视图），而末轮本身是抽样的 ——
+上表的 median/stdev 才是本票的结论面。
+
+**★ 存量历史 2 轮：离线重聚合（不跑模型，AC#4 的可执行形态）**
+
+**命令**：`python -m decision_eval_rounds --from-results \
+  doc/research/data/benchmark_production_live_prompt_results.json \
+  doc/research/data/benchmark_production_live_prompt_results_repeat.json --variant <V>`
+（装置在 `services/webinfer/decision_eval_rounds.py`，CI 可见、有单测）
+
+| variant | rounds | unstable | 按组 | 退化轮 |
+|---|---|---|---|---|
+| `P_live4_prod_prompt` | 2 | 20 | directed 8 / **nondirected 12** / delegate 0 | 精确率 + delegate 召回（分母皆 0） |
+| `P2_…_profile` | 2 | 19 | directed 5 / **nondirected 14** / delegate 0 | delegate 召回（分母 0） |
+
+⇒ **工单正文那句「12–14 例两轮不一致」由这两个数字逐字复现（12 与 14）** ——
+本票把它从工单散文变成了**一条可重跑命令的输出**。
+⇒ 同时证明「存量只有 2 轮」的账**没有被浪费**：不重跑模型即可得到中位与离散度。
+
+**★ 负控（AC#5：离散度必须真的在度量离散）**
+
+**命令**：`python -m decision_eval_rounds --self-check`（离线，无需模型）　**退出码**：`0`
+
+```
+stable not_for_me_recall_pct: per_round=[100.0, 100.0, 100.0]  median=100.0  stdev=0.0    range=0.0
+stub   not_for_me_recall_pct: per_round=[100.0, 100.0, 0.0]    median=100.0  stdev=47.14  range=100.0
+verdict: PASS
+```
+
+高方差桩（第 3 轮非面向句全判误响应）⇒ stdev **0.0 → 47.14**、range **0.0 → 100.0**。
+**且中位数岿然不动（100.0）** —— 这正是选它而非均值的理由：单轮离群不带走结论，
+但读者**必须**能从离散度看到它抖过。自检本身可证伪（把 `_dispersion_stdev` 换成恒 0 的桩 ⇒ 判红）。
+
+**★ 本轮修的三处（都是真机/自查跑出来的，不是想出来的）**
+
+| 缺陷 | 怎么暴露的 | 修法 |
+|---|---|---|
+| **写盘时崩：`KeyError: 'cost'`** —— 结果块组装内联在 `main()`，重构改了键名而读取方读旧键 | 首次真机轮**跑完 336 次推理后**崩溃，**结果文件一个字节都没写**（≈7 分钟白跑）。根因是结构性的：`services/scripts` **既不在 CI 的 pytest 矩阵、也不在 CI 的 ruff 范围内** ⇒ 那里的键名不匹配**只能**等真机跑完才暴露 | 把组装抽成**纯函数** `variant_result_payload`；在 **CI 可见处**加 `tests/test_benchmark_multiround_contract.py`（含**静态 AST 扫描** `main()` 的全部下标读取），同类错误从此**离线秒级**转红 |
+| **退化分母被读成「全错」** —— 分母为 0 时 `summarize` 记 0.0 | 真机上 `P` 的 nfm 精确率出现 stdev 47.14（看着像剧烈抖动）；存量历史文件里 `delegate_recall_pct=0.0`（看着像委派全失败，实际是**当年没测**） | 加 `RATIO_DENOMINATORS` 逐条登记比率→分母，聚合时产出 `metrics_note.degenerate_rounds` 点名退化轮；并有结构化守卫测试「每条 `_pct` 都必须登记分母」 |
+| **落盘产物不自足** —— 只存末轮的 `rows` | **自查**（非真机）：用新产物跑 `--from-results` 会被拒「不足 2 轮」，尽管文件里明明有三轮 ⇒ 重新分析就得**再花 3 分钟跑模型** | 产物加 `per_round_rows`（逐轮全存）；`report_from_results_files` 同时接受「一文件一轮」与「一文件 N 轮」两种形状，并各配正/负控测试 |
+
+> 这三处都属本仓最贵的那一类（**静默**：一个让证据丢失、一个让读数反向、
+> 一个让证据一次性用完），且**前两处只有真机会暴露** —— 离线单测在设计时全是绿的。
+
+| 项 | 命令 | 结果 | 真机? | 测量时间 |
+|---|---|---|---|---|
+| 真机 3 轮 × 2 variant（336 次推理） | `BENCH_ROUNDS=3 BENCH_PROD_OUT=…rounds.json python services/scripts/benchmark_production_live_prompt.py` | **ALL PASS** 退出码 0；结果落 `doc/research/data/benchmark_production_live_prompt_rounds.json`（含 `rounds_report` 多轮块 + `per_round_rows` 逐轮全存） | **真机**（7060 在位） | 2026-09-22T13:4x |
+| 产物自足性（不重跑模型即可重新分析） | `python -m decision_eval_rounds --from-results doc/research/data/benchmark_production_live_prompt_rounds.json --variant P_live4_prod_prompt` | **读出 3 轮**，median/stdev 与产物内的 `rounds_report` 逐项一致 | 离线（读入库产物） | 2026-09-22T13:5x |
+| 负控自检（AC#5） | `python -m decision_eval_rounds --self-check` | **PASS**：stable stdev 0.0 → stub stdev **47.14**（range 0→100），中位不变 | 离线 | 2026-09-22T13:0x |
+| 存量历史 2 轮重聚合 | `python -m decision_eval_rounds --from-results …results.json …_repeat.json --variant <V>` | **P：nondirected 12 句不一致；P2：14 句** —— 逐字复现工单的 12–14 | 离线（读已落盘文件） | 2026-09-22T13:1x |
+| aggregator 行为测试 | `python -m pytest services/webinfer/tests/test_decision_eval_rounds.py -q` | **44 passed** | 离线 | 2026-09-22T13:5x |
+| 契约测试（真机脚本的结果形状） | `python -m pytest services/webinfer/tests/test_benchmark_multiround_contract.py -q` | **9 passed**（含跨 CI 边界的静态 AST 扫描 + 其负控 + 产物自足性端到端） | 离线 | 2026-09-22T13:5x |
+| webinfer 全量单测 | `cd services/webinfer && python -m pytest -o asyncio_mode=auto -q` | **588 passed**（#155 时 535 → 本轮 +53：44 例 aggregator + 9 例跨 CI 契约） | 离线 | 2026-09-22T13:5x |
+| scripts 单测（#162/#163 的） | `python -m pytest scripts/tests/ -q` | **89 passed**（与本轮改动前一致，无回归） | 离线 | 2026-09-22T13:2x |
+| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,D102,D103,D205,D401,SIM105` + `ruff format --check services/webinfer` | **All checks passed** / 72 files already formatted | 离线 | 2026-09-22T13:2x |
+
+> **成本（AC#6，供后续调 N）**：单轮 56 例 ≈ **26–32 s**（均值 28.6 s），
+> **0.473–0.510 s/次推理**。⇒ `ROUNDS=3` 一轮完整评测 ≈ **3 分钟**；
+> 要提到 N=5 约 5 分钟 —— N 现在是有数字可依的，不是拍的。
+>
+> **可复现性**：逐轮日志在 `logs/bench-rounds-165.log`、历史重聚合结果在
+> `logs/rounds-165/`，而 `logs/` 被 gitignore（同 §1 #163 轮的惯例）。
+> **结论不依赖那些文件**：真机三轮由上面的命令重跑；
+> **入库产物本身即可重新分析**（`--from-results` 一条命令，见上表「产物自足性」行）；
+> 历史两轮由 `--from-results` 对**入库的**两个 results 文件重算，命令与判据都在本页。
+
+---
+
 ### 2026-09-22（★ 帧链路：判定「内容空」+ 建立正常基线；工单 #163）
 
 > **这是欠账清单里「唯一从未真机测过」的一条**（§4 #1）。本轮把它从「只有间接证据」
@@ -485,7 +626,7 @@
 | 1b | 帧链路分辨率/`max_pixels` | ✅ **2026-09-22 实测**：1fps / 764×540（协商值）；图像 token 764×540→**399**、1280×720→911、2560×1440→1023（`max_pixels` 削后）。⚠️ 早先记的 826/1850/2074 **已作废**（会话复用导致累加污染），见 §1 #163 轮 AC4 表 | 已收口（见 §1 #163 轮 AC4 表） |
 | 1c | 帧链路的**输出可见性**（VLM 输出是否到主显示位） | ✅ **2026-09-22 实测**：`#resultText` 的 `vlm_response` 通道当前**结构性不可达**（守卫 `isAnalysisRunning` 恒 `false`，因唯一置位函数零调用点）。**已记入 #168，未另立工单** —— 这是本 fork 有意的架构收敛（`ARCHITECTURE.md:11-14` 明写 `VideoProcessorTrack` 零构造点、四态只在用户说话/proactive 轮发生），**不是新缺陷** | 已收口；与 #168 同源 |
 | 2 | **proactive 轮真机** | ❌ 从未真跑。`LIVE_PROACTIVE_ENABLED` 默认 OFF，`proactive_supported:false` | live 两条产出决策的路径之一完全未验 |
-| 3 | **多轮取中位** | ❌ 未做。存量只有 2 轮（且 26 例非面向中 12–14 例两轮不一致） | #157 的硬要求 |
+| 3 | **多轮取中位** | ✅ **2026-09-22 已做（工单 #165）**：真机 3 轮 × 2 variant（336 次推理）+ 离散度 + 逐句稳定性；存量历史 2 轮**离线重聚合**（复现工单的 12–14 句不一致）；负控（高方差桩 ⇒ stdev 0→47.14）。装置 `services/webinfer/decision_eval_rounds.py`（CI 可见、有单测） | 已收口；#157 的硬前置已满足 |
 | 4 | `delegate` 真实行为 | ❌ 只有单测；真机未验 | `delegate` 是四态之一 |
 | 5 | 记忆写入端到端（webinfer 自动 push） | ❌ 只手工调过 API | 生产链路的记忆写入未端到端验 |
 | 6 | 1Hz 持续决策**现状** | ⚠️ 数据是 09-20 的，未重测 | 地图基线数字可能已过期 |
@@ -690,4 +831,31 @@ node scripts/frame_link_probe.mjs --frame-file <此前 --save-frame 落盘的帧
 > 合成帧会让「模型看到了什么」这件事失去意义（那是本项目已被推翻过的取证方式）。
 > ⚠️ **绝不自建 WebSocket**。自建 `new WebSocket(...)` 收不到 `vlm_response`
 > （已实测），据此下结论会得到完全错误的判定；探针只复用应用自身的 `window.websocket`。
+
+**多轮取中位 / 离散度**（工单 #165 新建，`services/webinfer/decision_eval_rounds.py`）：
+
+```bash
+# 前置：llama-server (7060) 在位。**不需要**其余 5 个服务、不需要浏览器 ——
+# 这是模型层评测，不是端到端链路。
+
+# ① 负控自检（离线，秒级；证明离散度真的在度量离散）—— AC#5
+cd services/webinfer && python -m decision_eval_rounds --self-check
+
+# ② 真机 N 轮（默认 3；每次 56 例；两 variant 共 2×N×56 次推理）
+BENCH_ROUNDS=3 BENCH_PROD_OUT=doc/research/data/benchmark_production_live_prompt_rounds.json \
+    python services/scripts/benchmark_production_live_prompt.py
+
+# ③ 存量轮次**离线**重聚合（不跑模型）—— 包括历史上那两个单轮文件
+cd services/webinfer && python -m decision_eval_rounds --from-results \
+    ../../doc/research/data/benchmark_production_live_prompt_results.json \
+    ../../doc/research/data/benchmark_production_live_prompt_results_repeat.json \
+    --variant P2_live4_prod_prompt_profile
+
+# ④ 两次运行逐指标对比（AC#3「差异一眼可见」）
+BENCH_DIFF_AGAINST=<上一轮 results.json> ... python services/scripts/benchmark_production_live_prompt.py
+```
+
+**判据**：结果里 `median` 必须与 `per_round`**并列**，且 `dispersion.stdev/range` 同在；
+`metrics_note.degenerate_rounds` 非空时**不得**把该 ratio 的离散度当作模型抖动（那是分母退化）。
+
 
