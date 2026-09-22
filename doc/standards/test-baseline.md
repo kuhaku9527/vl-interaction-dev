@@ -21,6 +21,41 @@
 
 ## §1 当日新增（倒序，最新在上）
 
+### 2026-09-22（★ 首次**全绿**真机轮 + AC 负控：停一个服务）
+
+> 这是运行器**第一次跑出 ALL GREEN**（此前三轮都是故意制造的负控轮）。
+> **前置**：`start-joyai.ps1 -Mode default` → **6/6 服务 200**
+> （7060/8070/8099/8985/8079/8997）；静态服务器 8123 在位且服务本仓库 static 目录。
+> 本轮意义：**判据正则首次对「新鲜的真机输出」验证**（此前只对测试里收录的输出样本验证过）。
+
+**命令**：`python scripts/verify_ritual.py`　**退出码**：`0`（**全仪式全绿**）
+
+| 项 | 命令 | 结果 | 真机? | 测量时间 |
+|---|---|---|---|---|
+| 服务栈探活 | `python services/scripts/verify-services.py` | **ALL PASS** ALL GREEN | 真机 | 2026-09-22T08:17:41Z |
+| 运行时门禁 | `python scripts/drift_gate.py --contract config/drift-contract.json --phase runtime --mode closed --no-history` | **ALL PASS** block_fail=0 / warn_fail=0 | 真机 | 2026-09-22T08:17:42Z |
+| 前端残留审计（死引用） | `node scripts/audit-frontend-residue.mjs` | **ALL PASS** 死引用 0（DOM id 294） | 真机 | 2026-09-22T08:17:48Z |
+| 路由契约审计 | `node scripts/audit-api-contract.mjs` | **ALL PASS** BROKEN=0 / UNUSED=15 | 离线 | 2026-09-22T08:17:48Z |
+| live 决策事件读取 | `python -m decision_events --events-dir logs/events/webui-2026-09-22.jsonl --require-latency` | **ALL PASS** rounds=4 | 离线 | 2026-09-22T08:17:48Z |
+| 向量语义召回（golden） | `python tools/eval_golden_recall.py --mode vector` | **ALL PASS** 24 / 24 | 离线 | 2026-09-22T08:17:54Z |
+
+**同一台机器上的 AC 负控（★ 工单 #162 要求的「停掉一个服务」）**：
+
+停掉 **voice-clone (8985)**，其余 5 项服务不动 ⇒ 重跑**完整**仪式：
+
+| 项 | 命令 | 结果 | 真机? | 测量时间 |
+|---|---|---|---|---|
+| 服务栈探活 | `python services/scripts/verify-services.py` | **FAIL** 服务栈未全绿：**2 项失败** | 真机 | 2026-09-22T08:18:5x |
+| 运行时门禁 | `python scripts/drift_gate.py … --phase runtime --mode closed --no-history` | **ALL PASS** block_fail=0 / warn_fail=0 | 真机 | 2026-09-22T08:18:5x |
+| 前端残留审计（死引用） | `node scripts/audit-frontend-residue.mjs` | **ALL PASS** 死引用 0 | 真机 | 2026-09-22T08:18:5x |
+| 路由契约审计 | `node scripts/audit-api-contract.mjs` | **ALL PASS** BROKEN=0 / UNUSED=15 | 离线 | 2026-09-22T08:18:5x |
+| live 决策事件读取 | `python -m decision_events … --require-latency` | **ALL PASS** rounds=4 | 离线 | 2026-09-22T08:18:5x |
+| 向量语义召回（golden） | `python tools/eval_golden_recall.py --mode vector` | **ALL PASS** 24 / 24 | 离线 | 2026-09-22T08:18:5x |
+
+**退出码 `1`**，结论行为 `❌ 存在问题项：服务栈探活` —— **没有静默跳过、没有整体报绿**。
+⇒ 工单 #162 的负控判据（「让任一项失败 → 该项判 FAIL 并体现在输出行里」）**在真机上成立**。
+（附：`--only stack` 的子集形态亦同时验证 —— 它额外点名「未覆盖 5 项」并判 `exit 1`。）
+
 ### 2026-09-22（运行器首次真跑：栈下线的负控轮）
 
 > **前置**：6 服务**均未起**（7060/8070/8099/8985 全 000）；静态服务器 8123 **在位且服务本仓库
