@@ -156,6 +156,7 @@ verdict: PASS
 | 产物自足性（不重跑模型即可重新分析） | `cd services/webinfer && python -m decision_eval_rounds --from-results ../../doc/research/data/benchmark_production_live_prompt_rounds.json --variant P_live4_prod_prompt` | **读出 3 轮**，median/stdev 与产物内的 `rounds_report` 逐项一致；成本栏如实报**未测**（产物外的重聚合没有耗时数据） | 离线（读入库产物） | 2026-09-22T13:5x |
 | 负控自检（AC#5） | `python -m decision_eval_rounds --self-check` | **PASS**：stable stdev 0.0 → stub stdev **47.14**（range 0→100），中位不变 | 离线 | 2026-09-22T13:0x |
 | 存量历史 2 轮重聚合 | `cd services/webinfer && python -m decision_eval_rounds --from-results …results.json …_repeat.json --variant <V>` | **P：nondirected 12 句不一致；P2：14 句** —— 逐字复现工单的 12–14 | 离线（读已落盘文件） | 2026-09-22T13:1x |
+| **AC#3 两次运行 diff**（差异一眼可见） | `diff_reports(历史2轮, 本轮3轮)`（经 `--diff-against` 暴露） | **逐指标列出**：`rounds_completed 2 -> 3`、`mis_resp median 30.8 -> 23.1 \| stdev 0.0 -> 6.537`、`nfm_recall 13.45 -> 19.2`、`delegate_recall 0.0 -> 100.0`、**`case_ids_total 51 -> 56`**（连分母变化都点出来）。自比时明确输出「无差异」 | 离线 | 2026-09-22T13:5x |
 | aggregator 行为测试 | `cd services/webinfer && python -m pytest tests/test_decision_eval_rounds.py -q` | **54 passed** | 离线 | 2026-09-22T13:5x |
 | 契约测试（真机脚本的结果形状） | `cd services/webinfer && python -m pytest tests/test_benchmark_multiround_contract.py -q` | **13 passed**（含跨 CI 边界的静态 AST 扫描 + 两层负控 + 产物自足性端到端 + BENCH_ROUNDS 坏值判红） | 离线 | 2026-09-22T13:5x |
 | webinfer 全量单测 | `cd services/webinfer && python -m pytest -o asyncio_mode=auto -q` | **602 passed**（#155 时 535 → 本轮 +67：54 例 aggregator + 13 例跨 CI 契约） | 离线 | 2026-09-22T13:5x |
