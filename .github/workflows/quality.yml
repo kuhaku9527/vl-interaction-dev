@@ -259,6 +259,27 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  # ---------------------------------------------------------------------------
+  # scripts-tests (工单 #162): 验证仪式运行器的行为测试。
+  # 该运行器的输出会变成台账证据 —— 一条假的绿色行比没有台账更坏（#162 的
+  # 出发点是「残留审计在静态服务器服务错目录时报 139 假数字，真值 0」）。
+  # 故这些测试**必须在 CI 可见处**：放在 services/*/tests 之外的文件不会被上面
+  # 任何 job 收集，等于没有测试（#155 的教训 —— 计分器曾因不在矩阵内而长期零覆盖）。
+  # 纯离线：用注入的假探针/假执行器，不起任何服务。
+  # ---------------------------------------------------------------------------
+  scripts-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Verify-ritual runner tests (offline, no services)
+        run: python -m pytest scripts/tests/test_verify_ritual.py -q
+
   pytest:
     runs-on: ubuntu-latest
     strategy:
