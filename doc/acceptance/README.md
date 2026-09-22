@@ -8,12 +8,13 @@
 | `live-ca-acceptance-2026-08-12.md` | 08-12 | **方法母本**：三决策诱发法（live 模式验收方法论） | ⚠️ 当时 live=三态，08-13 后为**四态**（+`not-for-me`）；方法仍有效 |
 | `acceptance-plan-2026-08-14.md` | 08-14 | 验收计划 | ⚠️ **已被 08-15 版覆盖**（后者含 08-13/08-14 新增） |
 | `acceptance-plan-2026-08-15.md` | 08-15 | 验收计划（最新） | ✅ 在用（含空白记录表） |
-| `pending-issue-163-frame-decision-contract.md` | 09-22 | **待提交的缺陷工单正文**（工单 #163 判定「帧链路内容空」为读侧缺陷） | ⏳ **待提交**（`issue_open` 被 auto-mode 审核拦下）；提交后可退役 |
+| `pending-issue-163-frame-decision-contract.md` | 09-22 | 缺陷工单正文副本（工单 #163 判定「帧链路内容空」为读侧缺陷） | ✅ **已提交为 #168**；本副本仅作离线追溯 |
 
-> **本目录为何有一份「待提交 issue」**：`doc/acceptance/` 的定位是事件型留痕。
-> 该文件是因 #163 的最后一条 AC（「若判定为缺陷 → 另立工单」）**卡在提交环节**而落的
-> 正文草稿 —— 放这里而不是 `logs/`，是因为 `logs/` 被 gitignore，引用它等于给后人
-> 一个跨机器即失效的死链。提交后即可删除本行与那份文件。
+> **本目录为何有一份 issue 副本**：`doc/acceptance/` 的定位是事件型留痕。该文件是 #163
+> 最后一条 AC（「若判定为缺陷 → 另立工单」）所要求的工单正文；因提交动作一度被 auto-mode
+> 审核拦下，正文先落在此处（放这里而不是 `logs/`，是因为 `logs/` 被 gitignore，
+> 引用它等于给后人一个跨机器即失效的死链）。现已提交为
+> [#168](https://github.com/kuhaku9527/vl-interaction-dev/issues/168)，本副本转为离线留痕。
 
 > **⚠️ 口径提醒**：前两份写"live 三决策/三态"，是**四态上线前**的表述。
 > 现行定义：**live = 四态**（`silence` / `response` / `delegation` / `not-for-me`）、jarvis = 三态、call = 零态。

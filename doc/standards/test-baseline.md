@@ -185,11 +185,11 @@
 > 并显式 `setup-node`（探针是 .mjs）。测试文件里的 node 缺失处理也用
 > **fail-closed**（收集期报错）而不是 `skipif` —— 「全 skip」看起来与「全通过」一样绿。
 
-**本票不改被测对象**（spec §2）：缺陷已另立工单，本票只交「判定 + 基线 + 装置 + 台账」。
-（该工单**草稿**见 `doc/acceptance/pending-issue-163-frame-decision-contract.md`
-—— 提交动作被 auto-mode 审核拦下（对外可见、难撤销），**待用户确认后提交**；
-草稿放在 `doc/acceptance/` 而非 `logs/`，因为 `logs/` 被 gitignore，引用它等于给后人
-一个**跨机器即失效**的死链。）
+**本票不改被测对象**（spec §2）：缺陷已另立工单 **#168**
+（<https://github.com/kuhaku9527/vl-interaction-dev/issues/168>），本票只交
+「判定 + 基线 + 装置 + 台账」。该工单正文的本地副本留档于
+`doc/acceptance/pending-issue-163-frame-decision-contract.md`（提交前为草稿，
+现已提交，副本供离线追溯）。
 
 > **本轮证据产物的可复现性**：逐轮 JSON（`round-A/A2/B/C/C2-*.json`）与真实帧
 > （`real-frame-163.jpg`，764×540）落在 `logs/frame-link/`，而 `logs/` 被 gitignore
