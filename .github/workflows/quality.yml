@@ -260,12 +260,15 @@ jobs:
       - run: npm test
 
   # ---------------------------------------------------------------------------
-  # scripts-tests (工单 #162): 验证仪式运行器的行为测试。
-  # 该运行器的输出会变成台账证据 —— 一条假的绿色行比没有台账更坏（#162 的
+  # scripts-tests (工单 #162 / #163): 验证仪式运行器 + 帧链路探针的行为测试。
+  # 这两个工具的输出都会变成台账证据 —— 一条假的绿色行比没有台账更坏（#162 的
   # 出发点是「残留审计在静态服务器服务错目录时报 139 假数字，真值 0」）。
   # 故这些测试**必须在 CI 可见处**：放在 services/*/tests 之外的文件不会被上面
   # 任何 job 收集，等于没有测试（#155 的教训 —— 计分器曾因不在矩阵内而长期零覆盖）。
-  # 纯离线：用注入的假探针/假执行器，不起任何服务。
+  # 纯离线：用注入的假探针/假执行器 + 纯函数判据，不起任何服务、不开浏览器。
+  #
+  # ★ 跑**整个目录**（而不是逐个点名文件）：点名写法会让「新加的测试文件」静默
+  #   不被收集 —— 那正是本仓已经踩过的病（#152：46 个测试从未被收集）。
   # ---------------------------------------------------------------------------
   scripts-tests:
     runs-on: ubuntu-latest
@@ -275,10 +278,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # 帧链路探针是 .mjs，其行为测试需要 node 才能跑（缺失时会 skip —— 而
+      # 「skip 了却看起来绿」正是本仓 §6.4 fails-open 的一类）。故显式装 node。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Install pytest
         run: pip install pytest
-      - name: Verify-ritual runner tests (offline, no services)
-        run: python -m pytest scripts/tests/test_verify_ritual.py -q
+      - name: Scripts tests (offline, no services)
+        run: python -m pytest scripts/tests/ -q
 
   pytest:
     runs-on: ubuntu-latest

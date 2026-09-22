@@ -21,6 +21,184 @@
 
 ## §1 当日新增（倒序，最新在上）
 
+### 2026-09-22（★ 帧链路：判定「内容空」+ 建立正常基线；工单 #163）
+
+> **这是欠账清单里「唯一从未真机测过」的一条**（§4 #1）。本轮把它从「只有间接证据」
+> 推到**判定 + 基线 + 负控**三件事齐备。
+> **前置**：`start-joyai.ps1 -Mode default` → 6/6 服务 200；ego 真浏览器已打开
+> `http://127.0.0.1:8099/`；**真实 `getDisplayMedia` 采集在跑**（点应用页面
+> 「视频 → 屏幕采集 → Start」，浏览器窗口选择器需**人在回路**授权）。
+> **装置**：`scripts/frame_link_probe.mjs`（本轮新建）—— **只用应用自身 socket**
+> （`window.websocket`），**只用真实帧**（取自应用自身采集管线），不合成帧、不自己开连接。
+
+**★ 判定结论：「内容空」是 **读侧缺陷**，不是预期行为。**
+
+| 判据 | 读数 | 出处 |
+|---|---|---|
+| 模型**真的产出**了内容 | 同图 image-only 直连 7060 → `"这张图片展示的是一个视频采集或屏幕捕获工具的界面…"`（64 token，`finish_reason=length`） | 本轮实测 |
+| webinfer 的**决策契约**也正常 | image-only 请求 → HTTP 200，`streamingharness.decision="silence"`，`usage.completion_tokens=2` | 本轮实测 |
+| 但 webui 显示的文本是**占位诊断串** | `text="Empty model response: stop"` | 台账 §1 #13 + 本轮复现 |
+| **决策契约在 `frame` 路径上无人消费** | `vlm_service.py` 全文**没有** `streamingharness` / `decision` 字样；而 live/jarvis 三条路径都读 `harness.get("decision")` | `vlm_service.py` vs `live_llm.py:365` / `live_proactive.py:297` / `jarvis_mode.py:1610` |
+
+**因果链（机制层面确证）**：帧路径（`ws_handler.py` → `svc.process_frame` → `analyze_image`）
+**不读** webinfer 的 `streamingharness.decision`；它只看 `choices[0].message.content`。
+而 webinfer 把四态控制标记（`</silence>` 等）从 `content` 里剥掉、只留在
+`streamingharness.raw_content` —— 于是「模型按契约选择沉默」这件事到达 webui 时
+**只剩一个空字符串**，`_extract_response_text` 便回落成
+`f"Empty model response{': ' + finish_reason}"` 这个**诊断串**（`vlm_service.py:629`）。
+⇒ 决策语义在网络层**丢失**，用户可见面收到的是内部诊断文案。
+**依据取自决策态承诺**：`doc/subsystems/screen-capture.md` §3.5.5「视频框实时显示游戏画面
+**同时** BT-7274 看到同一路画面，玩家喊『bt，这个怪怎么打』→ BT 回复攻略」
++ §4.3「1 fps 视频帧 → VLM 识别 → BT-7274『这个螳螂帮…』」；
+`doc/specs/live-visual-cb.md` §1「用户说话时最近 1-N 帧作为视觉输入一起送 LLM → 模型
+**看着画面回答**」。两处承诺的都是**有内容**的作答，**没有任何一处**把「无 prompt 时
+回一句内部诊断串」写成预期行为。⇒ **判缺陷**，另立工单（本票不修，见 spec §2「不改被测对象」）。
+
+**四轮结果（命令 / 结果 / 真机 / 时间）**：
+
+| 轮 | 命令 | 结果 | 真机? | 测量时间 |
+|---|---|---|---|---|
+| A：无 prompt（复现「内容空」） | `node scripts/frame_link_probe.mjs --reset-session --observe-ms 30000` | `round-A-noprompt.json`：`verdict=FAIL`，`problems=[缺少 metrics.api_call_ms]`（**当时判据读错层级**，见下 ⚠️①）；读数 `text="Empty model response: stop"` / `user_prompt=""` / `api_call_ms=420.87` / `total_inferences=5` | 真机 | 2026-09-22T09:40:34Z |
+| A2：同 A，重跑确证（离线帧） | `node scripts/frame_link_probe.mjs --frame-file logs/frame-link/real-frame-163.jpg --reset-session --observe-ms 25000` | `round-A2-reconfirm.json`：**`verdict=PASS`、`problems=[]`**，读数 `text="Empty model response: stop"` / `user_prompt=""` / `api_call_ms=953.32` / `total_inferences=1` | 真机 | 2026-09-22T09:52:11Z |
+| **B：正常基线**（同帧 + 应用自身 `update_prompt`） | `node scripts/frame_link_probe.mjs --reset-session --observe-ms 40000 --prompt "请描述当前画面内容，一句话。" --require-content` | `round-B-withprompt.json`：`verdict=PASS`，`text="用户打开了浏览器，正在查看一个包含多个代码窗口和设置选项的网页界面。"` / `user_prompt="请描述当前画面内容，一句话。"` / `api_call_ms=729.74` / `total_ms=731.30` | 真机 | 2026-09-22T09:44:46Z |
+| **C：负控**（停 8070，`--expect-no-response` 档） | `node scripts/frame_link_probe.mjs --observe-ms 25000 --expect-no-response` | `round-C-negative.json`：**`verdict=PASS`（负控成立 = 未收到配对响应）**；该档 `session_reset` 回 `ECONNREFUSED 127.0.0.1:8070`（8070 确已停） | 真机 | 2026-09-22T09:46:42Z |
+| **C2：负控**（停 8070，**正常判据**——AC5 的字面要求） | `node scripts/frame_link_probe.mjs --frame-file … --observe-ms 20000` | `round-C2-negative-normal-mode.json`：**`verdict=FAIL`**（退出码 1，**没有静默通过**），`problems` = 缺 api_call_ms + `total_inferences=0` + 返回错误串 `Error: Error code: 502` | 真机 | 2026-09-22T09:50:16Z |
+| R：判据修正后的重跑（同一真实帧） | `node scripts/frame_link_probe.mjs --frame-file logs/frame-link/real-frame-163.jpg --reset-session --observe-ms 25000` | `verdict=FAIL`（诊断串现在恒定判红，见 ⚠️①）；`text="Empty model response: stop"` / `user_prompt=""` / `api_call_ms=415.89` | 真机 | 2026-09-22T10:01:44Z |
+
+> ⚠️ **两处必须如实说明，否则上面的行会被误读**：
+>
+> **① 判据在测量之后被收紧过一次 ⇒ A/A2 的 `verdict` 是「旧判据」的读数。**
+> 首版判据把 `api_call_ms` 读成 `metrics.api_call_ms`（**层级错**，实际在
+> `metrics.latency_breakdown_ms.api_call_ms`），且只在 `--require-content` 档对
+> `Empty model response` 判红。于是：A 因**误读**一个不存在的键而 FAIL（**假红**），
+> A2 因不带 `--require-content` 而 PASS（**放过**了诊断串）。**两轮的 `verdict`
+> 都不是对「内容空」的判定** —— 对它的判定见上方「判定结论」表，由
+> **判决性对照实验**（直连 7060 / 直连 8070 / `getVlmDisplayText`）给出，
+> 与这两轮的 `verdict` 无关。修正后重跑（R 行）如实判 **FAIL**。
+> ⇒ **读本表时请以「读数」为准，不要以 A/A2 的 `verdict` 为准。**
+>
+> **② 两条负控的档不同（不是冗余也不是重复）。**
+> C 用 `--expect-no-response`（**专为负控设计的档**：期望收不到配对响应，
+> 收到才算失败）；C2 用**正常判据**（AC5 的字面要求：停掉 8070 ⇒ 该项判 FAIL）。
+> 两者都成立，但意义不同 —— C 证明「负控装置能识别『没有响应』」，
+> C2 证明「正常判据在 8070 下线时会判红」。AC5 由 **C2** 满足。
+>
+> **③ 「发帧前停掉应用 1fps 循环」这句装置描述在 B 轮不成立**：B 的
+> `frames_sent_in_window=3`、`total_inferences=11`，说明当时应用自身循环仍在推帧
+> （探针停循环的代码在 B 轮之后才定稿）。⇒ B 的**读数**（文本 + 耗时）有效，
+> 但它是「多帧中的首帧配对」，不是纯净单帧样本。R 行才是单帧干净样本。
+
+**★ 正常基线（本票 §2 要求建立的那一项）**：
+
+| 项 | 值 |
+|---|---|
+| 返回文本样例 | `用户打开了浏览器，正在查看一个包含多个代码窗口和设置选项的网页界面。`（与真实画面一致：当时屏幕上是本仓库的编辑器 + 本对话） |
+| 耗时量级 | `api_call_ms` **0.42–0.95 s**（A/A2/B 三轮：420.87 / 953.32 / 729.74）；`total_ms` 与 `api_call_ms` 同量级（编解码 <2 ms，不是瓶颈） |
+| 端到端（含传输） | 应用日志 `latency[transport+infer-screen]` 实测 **1.6–1.7 s**（1fps 采集下） |
+| 帧率/分辨率下表现 | 1 fps、**764×540**（实测协商值，见下）；每帧 b64 ≈ 75 KB |
+
+**★ 采集参数与到达服务端的实际值（AC4）**：
+
+**命令**：`python scripts/frame_token_probe.py logs/frame-link/real-frame-163.jpg --json logs/frame-link/capture-params-163.json`
+（该探针为本票新建；**每档一个全新会话**，32×32 极小图作基线扣除固定开销）
+
+| 请求分辨率 | 请求像素 | `max_pixels` 削后应为 | `prompt_tokens` | **图像 token**（减基线后） | b64 字符 |
+|---|---|---|---|---|---|
+| 32×32（基线） | 1,024 | 32×32（不削） | 956 | 0 | 1,384 |
+| **764×540**（**真机协商值**） | 412,560 | 764×540（不削） | 1,355 | **399** | 82,284 |
+| 960×540（`screen_capture.js` 的 ideal） | 518,400 | 960×540（不削） | 1,457 | **501** | 99,388 |
+| 1280×720 | 921,600 | 1280×720（不削） | 1,867 | **911** | 147,136 |
+| 2560×1440 | 3,686,400 | **1365×768**（被削） | 1,979 | **1,023** | 374,724 |
+
+**结论**：
+1. **`max_pixels=1048576` 确实生效**：1440p（3.69 Mpx）被削到 ≈1365×768（1.05 Mpx）——
+   图像 token 从「按像素线性外推应有的 ~7,300」压到 **1,023**，即**削了约 86%**。
+2. **但在本项目的真实采集分辨率下它不生效（恒等变换）**：764×540 = 412 kpx，
+   远低于 1 Mpx 预算 ⇒ 与
+   `doc/research/capture-resolution-chain-2026-09-20.md` §1 的既有结论**一致**。
+3. **`getDisplayMedia` 的协商结果**：`screen_capture.js` 请求 `ideal 960×540`，
+   实测只拿到 **764×540**（`width=764` 由被捕获窗口的实际尺寸决定，不是 960）。
+   附 `frameRate=1`、`displaySurface="window"`、`screenPixelRatio=1`、
+   `resizeMode="crop-and-scale"`。
+
+> ⚠️ **这张表三次重跑才稳定，前两次的读数是错的**（都因会话复用）：
+> 会话名固定时 webinfer 会把每个帧**追加进该会话的 chunk**，`image_tokens`
+> 逐轮线性累加 —— 实测同一分辨率连跑四次得到 **399 / 798 / 1197 / 1596**
+> （每轮恰好 +399 = 一帧的量）。⇒ 上表是**会话名带 pid+时间戳、且先
+> `POST /v1/streaming/reset`** 之后的读数，**连续三次重跑逐档完全一致**。
+> 前两次的 826 / 1850 / 2074 是**累积污染值**，已作废，不得引用。
+
+**★ 装置纪律（AC6，本票明确要求的那条）**：
+自建 `new WebSocket('/ws?session_id=…')` 发帧**收不到 `vlm_response`**（只回
+`status` / `server_config`）—— 已在 §1 #14 记为反例。本轮探针因此**从不自己开连接**，
+只附着到已运行的应用页面并复用 `window.websocket`；并在 `window.websocket` 不可用时
+**直接判「装置不可用」并退出 2**，而不是自建连接凑一个结果。
+
+**本轮踩到并写进探针的 4 个装置坑（防后人重踩）**：
+
+1. **注入帧会被静默丢弃**：应用自身 1fps 采集持有 `vlm_service._processing_lock` 时，
+   另注入的帧命中 `logger.debug("VLM busy, skipping frame")`，**永远等不到**与它同
+   `frame_seq` 的响应。⇒ 探针先停应用自己的 1fps 循环，再发单帧。
+2. **帧会累进 prompt 直到 502**：每帧约 +1.4k prompt token，连推十余帧即超
+   llama `n_ctx=16384`（实测 `request (162806 tokens) exceeds the available context size`）。
+   ⇒ 这是「上下文累积」而非帧链路故障；探针须先 `POST /v1/streaming/reset` 清会话
+   （注意会话名是 **`default`** —— webui 建 `VLMService` 时没传 `session_id`）。
+3. **judged 字段层级**：`api_call_ms` 在 `metrics.latency_breakdown_ms.api_call_ms`，
+   **不是** `metrics.api_call_ms`。探针首版读错层级，把一次**成功**的推理
+   （`api_call_ms=420.87`）误判成「模型未被调用」—— 这正是「假红」。
+4. **失败轮会读到上一轮的成功数字**：`analyze_image` 异常时返回 `f"Error: {e}"` 且
+   **不更新** `last_latency_breakdown_ms` ⇒ 只看那个数字，8070 挂掉反而可能判绿。
+   ⇒ 判据显式对 `Error:` 前缀判红。
+
+**★ 探针自身的判据有效性（「判据能跑绿」≠「判据能分辨对错」）**：
+
+判据被抽成**纯函数**（`judgeRound` 判一轮、`pickPairedResponse` 按 `frame_seq` 配对），
+可在 node 里直接 import，故能对真实缺陷形态逐条写**离线**回归，而不是只靠真机轮碰运气。
+
+**变异测试：6/6 全部被杀死，且各由声称守护它的那条测试杀死** ⇒ 这些测试不是同义反复：
+
+| 变异体（把缺陷改回去） | 被哪条测试杀死 |
+|---|---|
+| `api_call_ms` 读回错层级（`metrics.api_call_ms`） | `test_healthy_round_has_no_problems`（+ `…_reads_api_call_ms_from_latency_breakdown`） |
+| 去掉错误串判红（复现「失败轮读上一轮成功数字 ⇒ 假绿」） | `test_error_text_fails_even_without_require_content` |
+| 负控反向失效（收到响应也算过） | `test_negative_control_fails_when_a_response_still_arrives` |
+| 装置不可用时报绿（`return 0`） | `test_unreachable_cdp_exits_2_not_0`（+ `…_explains_itself`） |
+| 诊断串不判红（复现「ALL PASS + 内容空」自相矛盾） | `test_content_empty_placeholder_fails_with_require_content`（+ `…_never_coexists_with_all_pass`） |
+| **不按 `frame_seq` 配对**（随便取一条响应） | `test_paired_response_picks_only_the_rounds_own_frame`（+ `…_when_only_foreign_frames_replied`） |
+
+> ⚠️ **最后一行的变异体原本是「幸存」的**：`/code-review` 的 Standards 轴查出，
+> 当时只有 `judgeRound` 被覆盖，而**配对逻辑本身没测** —— 把 main() 的
+> `filter(frame_seq === seq)` 改成「取任意一条」**能全绿通过**。那份检查还查出
+> 变异体 4 的归属写错了（实际由 `…_exits_2_not_0` 杀死，不是 `…_explains_itself`）。
+> ⇒ 本轮把配对抽成 `pickPairedResponse` 并补 4 例测试，该变异体现在**被杀死**。
+> 这正是「CI 全绿 ≠ 断言有效」的又一实例（本仓 §6.4），故单列。
+
+| 项 | 命令 | 结果 | 真机? | 测量时间 |
+|---|---|---|---|---|
+| 探针判据的行为测试 | `python -m pytest scripts/tests/ -q`（**解释器：`D:\AI\envs\joyai-main\python.exe` = 3.12.13**） | **ALL PASS** 89 passed（含 #162 的 65 例 + 本票 24 例） | 离线 | 2026-09-22T10:2x |
+| 同上，**用本机默认 3.9** | `py -3 -m pytest scripts/tests/ -q` | **1 failed / 88 passed** —— `test_verify_ritual.py`（**#162 的文件**）用了 `zip(strict=)`，那是 3.10+ 语法 ⇒ 在 3.9 下 `TypeError`。**与本票改动无关**，但**必须写清解释器**，否则「85 passed」这句话在默认解释器下是假的 | 离线 | 2026-09-22T10:2x |
+| 探针判据的变异测试 | 6 个变异体（见上表） | **ALL PASS** 6/6 被杀死，各由对应测试杀死 | 离线 | 2026-09-22T10:3x |
+
+> **CI 可见性**（防 #152 重演）：`.github/workflows/quality.yml` 的 `scripts-tests`
+> job 原先把测试**逐个点名**（`pytest scripts/tests/test_verify_ritual.py`）——
+> 新加的测试文件会**静默不被收集**。本轮改为跑**整个目录**（`pytest scripts/tests/`）
+> 并显式 `setup-node`（探针是 .mjs）。测试文件里的 node 缺失处理也用
+> **fail-closed**（收集期报错）而不是 `skipif` —— 「全 skip」看起来与「全通过」一样绿。
+
+**本票不改被测对象**（spec §2）：缺陷已另立工单，本票只交「判定 + 基线 + 装置 + 台账」。
+（该工单**草稿**见 `doc/acceptance/pending-issue-163-frame-decision-contract.md`
+—— 提交动作被 auto-mode 审核拦下（对外可见、难撤销），**待用户确认后提交**；
+草稿放在 `doc/acceptance/` 而非 `logs/`，因为 `logs/` 被 gitignore，引用它等于给后人
+一个**跨机器即失效**的死链。）
+
+> **本轮证据产物的可复现性**：逐轮 JSON（`round-A/A2/B/C/C2-*.json`）与真实帧
+> （`real-frame-163.jpg`，764×540）落在 `logs/frame-link/`，而 `logs/` 被 gitignore
+> ⇒ **换台机器就取不到**。这与台账既有的 `logs/events/webui-*.jsonl` 引用是同一惯例
+> （记「命令如当时所跑」），但**结论不依赖那些文件**：四轮结论均可由
+> `scripts/frame_link_probe.mjs` 重跑复现，命令与判据都在本页。
+
+---
+
 ### 2026-09-22（★ 首次**全绿**真机轮 + AC 负控：停一个服务）
 
 > 这是运行器**第一次跑出 ALL GREEN**（此前三轮都是故意制造的负控轮）。
@@ -262,7 +440,8 @@
 
 | # | 面 | 现状 | 影响 |
 |---|---|---|---|
-| 1 | **帧链路**（摄像头/屏幕 → VLM） | 🟡 **2026-09-22 首次真机测（§1 #13）**：机制通、**内容空**（无 prompt）。**判定未做**；且**无「正常应返回什么」的基线** | 需判定 + 建立正常基线 |
+| 1 | **帧链路**（摄像头/屏幕 → VLM） | ✅ **2026-09-22 已判定 + 已建基线（§1 #163 轮）**：真机四轮（无 prompt / 正常基线 / 两条负控）；「内容空」判定为**读侧缺陷**（另立工单） | 已收口；缺陷修复走独立工单 |
+| 1b | 帧链路分辨率/`max_pixels` | ✅ **2026-09-22 实测**：1fps / 764×540（协商值）；图像 token 764×540→**826**、1280×720→1850、2560×1440→2074（`max_pixels` 削后） | 已收口（见 §1 #163 轮 AC4 表） |
 | 2 | **proactive 轮真机** | ❌ 从未真跑。`LIVE_PROACTIVE_ENABLED` 默认 OFF，`proactive_supported:false` | live 两条产出决策的路径之一完全未验 |
 | 3 | **多轮取中位** | ❌ 未做。存量只有 2 轮（且 26 例非面向中 12–14 例两轮不一致） | #157 的硬要求 |
 | 4 | `delegate` 真实行为 | ❌ 只有单测；真机未验 | `delegate` 是四态之一 |
@@ -360,6 +539,9 @@ memory-store 有**两条**写入路径，**不要混用**：
 
 > **一句话**：跑一条命令，把它打印的表格**原样粘贴**进 §1 的当日小节。四要素由运行器打，
 > 不靠人记 —— 这就是本票存在的理由（纪律靠人记就一定会漏）。
+>
+> ⚠️ **运行器只覆盖 6 项平台面，不覆盖链路级真机验证**。链路级（帧链路 / proactive /
+> delegate / 记忆端到端）各有自己的探针 —— 见 §7.6。
 
 ### 7.1 跑一轮
 
@@ -432,4 +614,38 @@ python scripts/verify_ritual.py --list
 `scripts/tests/test_verify_ritual.py`（65 例，**离线、不起服务**，被 CI 的 `scripts-tests`
 job 收集）。若运行器本身被改坏（例如又把「无法测量」报成数字），这些测试会红 ——
 这也是本票对「假绿色行」的兜底。
+
+### 7.6 链路级探针（不在 7.1 的运行器里）
+
+`verify_ritual.py` 覆盖的是**平台面**（服务栈 / 门禁 / 审计 / 召回）。**链路级**
+（帧 → VLM、proactive 轮、delegate、记忆端到端）各有自己的探针，因为它们的判据是
+**链路上的语义数字**，不是平台健康度。
+
+**帧链路探针**（工单 #163 新建）：
+
+```bash
+# 前置：应用页面已在 Chrome 打开，且**真实屏幕采集在跑**
+#   （点应用页面「视频 → 屏幕采集 → Start」；浏览器窗口选择器 = 人在回路）
+
+# ① 无 prompt（复现「内容空」形态）——该轮**本应**判 FAIL
+node scripts/frame_link_probe.mjs --reset-session --observe-ms 30000
+
+# ② 正常基线：带问题 → 期望有内容（--require-content 让空内容判红）
+node scripts/frame_link_probe.mjs --reset-session --observe-ms 40000 \
+    --prompt "请描述当前画面内容，一句话。" --require-content
+
+# ③ 负控：先 `stop-joyai.ps1 -Only 8070`，正常判据**必须**判 FAIL
+node scripts/frame_link_probe.mjs --frame-file logs/frame-link/real-frame-163.jpg \
+    --observe-ms 20000
+
+# ④ 只用已落盘的真实帧复跑（不需人坐在屏幕前；回归/复核用）
+node scripts/frame_link_probe.mjs --frame-file <此前 --save-frame 落盘的帧> --reset-session
+```
+
+**退出码**：`0` PASS ／ `1` FAIL ／ `2` **装置或前置不可用**（不是通过）。
+
+> ⚠️ **绝不合成帧**。探针没有真实采集时**直接退出 2**，并提示你先去点 Start ——
+> 合成帧会让「模型看到了什么」这件事失去意义（那是本项目已被推翻过的取证方式）。
+> ⚠️ **绝不自建 WebSocket**。自建 `new WebSocket(...)` 收不到 `vlm_response`
+> （已实测），据此下结论会得到完全错误的判定；探针只复用应用自身的 `window.websocket`。
 
