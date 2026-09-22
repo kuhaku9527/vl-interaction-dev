@@ -24,6 +24,7 @@ Run: cd services/webinfer && python -m pytest tests/test_benchmark_multiround_co
 from __future__ import annotations
 
 import ast
+import os
 import sys
 from pathlib import Path
 
@@ -118,6 +119,25 @@ def _payload(rounds_n=3):
     )
 
 
+def _variant_payload_oracle():
+    """The **full** ``variant_result_payload`` output, offline.
+
+    ``main()``'s loop variable ``payload`` is this object (not the rounds
+    report alone), so the nested-path oracle must resolve against it —
+    resolving against the rounds report would report every
+    ``payload["rounds_report"][…]`` read as missing.
+    """
+    per_round_rows = [_rows() for _ in range(3)]
+    return _import_benchmark().variant_result_payload(
+        rows=per_round_rows[-1],
+        per_round_stats=[score.summarize(r) for r in per_round_rows],
+        per_round_rows=per_round_rows,
+        per_round_wall=[1.0, 1.0, 1.0],
+        prompt="（离线桩，零重叠）",
+        rounds_requested=3,
+    )
+
+
 # ---------------------------------------------------------------------------
 # 1. ★ 组装产出的键必须覆盖消费方读取的键
 # ---------------------------------------------------------------------------
@@ -185,66 +205,127 @@ def test_variant_result_payload_requires_at_least_two_rounds():
 # ---------------------------------------------------------------------------
 
 
+#: 顶层名字 → 该名字下**已知合法**的键路径（``("rounds_report", "cost")`` 表示
+#: 先取 ``x["rounds_report"]`` 再取 ``["cost"]``）。``None`` 表示「只扫一层」。
+_KNOWN_PATHS: dict[str, set[tuple[str, ...]]] = {}
+
+
+def _subscript_paths(fn: ast.AST) -> dict[str, set[tuple[str, ...]]]:
+    """Collect every nested ``x["a"]["b"]…`` path rooted at a local name.
+
+    ★ 必须处理**嵌套**读取。早先的版本只看 ``ast.Subscript`` 的**直接**基名，
+    于是 ``payload["rounds_report"]["case_stabilty"]`` 这类拼错的**第二层**键
+    完全逃过扫描 —— 而 #165 真实崩的就是一条嵌套读取（``payload["cost"]``，
+    当时在更深的层级上）。只守一层的检查会给出**虚假的安全感**。
+    """
+    out: dict[str, set[tuple[str, ...]]] = {}
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Subscript):
+            continue
+        parts: list[str] = []
+        cur: ast.AST = node
+        while isinstance(cur, ast.Subscript):
+            if not (isinstance(cur.slice, ast.Constant) and isinstance(cur.slice.value, str)):
+                break
+            parts.append(cur.slice.value)
+            cur = cur.value
+        if not parts or not isinstance(cur, ast.Name):
+            continue
+        out.setdefault(cur.id, set()).add(tuple(reversed(parts)))
+    return out
+
+
 def test_every_subscript_read_in_main_is_covered_statically():
-    """★ 不靠运行、不靠人眼：把 `main()` 里的**全部下标读取**扫出来.
+    """★ 不靠运行、不靠人眼：把 `main()` 里的下标读取（**含嵌套**）扫出来.
 
     这是本文件里最要紧的一条 —— 它守的不是某一个已知的键，
-    而是**整类**「读了一个没人产出的键」的缺陷（#165 崩的就是这一类）。
-    真机脚本不在 CI 矩阵里，所以这层静态检查是它唯一的离线防线。
+    而是「读了一个没人产出的键」这一类缺陷（#165 崩的就是这一类）。
+    真机脚本不在 CI 的 pytest 矩阵、也不在 CI 的 ruff 范围内，
+    所以这层静态检查是它唯一的离线防线。
+
+    ⚠️ **覆盖边界（勿高估它）**：只覆盖 ``ast.Name`` 为根的下标读取，
+    即 ``payload[...]`` / ``cost[...]`` 这类**局部变量直接下标**。
+    经函数返回值、属性或循环变量间接取的键（例如 ``payload.get(…)``、
+    ``for k in payload: payload[k]``）**不在**覆盖内 —— 那些由行为测试守。
+    声称覆盖「整类」是不诚实的；这里守住的是**曾经真实崩过的那一类**。
     """
     tree = ast.parse(BENCH.read_text(encoding="utf-8"))
     main_fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "main")
+    paths = _subscript_paths(main_fn)
 
-    # 收集 main() 里对形如 X["key"] 的读取，X 是局部名。
-    read_keys: dict[str, set[str]] = {}
-    for node in ast.walk(main_fn):
-        if (
-            isinstance(node, ast.Subscript)
-            and isinstance(node.value, ast.Name)
-            and isinstance(node.slice, ast.Constant)
-            and isinstance(node.slice.value, str)
-        ):
-            read_keys.setdefault(node.value.id, set()).add(node.slice.value)
-
-    # ① `payload[...]` 的读取必须全在 variant_result_payload 的产出里。
-    payload_reads = read_keys.get("payload", set())
-    unknown = sorted(payload_reads - set(CONSUMED_RESULT_KEYS))
+    # ① `payload[...]` 的第一层键必须都在契约清单里。
+    payload_first = {p[0] for p in paths.get("payload", set())}
+    unknown = sorted(payload_first - set(CONSUMED_RESULT_KEYS))
     assert not unknown, (
         f"main() 读了 payload[{unknown!r}]，但契约清单里没有这些键 —— "
         "要么组装里加了它（同步 CONSUMED_RESULT_KEYS），要么这是个笔误"
     )
 
-    # ② `cost[...]` 的读取必须来自 payload["rounds_report"]["cost"]。
-    if "cost" in read_keys:
-        report_keys = _payload()
-        unknown_cost = sorted(read_keys["cost"] - set(report_keys["cost"]))
-        assert not unknown_cost, f"main() 读了 cost[{unknown_cost!r}]，但 cost 块里没有"
+    # ② ★ 嵌套的第二层键必须真的存在（这是早先漏掉、真实崩过的那一层）。
+    report = _variant_payload_oracle()
+    for path in sorted(paths.get("payload", set())):
+        if len(path) < 2:
+            continue
+        target: object = report
+        for depth, key in enumerate(path, 1):
+            assert isinstance(target, dict), f"payload{list(path)} 在深度 {depth} 处不是 dict"
+            assert key in target, (
+                f"main() 读到 payload{list(path)}，但第 {depth} 层的键 {key!r} "
+                f"在组装产物里不存在：{sorted(target)[:8]}"
+            )
+            target = target[key]
 
-    # ③ 反向：契约清单里的每个键都必须真的被 main() 读到（防止清单腐化）。
-    assert payload_reads, "没在 main() 里扫到任何 payload[...] 读取 —— 静态扫描失效了"
+    # ③ `cost[...]` 的读取必须真的在 cost 块里。
+    unknown_cost = sorted(
+        {p[0] for p in paths.get("cost", set())} - set(report["rounds_report"]["cost"])
+    )
+    assert not unknown_cost, f"main() 读了 cost[{unknown_cost!r}]，但 cost 块里没有"
+
+    # ④ 反向：契约清单里的每个键都必须真的被 main() 读到（防止清单腐化）。
+    assert payload_first, "没在 main() 里扫到任何 payload[...] 读取 —— 静态扫描失效了"
+    assert paths.get("payload"), "没扫到任何 payload 的嵌套路径 —— 嵌套处理可能退化了"
 
 
-def test_the_static_scan_would_catch_a_typo():
-    """★ 负控：静态扫描必须**真的能**发现坏键，而不是恒过。"""
+def test_the_static_scan_would_catch_a_first_level_typo():
+    """★ 负控①：第一层键拼错必须被发现。"""
+    assert _scan_finds_bad_path('payload["rounds_report"]', 'payload["rounds_reprot"]')
+
+
+def test_the_static_scan_would_catch_a_nested_typo():
+    """★★ 负控②：**嵌套**第二层键拼错也必须被发现。
+
+    早先的实现漏掉这一整层（评审实测：把 ``case_stability`` 拼成
+    ``case_stabilty`` 能全绿通过）。这条负控保证那个洞已被堵上。
+    """
+    assert _scan_finds_bad_path(
+        'payload["rounds_report"]["case_stability"]',
+        'payload["rounds_report"]["case_stabilty"]',
+    )
+
+
+def _scan_finds_bad_path(good: str, bad: str) -> bool:
+    """把 ``main()`` 里的 ``good`` 换成 ``bad``，看静态检查是否报错。"""
     source = BENCH.read_text(encoding="utf-8")
-    tampered = source.replace('payload["rounds_report"]', 'payload["rounds_reprot"]', 1)
-    assert tampered != source, "没找到可篡改的锚点 —— 本负控失效，需更新"
+    assert good in source, f"锚点 {good!r} 不在脚本里 —— 本负控失效，需更新"
+    tampered = source.replace(good, bad, 1)
+    assert tampered != source
 
     tree = ast.parse(tampered)
     main_fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "main")
-    read_keys: set[str] = set()
-    for node in ast.walk(main_fn):
-        if (
-            isinstance(node, ast.Subscript)
-            and isinstance(node.value, ast.Name)
-            and node.value.id == "payload"
-            and isinstance(node.slice, ast.Constant)
-            and isinstance(node.slice.value, str)
-        ):
-            read_keys.add(node.slice.value)
-    assert sorted(read_keys - set(CONSUMED_RESULT_KEYS)), (
-        "把 rounds_report 拼错成 rounds_reprot 却扫不出来 ⇒ 静态检查是恒真的"
-    )
+    paths = _subscript_paths(main_fn)
+    report = _variant_payload_oracle()
+
+    problems: list[str] = []
+    payload_first = {p[0] for p in paths.get("payload", set())}
+    problems += sorted(payload_first - set(CONSUMED_RESULT_KEYS))
+    for path in sorted(paths.get("payload", set())):
+        target: object = report
+        for key in path:
+            if not isinstance(target, dict) or key not in target:
+                problems.append(".".join(path))
+                break
+            target = target[key]
+    return bool(problems)
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +357,55 @@ def test_rounds_are_configurable_via_env_and_default_above_two():
     bench = _import_benchmark()
     assert bench.ROUNDS >= 2
     assert rounds.DEFAULT_ROUNDS > 2, "默认轮数必须 > 2（2 轮没有中位可言）"
+
+
+def _import_benchmark_with_env(monkeypatch, value):
+    """Re-import the benchmark with BENCH_ROUNDS set, returning (rc, message)."""
+    import subprocess
+
+    env = dict(os.environ)
+    env["BENCH_ROUNDS"] = value
+    # Import only (no main()) so no model call happens; module-level validation
+    # runs at import time, which is where the guard lives.
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path[:0]=[{str(ROOT)!r}, {str(REPO_ROOT / 'services' / 'scripts')!r}];"
+            f"import importlib.util as u;"
+            f"s=u.spec_from_file_location('b', {str(BENCH)!r});"
+            f"m=u.module_from_spec(s); s.loader.exec_module(m); print('ROUNDS=', m.ROUNDS)",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+    )
+    return proc
+
+
+def test_invalid_bench_rounds_fails_loud_instead_of_clamping():
+    """★★ spec 轴查出的缺陷：``ROUNDS = max(2, int(...))`` **静默**把 1 改成 2。
+
+    要 1 轮的人拿到 2 轮**看不出来**；而如果他随后读了离散度，读到的数字
+    来自一个他从未选择过的配置。坏值必须是**错误**，不是悄悄纠正。
+    """
+    proc = _import_benchmark_with_env(None, "1")
+    assert proc.returncode != 0, "BENCH_ROUNDS=1 必须报错，不得静默改成 2"
+    assert "BENCH_ROUNDS" in (proc.stderr or proc.stdout)
+
+
+def test_non_integer_bench_rounds_fails_loud():
+    proc = _import_benchmark_with_env(None, "three")
+    assert proc.returncode != 0
+    assert "整数" in (proc.stderr or proc.stdout)
+
+
+def test_valid_bench_rounds_is_honoured_exactly():
+    """正向对照：给了合法值就必须**原样**生效（证明上一条不是恒错）。"""
+    proc = _import_benchmark_with_env(None, "4")
+    assert proc.returncode == 0, proc.stderr
+    assert "ROUNDS= 4" in proc.stdout
 
 
 def test_open_book_flag_is_wired_for_the_production_prompt():

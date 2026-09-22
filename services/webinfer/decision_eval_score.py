@@ -190,7 +190,7 @@ def format_scorecard(
         lines.append(f"=== {title} ===")
     lines.append(
         f"overall  n={len(rows)}  "
-        + "  ".join(f"{g}={overall['n_' + _COUNT_KEY[g]]}" for g in GROUPS)
+        + "  ".join(f"{g}={overall['n_' + COUNT_KEY[g]]}" for g in GROUPS)
     )
     lines.append(
         "         nfm_precision={:.1f}%  nfm_recall={:.1f}%  "
@@ -246,14 +246,24 @@ def load_rows_from_results(path: str | Path, variant: str | None = None) -> tupl
 
 
 #: group -> the ``n_*`` key summarize() reports it under.
-_COUNT_KEY = {
+#:
+#: ★ Public (no leading underscore) because a second module needs the same
+#: mapping: ``decision_eval_rounds._round_total`` sums a round's size as
+#: ``n_<suffix>``. Two copies of this map would eventually diverge, and a
+#: divergent copy makes the *denominator* wrong — the one number this whole
+#: workstream exists to keep honest.
+COUNT_KEY = {
     GROUP_DIRECTED: "directed",
     GROUP_NONDIRECTED: "nondirected",
     GROUP_DELEGATE: "delegate",
 }
 
+#: Old private alias, kept so existing callers/tests do not break.
+_COUNT_KEY = COUNT_KEY
+
 
 __all__ = [
+    "COUNT_KEY",
     "GROUPS",
     "GROUP_DELEGATE",
     "GROUP_DIRECTED",

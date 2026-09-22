@@ -228,7 +228,10 @@ def test_delegate_recall_0_from_absent_group_is_flagged_not_read_as_failure():
 
 
 def test_degenerate_map_covers_every_percentage_metric():
-    """★ 结构性守卫：每条比率都必须登记分母，否则下一个 0.0 又会骗人。"""
+    """★ 结构性守卫：每条比率都必须登记分母，否则下一个 0.0 又会骗人。
+
+    ⚠️ 这条只守**覆盖**（每条都有登记），**不守正确性** —— 见下一条。
+    """
     for metric in rounds.AGGREGATED_METRICS:
         if metric.endswith("_pct"):
             assert metric in rounds.RATIO_DENOMINATORS, (
@@ -237,6 +240,90 @@ def test_degenerate_map_covers_every_percentage_metric():
             assert rounds.RATIO_DENOMINATORS[metric] in rounds.AGGREGATED_METRICS, (
                 f"{metric} 的分母计数器 {rounds.RATIO_DENOMINATORS[metric]} 未被聚合"
             )
+
+
+#: ★ **独立金标**：每条比率的分母，由**指标名本身的语义**推出
+#: （「A 比 B」→ 分母是 B 的规模），不是从实现里抄的。
+#: 之所以要在测试里再写一遍：上一条只断言「登记了某个计数器」，
+#: 对 3/5 条比率是**恒真**的 —— 变异测试证明把
+#: `baseline_mis_response_rate_pct` 的分母改成 `n_directed`、
+#: `not_for_me_recall_pct` 改成 `n_delegate`、
+#: `directed_miss_rate_pct` 改成 `n_nondirected`，全都**绿着通过**。
+#: 分母登记错 = 退化轮会被判在不该判的地方（fail-open），必须逐条钉住。
+EXPECTED_DENOMINATORS: dict[str, str] = {
+    # 「非面向句里被误响应的比例」→ 分母 = 非面向句数
+    "baseline_mis_response_rate_pct": "n_nondirected",
+    # 「预测为 not-for-me 里真的比例」→ 分母 = 预测为 not-for-me 的条数
+    "not_for_me_precision_pct": "n_not_for_me_predicted",
+    # 「非面向句里被认出的比例」→ 分母 = 非面向句数
+    "not_for_me_recall_pct": "n_nondirected",
+    # 「面向句里被漏判的比例」→ 分母 = 面向句数
+    "directed_miss_rate_pct": "n_directed",
+    # 「委派句里被委派的比例」→ 分母 = 委派句数
+    "delegate_recall_pct": "n_delegate",
+}
+
+
+def test_ratio_denominators_match_an_independent_oracle():
+    """★★ 逐条比对独立金标 —— 这条才真正守**正确性**（杀死分母换错）。"""
+    assert rounds.RATIO_DENOMINATORS == EXPECTED_DENOMINATORS
+
+
+@pytest.mark.parametrize(("ratio", "counter"), sorted(EXPECTED_DENOMINATORS.items()))
+def test_zeroing_the_registered_denominator_flags_exactly_that_ratio(ratio, counter):
+    """★ 行为验证：把**该**比率的分母清零 ⇒ 它被点名。
+
+    与金标比对互补：金标守「静态声明对不对」，本条守「声明真的接进了判定」。
+
+    分母分两类，构造方式不同：
+    * ``n_directed`` / ``n_nondirected`` / ``n_delegate`` 是**句集规模**，
+      只能靠**取子集**清零（决策改不了它们）；
+    * ``n_not_for_me_predicted`` 是**预测计数**，靠把决策都改成非 not-for-me 清零。
+    """
+    if counter == "n_not_for_me_predicted":
+        stats = score.summarize(_rows({GROUP_NONDIRECTED: "response", GROUP_DELEGATE: "response"}))
+    else:
+        # 只保留「不含该组」的行 ⇒ 该组句数变 0
+        excluded = {
+            "n_directed": GROUP_DIRECTED,
+            "n_nondirected": GROUP_NONDIRECTED,
+            "n_delegate": GROUP_DELEGATE,
+        }[counter]
+        stats = score.summarize([r for r in _rows() if r["expected"] != excluded])
+
+    assert stats[counter] == 0, f"构造失败：{counter} 应为 0，实际 {stats[counter]}"
+    flagged = rounds.aggregate_rounds([stats, stats])["metrics_note"]["degenerate_rounds"]
+    assert ratio in flagged, f"{counter}=0 时 {ratio} 应被点名"
+
+
+def test_a_zero_denominator_does_not_flag_unrelated_ratios():
+    """★★ 反向：分母为 0 只能点名**用它的**那些比率，不得牵连别的。
+
+    这条是杀死「分母换错」变异体的关键 —— 例如把
+    ``directed_miss_rate_pct`` 的分母错登记成 ``n_nondirected`` 时，
+    一个**全是面向句**的轮（``n_nondirected=0``）就会把「面向句漏判率」
+    误判成退化，而那一轮它明明算得出来。
+    """
+    # 全是面向句 ⇒ n_nondirected = 0、n_delegate = 0，但 n_directed > 0
+    directed_only = [r for r in _rows() if r["expected"] == GROUP_DIRECTED]
+    stats = score.summarize(directed_only)
+    assert stats["n_nondirected"] == 0 and stats["n_directed"] == len(directed_only)
+
+    flagged = rounds.aggregate_rounds([stats, stats])["metrics_note"]["degenerate_rounds"]
+    assert "directed_miss_rate_pct" not in flagged, (
+        "全是面向句时「面向句漏判率」的分母是 n_directed（非 0），不该被判退化"
+    )
+    assert "not_for_me_recall_pct" in flagged, "非面向句为 0 ⇒ 召回率确实退化"
+
+    # 全是非面向句 ⇒ n_directed = 0，但 n_nondirected > 0
+    nondirected_only = [r for r in _rows() if r["expected"] == GROUP_NONDIRECTED]
+    stats2 = score.summarize(nondirected_only)
+    assert stats2["n_directed"] == 0
+    flagged2 = rounds.aggregate_rounds([stats2, stats2])["metrics_note"]["degenerate_rounds"]
+    assert "baseline_mis_response_rate_pct" not in flagged2, (
+        "全是非面向句时「误响应率」的分母是 n_nondirected（非 0），不该被判退化"
+    )
+    assert "directed_miss_rate_pct" in flagged2, "面向句为 0 ⇒ 漏判率确实退化"
 
 
 def test_denominator_counters_are_aggregated_not_dropped():
@@ -378,11 +465,62 @@ def test_cost_block_records_rounds_and_wall_time():
     assert cost["wall_seconds_per_round_mean"] == 11.0
     assert cost["llm_calls"] == 168
     assert cost["seconds_per_llm_call"] == pytest.approx(0.196, abs=0.001)
+    assert cost["measured"] is True
 
 
 def test_cost_block_handles_zero_calls_without_dividing_by_zero():
     cost = rounds.cost_report([1.0, 1.0], llm_calls=0)
     assert cost["seconds_per_llm_call"] is None
+
+
+def test_unmeasured_cost_is_none_not_zero():
+    """★★ 没测过时间 ⇒ 耗时字段一律 ``None``，**不得**给 0.0。
+
+    这是 spec 轴查出的缺陷：``--from-results`` 从已落盘文件重新聚合时**没有**
+    耗时数据，而实现曾用 ``[0.0] * n`` 填充 ⇒ 报告声称「单轮 0.0 秒」，
+    那是**从没测过的数据里读出「测到了 0」** —— 与本模块对分母退化
+    （0.0 = 测到 0 还是没测）所修的是**同一类**错误。
+    """
+    cost = rounds.cost_report(None, llm_calls=168)
+    assert cost["measured"] is False
+    assert cost["wall_seconds_total"] is None
+    assert cost["wall_seconds_per_round"] is None
+    assert cost["wall_seconds_per_round_mean"] is None
+    assert cost["seconds_per_llm_call"] is None
+    assert cost["rounds"] is None, "没测过就不该声称跑了 N 轮耗时"
+
+
+def test_reaggregated_report_does_not_claim_a_measured_cost(tmp_path):
+    """★ 端到端：从文件重新聚合出的报告，其 cost 必须是「未测」而非 0.0。"""
+    variant = "V"
+    p = tmp_path / "rounds.json"
+    _write_results_file(p, variant, _rows())
+    p2 = tmp_path / "rounds2.json"
+    _write_results_file(p2, variant, _rows({GROUP_NONDIRECTED: "response"}))
+
+    report = rounds.report_from_results_files([str(p), str(p2)], variant)
+    assert report["cost"]["measured"] is False
+    assert report["cost"]["wall_seconds_total"] is None
+    assert report["cost"]["seconds_per_llm_call"] is None
+
+
+def test_print_report_says_cost_unmeasured_instead_of_staying_silent(capsys):
+    """★ 人读视图必须把「未测」写出来 —— 沉默会被读成「成本可忽略」。"""
+    variant = "V"
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        a = Path(tmp) / "a.json"
+        b = Path(tmp) / "b.json"
+        for path, rows in ((a, _rows()), (b, _rows())):
+            path.write_text(json.dumps({"results": {variant: {"rows": rows}}}), encoding="utf-8")
+        report = rounds.report_from_results_files([str(a), str(b)], variant)
+
+    rounds.print_report(report)
+    out = capsys.readouterr().out
+    assert "未测" in out, "cost 未测时既不该给 0.0，也不该什么都不说"
+    assert "0.0s" not in out
 
 
 # ---------------------------------------------------------------------------

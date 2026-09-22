@@ -99,6 +99,7 @@ from decision_eval_rounds import (  # noqa: E402
     diff_reports,
     historical_comparable_view,
     open_book_report,
+    print_report_text,
 )
 
 # ★ #155: the test set now has THREE ground-truth groups (directed /
@@ -144,7 +145,22 @@ _OUT_PATH = Path(os.environ.get("BENCH_PROD_OUT", str(_OUT_PATH)))
 # ★ #165: how many rounds to run. Default 3 (> 2 as the ticket requires);
 # 2 rounds can only say "agree/disagree" — 3 is the first round count with a
 # real middle value. Override with BENCH_ROUNDS.
-ROUNDS = max(2, int(os.environ.get("BENCH_ROUNDS", str(DEFAULT_ROUNDS))))
+#
+# ★ Fail loud instead of clamping: an earlier version used
+# `max(2, int(...))`, so `BENCH_ROUNDS=1` silently ran 2 rounds. Someone
+# asking for 1 round and being given 2 cannot tell — and if they later read
+# the dispersion, they are reading a number produced by a configuration they
+# never chose. A bad value must be an error, not a quiet correction.
+_rounds_raw = os.environ.get("BENCH_ROUNDS", str(DEFAULT_ROUNDS))
+try:
+    ROUNDS = int(_rounds_raw)
+except ValueError:
+    raise SystemExit(f"BENCH_ROUNDS 必须是整数，收到 {_rounds_raw!r}") from None
+if ROUNDS < 2:
+    raise SystemExit(
+        f"BENCH_ROUNDS={ROUNDS} 无效：单轮算不出离散度，"
+        "而「多轮取中位」正是本 benchmark 的存在理由。请给 >= 2（建议 3）。"
+    )
 # Optional path to a previous multi-round results file: when set, the script
 # prints the per-metric diff at the end (AC#3 "differences visible at a glance").
 _DIFF_AGAINST = os.environ.get("BENCH_DIFF_AGAINST", "")
@@ -307,55 +323,46 @@ def category_breakdown(rows: list[dict]) -> dict:
 
 
 def print_rounds_block(name: str, report: dict, stability: dict) -> None:
-    """Print the multi-round median + dispersion table for one variant (#165)."""
+    """Print the multi-round median + dispersion table for one variant (#165).
+
+    ★ Delegates the table itself to ``decision_eval_rounds.print_report``
+    rather than re-printing it here. The two were near-identical copies (same
+    columns, same degenerate-denominator warning prose, same cost line), and a
+    copy drifts: the canonical one is unit-tested, so this path now prints
+    exactly what the tests assert instead of a lookalike.
+
+    ``stability`` is accepted for call-site symmetry but is read from the
+    report — ``print_report`` prints the same block from the same source.
+    """
     print(f"  --- {name}: {report['rounds_completed']} 轮中位数 + 离散度 ---")
-    print(
-        "    "
-        + "metric".ljust(32)
-        + "median".rjust(9)
-        + "single".rjust(9)
-        + "stdev".rjust(9)
-        + "range".rjust(9)
-        + "  per_round"
-    )
-    for metric, series in report["metrics"].items():
-        disp = series["dispersion"]
-        print(
-            "    "
-            + metric.ljust(32)
-            + f"{series['median']}".rjust(9)
-            + f"{series['single_round_first']}".rjust(9)
-            + f"{disp['stdev']}".rjust(9)
-            + f"{disp['range']}".rjust(9)
-            + "  "
-            + str(series["per_round"])
-        )
-    print(
-        f"    逐句稳定性: stable={stability['n_stable']}  "
-        f"unstable={stability['n_unstable']}  "
-        f"(by group {stability['n_unstable_by_group']})"
-    )
-    if stability["unstable_ids"]:
-        print(f"    不稳定句: {', '.join(stability['unstable_ids'])}")
-    # ★ A ratio whose denominator is 0 is recorded as 0.0 — numerically
-    # identical to "measured and got zero", semantically the opposite. Real
-    # runs hit this both ways (a round predicting no not-for-me at all, and
-    # the historical files having no delegate group). Say it out loud so a
-    # reader does not read the inflated stdev as model instability.
-    for ratio, round_numbers in (
-        (report.get("metrics_note") or {}).get("degenerate_rounds") or {}
-    ).items():
-        print(
-            f"    ⚠️ {ratio} 在轮 {round_numbers} 的**分母为 0** ⇒ 该轮读数无意义"
-            "（记作 0.0，与「测了但全错」数值相同、含义相反）；"
-            "跨轮离散度会因此虚高，别当成模型抖动。"
-        )
-    cost = report["cost"]
-    print(
-        f"    成本: total={cost['wall_seconds_total']}s  "
-        f"mean/round={cost['wall_seconds_per_round_mean']}s  "
-        f"calls={cost['llm_calls']}  s/call={cost['seconds_per_llm_call']}"
-    )
+    # Indent the shared view so it nests under the variant heading. The banner
+    # is suppressed because the heading above already says the same thing.
+    for line in print_report_text(report, include_header=False).splitlines():
+        print(f"  {line}")
+    _ = stability  # stability is part of `report`; kept for call-site clarity
+
+
+def _decision_only_rows(rows: list[dict]) -> list[dict]:
+    """Strip a round down to the fields re-aggregation actually reads.
+
+    Keeping every round's *full* rows made the committed artifact 484 KB,
+    because each round re-stores the model's raw response text, token ids and
+    latency. Re-aggregation needs only ``id`` / ``expected`` / ``decision``
+    (plus ``ok``, so a failed row stays distinguishable from a decision), which
+    is ~13 KB instead of ~70 KB for the same three rounds.
+
+    Kept as an explicit projection rather than storing nothing: the whole point
+    of the multi-round evidence is that it can be **re-read** without a re-run.
+    """
+    return [
+        {
+            "id": row["id"],
+            "expected": row["expected"],
+            "decision": row.get("decision", ""),
+            "ok": bool(row.get("ok", True)),
+        }
+        for row in rows
+    ]
 
 
 def variant_result_payload(
@@ -398,13 +405,13 @@ def variant_result_payload(
         "emission_breakdown": breakdown,
         "category_breakdown": category_breakdown(rows),
         "rows": rows,
-        # ★ #165: every round's rows, so the artifact is **self-sufficient**.
-        # Without this the file keeps only the last round and
-        # ``decision_eval_rounds --from-results`` cannot re-aggregate it
+        # ★ #165: every round's decisions, so the artifact is
+        # **self-sufficient**. Without this the file keeps only the last round
+        # and ``decision_eval_rounds --from-results`` cannot re-aggregate it
         # (it would refuse with "fewer than 2 rounds" even though the file
         # visibly holds three). Re-analysis must not require a re-run: the
         # whole point of multi-round evidence is that it can be re-read.
-        "per_round_rows": per_round_rows,
+        "per_round_rows": [_decision_only_rows(rws) for rws in per_round_rows],
         # ★ #165: the multi-round block. ``median`` sits next to ``per_round``
         # and ``dispersion``; the single-round-only fields above come from the
         # LAST round.
@@ -544,10 +551,16 @@ def main() -> None:
         # not know this cannot tell a stable score from a lucky one.
         "rounds_per_variant": ROUNDS,
         "rounds_semantics": (
-            "每个 variant 跑 ROUNDS 轮；results[<variant>].rounds 里 median 与单轮值并列，"
-            "并含 dispersion(stdev/range/mad/relative)。"
-            "仅有单轮值的字段（rows/emission_breakdown/subsets/category_breakdown）取自**末轮**，"
-            "结论请看 rounds 块。"
+            "每个 variant 跑 ROUNDS 轮。多轮结论在 "
+            "results[<variant>].rounds_report 里："
+            "rounds_report.metrics[<指标>] 给 {median, single_round_first, per_round, "
+            "dispersion{stdev,range,mad,relative_stdev_pct}} —— 中位数与单轮值**并列**。"
+            "逐句稳定性在 rounds_report.case_stability，"
+            "分母在 rounds_report.denominator，开卷标注在 rounds_report.open_book，"
+            "成本在 rounds_report.cost。"
+            "仅有单轮值的字段（rows / emission_breakdown / subsets / category_breakdown）"
+            "取自**末轮**；每轮原始行另存于 results[<variant>].per_round_rows，"
+            "使本文件可被离线重新聚合（decision_eval_rounds --from-results）。"
         ),
         "decoding": {
             "max_tokens": base_bench.MAX_TOKENS,
@@ -565,9 +578,15 @@ def main() -> None:
         "comparison_stats": comparison,
     }
     _OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # ★ newline="\n" is load-bearing (AGENTS.md 字节核验): the default text mode
+    # on Windows translates every "\n" to "\r\n", so the committed artifact
+    # came out CRLF while every other tracked file is LF — and
+    # `git diff --numstat` disagreed with `--ignore-cr-at-eol`, which AGENTS.md
+    # defines as "the whole file's endings were rewritten". Make LF explicit.
     _OUT_PATH.write_text(
         json.dumps(payload_out, ensure_ascii=False, indent=2),
         encoding="utf-8",
+        newline="\n",
     )
     print(f"\n[prod-bench] results written to {_OUT_PATH}")
 

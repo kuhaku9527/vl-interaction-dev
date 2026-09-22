@@ -31,13 +31,13 @@
 > 不是端到端链路）。执行解释器 `D:\AI\envs\joyai-main\python.exe`（3.12.13）。
 >
 > **本轮结论一句话**：**中位数确实稳住了结论，而离散度证明单轮结论本来就不可信** ——
-> 单轮之间的 stdev 达 **4.8–7.9 个百分点**，而「不稳定句」在三轮里有 **26–28 句**
+> 单轮之间的 stdev 达 **4.8–6.5 个百分点**，而「不稳定句」在三轮里有 **33 句**
 > （共 56 句）**决策不一致**。⇒ 此前所有单轮得分都应视为**该分布的一次抽样**，不是能力的点估计。
 >
 > ⚠️ **注**：本节数字取自入库产物
 > `doc/research/data/benchmark_production_live_prompt_rounds.json`（**同一次**真机跑的读数）。
-> 本票全程跑了**两次**真机 3 轮，两次的绝对数字**明显不同**（例：`P` 的误响应率中位
-> 38.5 → 26.9）—— 这**正是本票要证明的那件事**：单轮数字不可作为点估计。
+> 本票全程跑了**三次**真机 3 轮，各次绝对数字**明显不同**（`P` 的误响应率中位
+> 38.5 → 26.9 → 46.2）—— 这**正是本票要证明的那件事**：单轮数字不可作为点估计。
 > 故引用时必须认准是哪一次（本文引用的是入库文件的那一次）。
 
 **★ 真机三轮（每 variant × 3 轮 × 56 例 = 168 次推理，两个 variant 共 336 次）**
@@ -47,12 +47,12 @@
 
 | metric | variant | median | 单轮值(首轮) | **stdev** | range | per_round |
 |---|---|---|---|---|---|---|
-| 误响应率 | `P_live4_prod_prompt`（裸 prompt） | **26.9** | 26.9 | **7.933** | 19.3 | [26.9, 38.5, 19.2] |
-| 误响应率 | `P2_…_profile`（带 persona） | **30.8** | 19.2 | **6.55** | 15.4 | [19.2, 30.8, 34.6] |
-| nfm 精确率 | `P` | **100.0** | 100.0 | 47.14 ⚠️ | 100.0 | [100.0, **0.0**, 100.0] |
+| 误响应率 | `P_live4_prod_prompt`（裸 prompt） | **46.2** | 46.2 | **5.421** | 11.5 | [46.2, 57.7, 46.2] |
+| 误响应率 | `P2_…_profile`（带 persona） | **23.1** | 19.2 | **6.537** | 15.4 | [19.2, 23.1, 34.6] |
+| nfm 精确率 | `P` | **0.0** ⚠️ | 0.0 | 0.0 ⚠️ | 0.0 | [0.0, 0.0, 0.0] ⚠️ |
 | nfm 精确率 | `P2` | **100.0** | 100.0 | 0.0 | 0.0 | [100.0, 100.0, 100.0] |
-| nfm 召回率 | `P` | **3.8** | 3.8 | 1.791 | 3.8 | [3.8, 0.0, 3.8] |
-| nfm 召回率 | `P2` | **15.4** | 15.4 | **4.784** | 11.5 | [15.4, 19.2, 7.7] |
+| nfm 召回率 | `P` | **0.0** | 0.0 | 0.0 | 0.0 | [0.0, 0.0, 0.0] |
+| nfm 召回率 | `P2` | **19.2** | 19.2 | **4.784** | 11.5 | [19.2, 26.9, 15.4] |
 | 面向句漏判率 | 两者 | **0.0** | 0.0 | 0.0 | 0.0 | 三轮全 0 |
 | delegate 召回 | `P` | **100.0** | 100.0 | 0.0 | 0.0 | [100, 100, 100] |
 | delegate 召回 | `P2` | **100.0** | 100.0 | 0.0 | 0.0 | [100, 100, 100] |
@@ -61,24 +61,28 @@
 
 | variant | stable | **unstable** | 按组 | 成本 |
 |---|---|---|---|---|
-| `P_live4_prod_prompt` | 30 | **26** | directed 9 / **nondirected 17** / delegate 0 | 79.54 s / 168 calls → **0.473 s/call** |
-| `P2_…_profile` | 28 | **28** | directed 9 / **nondirected 19** / delegate 0 | 85.71 s / 168 calls → **0.510 s/call** |
+| `P_live4_prod_prompt` | 23 | **33** | directed 15 / **nondirected 18** / delegate 0 | 91.36 s / 168 calls → **0.544 s/call** |
+| `P2_…_profile` | 23 | **33** | directed 12 / **nondirected 21** / delegate 0 | 80.52 s / 168 calls → **0.479 s/call** |
 
-⇒ **56 句里有 26–28 句跨三轮决策不一致**。非面向组（26 句）里 17–19 句不稳定 ——
+⇒ **56 句里有 33 句（两 variant 皆然）跨三轮决策不一致**。非面向组（26 句）里 18–21 句不稳定 ——
 与工单正文「26 例非面向中 **12–14** 例两轮不一致」**同量级且更严重**（三轮自然更多机会不一致）。
 
-> ⚠️ **`P` 的 nfm 精确率（stdev 47.14）不是模型剧烈抖动，是分母退化。**
-> 第 2 轮**一条 not-for-me 都没预测**（`n_not_for_me_predicted=0`），而
-> `summarize` 在分母为 0 时把比率记作 **0.0** —— 与「预测了但全错」的 0.0
+> ⚠️ **`P` 的 nfm 精确率整列 0.0 不是「测了但全错」，是三轮全部分母退化。**
+> 三轮**一条 not-for-me 都没预测**（`n_not_for_me_predicted=0`，见 `degenerate_rounds=[1,2,3]`），
+> 而 `summarize` 在分母为 0 时把比率记作 **0.0** —— 与「预测了但全错」的 0.0
 > **数值相同、含义相反**。本轮据此在结果结构里加了 `metrics_note.degenerate_rounds`
-> 显式点名退化轮（见下「本轮修的两处」）。**读这张表时勿把该 stdev 当成抖动。**
+> 显式点名退化轮（见下「本轮修的三处」）。**读这张表时勿把该列 0.0 当成「委派/精确率全错」。**
+>
+> ★ 顺便印证本票的立论：**同一配置三次真机跑，`P` 的误响应率中位依次为 38.5 → 26.9 → 46.2**
+> （本节引用的都是各自那一轮入库文件的读数）。单轮样本落到哪个数**全看运气** ——
+> 这正是「单轮不可作点估计」最直白的证据。
 
 **★ 同口径（AC#4：历史 25 vs 现 26 的差异必须显式处理）**
 
 | 口径 | 句数（directed/nondirected/delegate） | `P` 误响应率 | `P2` 误响应率 | `P` nfm召回 | `P2` nfm召回 |
 |---|---|---|---|---|---|
-| **本资产（权威）** | 25 / **26** / 5（共 56） | 26.9%（中位，本页上表） | 30.8%（中位，本页上表） | 3.8% | 15.4% |
-| **同口径历史可比**（排 `N01b` + 整组 delegate） | **25 / 25 / 0**（共 50） | 16.0% | 36.0% | 4.0% | 4.0% |
+| **本资产（权威）** | 25 / **26** / 5（共 56） | 46.2%（中位，本页上表） | 23.1%（中位，本页上表） | 0.0% ⚠️ | 19.2% |
+| **同口径历史可比**（排 `N01b` + 整组 delegate） | **25 / 25 / 0**（共 50） | 44.0% | 36.0% | 0.0% | 12.0% |
 
 ⇒ 两行的**分母不同（56 vs 50）**，这正是 #155 记录的「25 vs 26」在整组 delegate 加入后的完整形态；
 ⇒ 跨这两行比较**无效**，必须先统一分母 —— `denominator.historical_comparable`
@@ -90,18 +94,24 @@
 
 | variant | generalization（n=46） | open-book（n=10） |
 |---|---|---|
-| `P`（裸 prompt） | 误响应 **16.7%** / nfm_recall **0.0%** | 误响应 25.0% / nfm_recall **12.5%** |
-| `P2`（带 persona） | 误响应 **27.8%** / nfm_recall **5.6%** | 误响应 50.0% / nfm_recall 12.5% |
+| `P`（裸 prompt） | 误响应 **50.0%** / nfm_recall **0.0%** | 误响应 37.5% / nfm_recall 0.0% |
+| `P2`（带 persona） | 误响应 **33.3%** / nfm_recall **11.1%** | 误响应 37.5% / nfm_recall **25.0%** |
 
-⇒ 泛化子集 nfm_recall **0–5.6%**，与 #155 记录的「扣掉记忆效应后泛化 recall 仅 0–5.6%」**逐字吻合**
-（独立复现，非引用）。⚠️ 这两列取自**末轮**（单轮视图），而末轮本身是抽样的 ——
-上表的 median/stdev 才是本票的结论面。
+⇒ 泛化子集 nfm_recall **0–11.1%**，#155 记录的是「扣掉记忆效应后泛化 recall 仅 0–5.6%」，
+两者**同一量级**（本次三轮抽样里 `P2` 偏高一点，而单轮抽样本就落在 0–11% 之间波动）。
+⚠️ 这两列取自**末轮**（单轮视图），而末轮本身是抽样的 ——
+上表的 median/stdev 才是本票的结论面；**引用泛化分请连轮数一起引**。
 
 **★ 存量历史 2 轮：离线重聚合（不跑模型，AC#4 的可执行形态）**
 
-**命令**：`python -m decision_eval_rounds --from-results \
-  doc/research/data/benchmark_production_live_prompt_results.json \
-  doc/research/data/benchmark_production_live_prompt_results_repeat.json --variant <V>`
+**命令**（★ 须**先 cd 进 `services/webinfer`** —— 该模块是那里的顶层模块，
+从仓库根直接跑会 `No module named decision_eval_rounds`）：
+
+```bash
+cd services/webinfer && python -m decision_eval_rounds --from-results \
+  ../../doc/research/data/benchmark_production_live_prompt_results.json \
+  ../../doc/research/data/benchmark_production_live_prompt_results_repeat.json --variant <V>
+```
 （装置在 `services/webinfer/decision_eval_rounds.py`，CI 可见、有单测）
 
 | variant | rounds | unstable | 按组 | 退化轮 |
@@ -127,32 +137,37 @@ verdict: PASS
 **且中位数岿然不动（100.0）** —— 这正是选它而非均值的理由：单轮离群不带走结论，
 但读者**必须**能从离散度看到它抖过。自检本身可证伪（把 `_dispersion_stdev` 换成恒 0 的桩 ⇒ 判红）。
 
-**★ 本轮修的三处（都是真机/自查跑出来的，不是想出来的）**
+**★ 本轮修的四类缺陷**
 
 | 缺陷 | 怎么暴露的 | 修法 |
 |---|---|---|
-| **写盘时崩：`KeyError: 'cost'`** —— 结果块组装内联在 `main()`，重构改了键名而读取方读旧键 | 首次真机轮**跑完 336 次推理后**崩溃，**结果文件一个字节都没写**（≈7 分钟白跑）。根因是结构性的：`services/scripts` **既不在 CI 的 pytest 矩阵、也不在 CI 的 ruff 范围内** ⇒ 那里的键名不匹配**只能**等真机跑完才暴露 | 把组装抽成**纯函数** `variant_result_payload`；在 **CI 可见处**加 `tests/test_benchmark_multiround_contract.py`（含**静态 AST 扫描** `main()` 的全部下标读取），同类错误从此**离线秒级**转红 |
-| **退化分母被读成「全错」** —— 分母为 0 时 `summarize` 记 0.0 | 真机上 `P` 的 nfm 精确率出现 stdev 47.14（看着像剧烈抖动）；存量历史文件里 `delegate_recall_pct=0.0`（看着像委派全失败，实际是**当年没测**） | 加 `RATIO_DENOMINATORS` 逐条登记比率→分母，聚合时产出 `metrics_note.degenerate_rounds` 点名退化轮；并有结构化守卫测试「每条 `_pct` 都必须登记分母」 |
-| **落盘产物不自足** —— 只存末轮的 `rows` | **自查**（非真机）：用新产物跑 `--from-results` 会被拒「不足 2 轮」，尽管文件里明明有三轮 ⇒ 重新分析就得**再花 3 分钟跑模型** | 产物加 `per_round_rows`（逐轮全存）；`report_from_results_files` 同时接受「一文件一轮」与「一文件 N 轮」两种形状，并各配正/负控测试 |
+| **写盘时崩：`KeyError: 'cost'`** —— 结果块组装内联在 `main()`，重构改了键名而读取方读旧键 | 首次真机轮**跑完 336 次推理后**崩溃，**结果文件一个字节都没写**（≈7 分钟白跑）。根因是结构性的：`services/scripts` **既不在 CI 的 pytest 矩阵、也不在 CI 的 ruff 范围内** ⇒ 那里的键名不匹配**只能**等真机跑完才暴露 | 把组装抽成**纯函数** `variant_result_payload`；在 **CI 可见处**加 `tests/test_benchmark_multiround_contract.py`（静态 AST 扫描 `main()` 的下标读取，**含嵌套层**，附两层负控），同类错误从此**离线秒级**转红 |
+| **退化分母被读成「全错」** —— 分母为 0 时 `summarize` 记 0.0 | 真机上 `P` 的 nfm 精确率出现 stdev 47.14（看着像剧烈抖动）；存量历史文件里 `delegate_recall_pct=0.0`（看着像委派全失败，实际是**当年没测**） | 加 `RATIO_DENOMINATORS` 逐条登记比率→分母，聚合时产出 `metrics_note.degenerate_rounds` 点名退化轮 |
+| **落盘产物不自足** —— 只存末轮的 `rows` | **自查**（非真机）：用新产物跑 `--from-results` 会被拒「不足 2 轮」，尽管文件里明明有三轮 ⇒ 重新分析就得**再花 3 分钟跑模型** | 产物加 `per_round_rows`（逐轮决策，已裁到重聚合所需的 4 个字段，避免把产物撑到 484 KB）；`report_from_results_files` 兼容「一文件一轮」与「一文件 N 轮」两种形状 |
+| **★ `/code-review` 两轴查出的 6 处**（下列为其中真正是缺陷的） | 独立评审（Standards + Spec 两轴） | ① **CRLF 污染**：`Path.write_text` 在 Windows 默认把 `\n` 写成 `\r\n`，两个新文件与产物成了 CRLF（`git diff --numstat` 与 `--ignore-cr-at-eol` 不一致 = AGENTS.md 定义的「整文件行尾被改写」）⇒ 产物写入显式 `newline="\n"`，并把两个文件归回 LF；② **`--from-results` 声称「0.0 秒/轮」**：从没测过耗时的文件里读出「测到了 0」⇒ 改 `None` + 明说「未测」；③ **`BENCH_ROUNDS=1` 被静默改成 2** ⇒ 改为**报错**；④ **`RATIO_DENOMINATORS` 守卫恒真**（变异测试：3/5 条比率的分母改错仍全绿）⇒ 加独立金标 + 行为正/负控，**三个变异体现已被杀死**；⑤ **静态扫描漏嵌套层**（`["rounds_report"]["case_stabilty"]` 扫不出）⇒ 改为递归处理嵌套路径；⑥ **两处自述不实**（模块 docstring 称两个 benchmark 都已接线，实际只接了一个；`rounds_semantics` 指向不存在的 `results[<v>].rounds`）⇒ 逐条改正 |
 
-> 这三处都属本仓最贵的那一类（**静默**：一个让证据丢失、一个让读数反向、
-> 一个让证据一次性用完），且**前两处只有真机会暴露** —— 离线单测在设计时全是绿的。
+> 前两类属本仓最贵的那一类（**静默**：一个让证据丢失、一个让读数反向），
+> 且**只有真机会暴露** —— 离线单测在设计时全是绿的。
+> 第四类说明**离线全绿也不够**：评审用变异测试证明「看着在守、其实恒真」的守卫有三处。
 
 | 项 | 命令 | 结果 | 真机? | 测量时间 |
 |---|---|---|---|---|
-| 真机 3 轮 × 2 variant（336 次推理） | `BENCH_ROUNDS=3 BENCH_PROD_OUT=…rounds.json python services/scripts/benchmark_production_live_prompt.py` | **ALL PASS** 退出码 0；结果落 `doc/research/data/benchmark_production_live_prompt_rounds.json`（含 `rounds_report` 多轮块 + `per_round_rows` 逐轮全存） | **真机**（7060 在位） | 2026-09-22T13:4x |
-| 产物自足性（不重跑模型即可重新分析） | `python -m decision_eval_rounds --from-results doc/research/data/benchmark_production_live_prompt_rounds.json --variant P_live4_prod_prompt` | **读出 3 轮**，median/stdev 与产物内的 `rounds_report` 逐项一致 | 离线（读入库产物） | 2026-09-22T13:5x |
+| 真机 3 轮 × 2 variant（336 次推理） | `BENCH_ROUNDS=3 BENCH_PROD_OUT=…rounds.json python services/scripts/benchmark_production_live_prompt.py` | 退出码 0；结果落 `doc/research/data/benchmark_production_live_prompt_rounds.json`（含 `rounds_report` 多轮块 + `per_round_rows` 逐轮决策） | **真机**（7060 在位） | 2026-09-22T13:4x |
+| 产物自足性（不重跑模型即可重新分析） | `cd services/webinfer && python -m decision_eval_rounds --from-results ../../doc/research/data/benchmark_production_live_prompt_rounds.json --variant P_live4_prod_prompt` | **读出 3 轮**，median/stdev 与产物内的 `rounds_report` 逐项一致；成本栏如实报**未测**（产物外的重聚合没有耗时数据） | 离线（读入库产物） | 2026-09-22T13:5x |
 | 负控自检（AC#5） | `python -m decision_eval_rounds --self-check` | **PASS**：stable stdev 0.0 → stub stdev **47.14**（range 0→100），中位不变 | 离线 | 2026-09-22T13:0x |
-| 存量历史 2 轮重聚合 | `python -m decision_eval_rounds --from-results …results.json …_repeat.json --variant <V>` | **P：nondirected 12 句不一致；P2：14 句** —— 逐字复现工单的 12–14 | 离线（读已落盘文件） | 2026-09-22T13:1x |
-| aggregator 行为测试 | `python -m pytest services/webinfer/tests/test_decision_eval_rounds.py -q` | **44 passed** | 离线 | 2026-09-22T13:5x |
-| 契约测试（真机脚本的结果形状） | `python -m pytest services/webinfer/tests/test_benchmark_multiround_contract.py -q` | **9 passed**（含跨 CI 边界的静态 AST 扫描 + 其负控 + 产物自足性端到端） | 离线 | 2026-09-22T13:5x |
-| webinfer 全量单测 | `cd services/webinfer && python -m pytest -o asyncio_mode=auto -q` | **588 passed**（#155 时 535 → 本轮 +53：44 例 aggregator + 9 例跨 CI 契约） | 离线 | 2026-09-22T13:5x |
+| 存量历史 2 轮重聚合 | `cd services/webinfer && python -m decision_eval_rounds --from-results …results.json …_repeat.json --variant <V>` | **P：nondirected 12 句不一致；P2：14 句** —— 逐字复现工单的 12–14 | 离线（读已落盘文件） | 2026-09-22T13:1x |
+| aggregator 行为测试 | `cd services/webinfer && python -m pytest tests/test_decision_eval_rounds.py -q` | **54 passed** | 离线 | 2026-09-22T13:5x |
+| 契约测试（真机脚本的结果形状） | `cd services/webinfer && python -m pytest tests/test_benchmark_multiround_contract.py -q` | **13 passed**（含跨 CI 边界的静态 AST 扫描 + 两层负控 + 产物自足性端到端 + BENCH_ROUNDS 坏值判红） | 离线 | 2026-09-22T13:5x |
+| webinfer 全量单测 | `cd services/webinfer && python -m pytest -o asyncio_mode=auto -q` | **602 passed**（#155 时 535 → 本轮 +67：54 例 aggregator + 13 例跨 CI 契约） | 离线 | 2026-09-22T13:5x |
 | scripts 单测（#162/#163 的） | `python -m pytest scripts/tests/ -q` | **89 passed**（与本轮改动前一致，无回归） | 离线 | 2026-09-22T13:2x |
-| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,D102,D103,D205,D401,SIM105` + `ruff format --check services/webinfer` | **All checks passed** / 72 files already formatted | 离线 | 2026-09-22T13:2x |
+| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,D102,D103,D205,D401,SIM105` + `ruff format --check services/webinfer` | **All checks passed** / 73 files already formatted | 离线 | 2026-09-22T13:5x |
+| **行尾核验**（AGENTS.md 字节核验） | `git ls-files --eol` + `git diff --numstat` 对比 `--ignore-cr-at-eol` | 全部 `i/lf w/lf`（评审查出产物与 2 个新文件曾被写成 CRLF，已修，见上表第四类①） | 离线 | 2026-09-22T13:5x |
+| **变异测试**（守卫生效性，评审要求） | 逐个把 `RATIO_DENOMINATORS` 的分母改错（3 个曾**全绿通过**的变异体） | **3/3 已被杀死**，各由 `test_ratio_denominators_match_an_independent_oracle` / `…_zeroing_the_registered_denominator…` / `…_a_zero_denominator_does_not_flag_unrelated_ratios` 杀死 | 离线 | 2026-09-22T13:5x |
 
-> **成本（AC#6，供后续调 N）**：单轮 56 例 ≈ **26–32 s**（均值 28.6 s），
-> **0.473–0.510 s/次推理**。⇒ `ROUNDS=3` 一轮完整评测 ≈ **3 分钟**；
-> 要提到 N=5 约 5 分钟 —— N 现在是有数字可依的，不是拍的。
+> **成本（AC#6，供后续调 N）**：三次真机 3 轮的单轮耗时 ≈ **25–32 s**、**0.473–0.544 s/次推理**。
+> ⇒ `ROUNDS=3` 一轮完整评测 ≈ **3 分钟**；要提到 N=5 约 5 分钟 —— N 现在是有数字可依的，不是拍的。
+> ⚠️ 从**已落盘文件**重新聚合时**没有**耗时数据，`cost` 会如实报 `measured: false` / `None`
+> （**不是 0**）—— 评审查出这条曾是「从没测过的数据里读出测到了 0」，已修。
 >
 > **可复现性**：逐轮日志在 `logs/bench-rounds-165.log`、历史重聚合结果在
 > `logs/rounds-165/`，而 `logs/` 被 gitignore（同 §1 #163 轮的惯例）。

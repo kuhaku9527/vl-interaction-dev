@@ -26,11 +26,14 @@
   CI 的 pytest 矩阵内**，放那里等于让它永不被测（#152 的缺陷形态）。
 * **分母跨轮必须逐句一致，否则报错**（不是打警告）：比较失效是**静默**的，
   而静默正是这个项目最贵的教训（台账 §6.4）。
-* **不引入第三方统计库**：`statistics` 是标准库，且这几个量手算即可核对。
-* **本模块只做聚合，不跑模型**：跑分入口仍是既有的两个
-  （`benchmark_production_live_prompt.py` 与 `benchmark_4state_notforme.py`），
-  它们产出的 per-round stats 喂进这里。
-  这样「怎么算」可以在**离线**下被完整测试，而「怎么跑」才需要真机。
+* **不引入第三方统计库**：`statistics` 是标准库，且这几个量手算即可核对。* **本模块只做聚合，不跑模型**：目前**唯一**接线的是
+  `benchmark_production_live_prompt.py`（`BENCH_ROUNDS`）；
+  它把逐轮 stats 喂进这里。这样「怎么算」可以在**离线**下被完整测试，
+  而「怎么跑」才需要真机。
+
+  ⚠️ `benchmark_4state_notforme.py` **尚未接线**（它仍只跑单轮）——
+  本模块可用，但那条入口的多轮化是遗留工作，不在 #165 范围内。
+  写在这里是因为「两个入口都接了」曾是一句不实的自述（评审查出）。
 
 Run tests: cd services/webinfer && python -m pytest tests/test_decision_eval_rounds.py -q
 Self-check: python -m decision_eval_rounds --self-check
@@ -43,7 +46,7 @@ import json
 import statistics
 from pathlib import Path
 
-from decision_eval_score import summarize
+from decision_eval_score import COUNT_KEY, summarize
 from decision_eval_set import (
     CASES,
     GROUP_DELEGATE,
@@ -193,15 +196,13 @@ def aggregate_series(values: list[float]) -> dict:
 
 
 def _round_total(stats: dict) -> int:
-    """一轮的句数（三组之和）—— 判「分母是否跨轮一致」用."""
-    return sum(stats[f"n_{_COUNT_SUFFIX[group]}"] for group in GROUPS)
+    """一轮的句数（三组之和）—— 判「分母是否跨轮一致」用.
 
-
-_COUNT_SUFFIX = {
-    GROUP_DIRECTED: "directed",
-    GROUP_NONDIRECTED: "nondirected",
-    GROUP_DELEGATE: "delegate",
-}
+    ★ 复用 :data:`decision_eval_score._COUNT_KEY`（`group -> summarize() 里
+    `n_*` 的后缀`），**不再自己维护一份同义映射** —— 两份映射迟早分叉，
+    而分叉的后果是分母悄悄算错（本票从头到尾都在防这件事）。
+    """
+    return sum(stats[f"n_{COUNT_KEY[group]}"] for group in GROUPS)
 
 
 def historical_comparable_view(rows: list[dict]) -> list[dict]:
@@ -372,12 +373,30 @@ def open_book_report(prompt: str | None = None) -> dict:
     }
 
 
-def cost_report(wall_seconds: list[float], llm_calls: int) -> dict:
+def cost_report(wall_seconds: list[float] | None, llm_calls: int) -> dict:
     """★ AC#6：N 轮耗时，供后续调 N.
 
     没有成本数字就无法决定 N 该取多少：本票要求默认 N>2，
     但「跑得起几轮」是算出来的，不是拍的。
+
+    ★ ``wall_seconds=None`` 表示**没有测过时间**（例如从已落盘的结果文件
+    重新聚合 —— 那里没有耗时数据）。此时全部耗时字段给 ``None``，**不给 0.0**。
+
+    这与本模块对**比率**的处理是同一条纪律：``0.0`` 是「测到了 0」，
+    ``None`` 才是「没测」。把「没测」写成 ``0.0``，正是本票花了很大篇幅
+    去修的那类缺陷（分母退化的 0.0 与「测了但全错」的 0.0 不可区分）。
     """
+    if wall_seconds is None:
+        return {
+            "rounds": None,
+            "wall_seconds_total": None,
+            "wall_seconds_per_round": None,
+            "wall_seconds_per_round_mean": None,
+            "llm_calls": llm_calls,
+            "seconds_per_llm_call": None,
+            "measured": False,
+            "why": "本轮没有耗时数据（例如从已落盘结果重新聚合），故耗时字段一律为 None 而非 0.0",
+        }
     values = [float(v) for v in wall_seconds]
     total = round(sum(values), 3)
     return {
@@ -387,6 +406,7 @@ def cost_report(wall_seconds: list[float], llm_calls: int) -> dict:
         "wall_seconds_per_round_mean": round(total / len(values), 3) if values else None,
         "llm_calls": llm_calls,
         "seconds_per_llm_call": round(total / llm_calls, 3) if llm_calls else None,
+        "measured": True,
     }
 
 
@@ -473,10 +493,10 @@ def build_rounds_report(
         "case_stability": case_stability(per_round_rows),
         "denominator": aggregate["denominator"],
         "open_book": open_book_report(prompt),
-        "cost": cost_report(
-            round_wall_seconds if round_wall_seconds is not None else [0.0] * len(per_round_stats),
-            llm_calls,
-        ),
+        # ★ Pass None straight through when there is no timing data: fabricating
+        #   [0.0]*n made a re-aggregated report claim "0.0 s/round" — a measured
+        #   zero from unmeasured data, the exact confusion this module flags.
+        "cost": cost_report(round_wall_seconds, llm_calls),
     }
 
 
@@ -613,10 +633,18 @@ def report_from_results_files(
     Args:
         paths: the JSON files to read, in round order.
         variant: variant name inside each file.
-        prompt: the system prompt those rounds were produced against. ``None``
-            ⇒ rebuilt from the asset, using the variant name to decide whether
-            the persona block was present (same rule as
-            :func:`decision_eval_score.load_rows_from_results`).
+        prompt: the system prompt those rounds were produced against — it
+            decides the open-book split, so passing the wrong one silently
+            mislabels which sentences are open-book. ``None`` ⇒
+            :func:`production_live_prompt` **with** the persona block
+            (``include_profile=True``), which is what the production live route
+            sends and what the ``P2_…_profile`` variants use.
+
+            ⚠️ Unlike :func:`decision_eval_score.load_rows_from_results`, this
+            does **not** switch on the variant name: file names are not a
+            reliable signal for which prompt was under test, and guessing would
+            mislabel the split on exactly the ``P_live4_prod_prompt`` (bare)
+            variant. Pass ``prompt=`` explicitly when the variant was bare.
         rounds_requested: defaults to the number of rounds actually found.
 
     Raises
@@ -668,24 +696,38 @@ def report_from_results_files(
     )
 
 
-def print_report(report: dict) -> None:
-    """Print a report's median / single-round / dispersion table."""
-    print(
-        f"=== {report['rounds_completed']} 轮中位数 + 离散度 "
-        f"(requested {report['rounds_requested']}) ==="
-    )
-    print(
+def print_report_text(report: dict, *, include_header: bool = True) -> str:
+    """Render a report's median / single-round / dispersion view as one string.
+
+    ★ The **single** renderer: ``print_report`` prints it, and the benchmark
+    script re-emits it for each variant. Splitting the rendering out is what
+    removes the near-duplicate table that used to live in the benchmark (and
+    would have drifted from the unit-tested one).
+
+    Args:
+        include_header: ``False`` omits the ``=== N 轮… ===`` banner, for
+            callers that already printed their own heading (the benchmark
+            prints one per variant, so the banner would otherwise appear
+            twice).
+    """
+    out: list[str] = []
+    if include_header:
+        out.append(
+            f"=== {report['rounds_completed']} 轮中位数 + 离散度 "
+            f"(requested {report['rounds_requested']}) ==="
+        )
+    out += [
         "  "
         + "metric".ljust(32)
         + "median".rjust(9)
         + "single".rjust(9)
         + "stdev".rjust(9)
         + "range".rjust(9)
-        + "  per_round"
-    )
+        + "  per_round",
+    ]
     for metric, series in report["metrics"].items():
         disp = series["dispersion"]
-        print(
+        out.append(
             "  "
             + metric.ljust(32)
             + f"{series['median']}".rjust(9)
@@ -695,37 +737,47 @@ def print_report(report: dict) -> None:
             + "  "
             + str(series["per_round"])
         )
-    degenerate = (report.get("metrics_note") or {}).get("degenerate_rounds") or {}
-    for ratio, round_numbers in degenerate.items():
-        print(
+    for ratio, round_numbers in (
+        (report.get("metrics_note") or {}).get("degenerate_rounds") or {}
+    ).items():
+        out.append(
             f"  ⚠️ {ratio} 在轮 {round_numbers} 的**分母为 0** ⇒ 该轮读数无意义"
             "（记作 0.0，与「预测了但全错」数值相同、含义相反）；"
             "跨轮离散度会因此虚高，别当成模型抖动。"
         )
     stability = report["case_stability"]
-    print(
+    out.append(
         f"  逐句稳定性: stable={stability['n_stable']}  unstable={stability['n_unstable']}  "
         f"(by group {stability['n_unstable_by_group']})"
     )
     if stability["unstable_ids"]:
-        print(f"  不稳定句: {', '.join(stability['unstable_ids'])}")
+        out.append(f"  不稳定句: {', '.join(stability['unstable_ids'])}")
     ob = report["open_book"]
-    print(
+    out.append(
         f"  开卷考: {ob['is_open_book']}  逐字重叠 {ob['n_overlapping']} 句"
         f"（非面向 {ob['n_overlapping_nondirected']}）"
     )
     denom = report["denominator"]
     if denom.get("case_ids_total") is not None:
-        print(
+        out.append(
             f"  分母: 句集跨轮一致={denom['per_round_case_id_sets_identical']}  "
             f"case_ids={denom['case_ids_total']}  权威={denom['canonical']}"
         )
     cost = report["cost"]
-    if cost["wall_seconds_total"]:
-        print(
-            f"  成本: total={cost['wall_seconds_total']}s  calls={cost['llm_calls']}  "
-            f"s/call={cost['seconds_per_llm_call']}"
+    if cost.get("measured") or cost["wall_seconds_total"]:
+        out.append(
+            f"  成本: total={cost['wall_seconds_total']}s  "
+            f"calls={cost['llm_calls']}  s/call={cost['seconds_per_llm_call']}"
         )
+    else:
+        # ★ 说清「没测」而不是沉默 —— 沉默会被读成「成本可忽略」。
+        out.append("  成本: **未测**（本轮没有耗时数据）—— 不是 0，是未知")
+    return "\n".join(out)
+
+
+def print_report(report: dict) -> None:
+    """Print a report's median / single-round / dispersion table."""
+    print(print_report_text(report))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -773,11 +825,25 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"✗ {args.from_results[0]} 里没有任何 variant")
                 return 1
             variant = next(iter(variants))
-        report = report_from_results_files(args.from_results, variant)
+        # ★ Reuse the rule the rest of the repo already uses for this exact
+        #   question (decision_eval_score.load_rows_from_results): a variant
+        #   whose name says "profile" was run WITH the persona block, everything
+        #   else bare. Without this the open-book split would be computed
+        #   against the wrong prompt for the bare variant, silently mislabelling
+        #   which sentences are open-book — i.e. the exact defect #155 fixed.
+        include_profile = "profile" in variant or "prod_prompt_profile" in variant
+        report = report_from_results_files(
+            args.from_results,
+            variant,
+            prompt=production_live_prompt(include_profile=include_profile),
+        )
         if args.json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
-            print(f"variant={variant}  来源={', '.join(args.from_results)}")
+            print(
+                f"variant={variant}  来源={', '.join(args.from_results)}  "
+                f"开卷归属按 {'带 persona' if include_profile else '裸 prompt'} 口径判定"
+            )
             print_report(report)
         if args.diff_against:
             other = json.loads(Path(args.diff_against).read_text(encoding="utf-8"))
