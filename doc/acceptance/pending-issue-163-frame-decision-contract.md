@@ -1,6 +1,11 @@
 # 待开 issue（工单 #163 判定出的缺陷，需用户确认后才提交）
 
-> 状态：**已写好、未提交**。`issue_open` 被 auto-mode 审核拦下（对外可见、难以撤销，
+> ⚠️ **本文件已被线上工单 #168 取代**（提交于 2026-09-22）。下面的正文是**提交时的初稿**，
+> 其中「诊断串显示给用户」的表述**已被实测推翻**（详见 `doc/standards/test-baseline.md`
+> §1 #163 轮的「★ 可见面实测」）。**以 #168 的线上正文为准。**
+> 保留本文件仅作离线追溯，避免 `logs/`（gitignored）那种跨机器死链。
+>
+> 状态：**已写好、已提交为 #168**。`issue_open` 被 auto-mode 审核拦下（对外可见、难以撤销，
 > 且 `/implement #163` 未授权在另一仓库开单）。等用户确认后再提交。
 >
 > **本文件位置的理由**：`#163` 的最后一条 AC 是「若判定为缺陷 → 结论写入台账并**另立工单**」。
@@ -28,7 +33,8 @@
 ### 现象
 
 帧链路（屏幕/摄像头 → WS `frame` → webinfer → VLM）在**无 prompt** 时，
-用户可见面收到的是内部诊断串：
+**webui 的 VLM 服务层**产出内部诊断串（⚠️ 早先写作「用户可见面收到」，**该措辞已更正** ——
+诊断串在当前 HEAD 上到不了用户可见面，见下文「可见面实测」）：
 
 ```
 text = "Empty model response: stop"
@@ -99,6 +105,28 @@ metrics.user_prompt = ""
 - [ ] 正常基线**不回归**：`--prompt "…" --require-content` 仍 PASS 且文本有意义
       （基线值：`api_call_ms` 0.42–0.95 s，返回一句与画面一致的中文描述）
 - [ ] ★ 负控：停 8070 → 仍判 FAIL（不得因本次改动变成静默通过）
+
+### ★ 可见面实测（2026-09-22 补做；**本节推翻了本文件初稿的严重度**）
+
+装置：`logs/frame-link/dom_visibility_probe.mjs`（WS 通道与 DOM 通道**分开**记录）。
+
+| 实验 | 装置 | 读数 |
+|---|---|---|
+| **A（真机）** | 真实 `getDisplayMedia` 1 fps 采集，50 帧 | **后端发了 39 条**诊断串；用户可见面 50/50 次采样**全部不可见**；`#resultText` 长度**恒 `281`**（DOM 一字符未动） |
+| **C（受控正控）** | 同装置，**唯一改动** `isAnalysisRunning = true` | `body_has_target: false → true`、`#resultText 343 → 370`；还原后恢复 `false` |
+| **G（内部状态）** | 干净页 + 32 条响应（30 条为诊断串） | `lastText` 长度**恒 `[0]`**、`vlmHistory` **从未新增条目** |
+
+机制：`ws_dispatcher.js:24` 是 `vlm_response` 唯一分派点，首句即 `if (!isAnalysisRunning) return;`；
+`updateResultText` 只被 `ws_dispatcher.js:43` 调用（在守卫**之后**）；
+`isAnalysisRunning` 唯一置位点 `app_main.js:1192` 位于 `showProcessedVideoStream`，
+而该函数**零调用点**（静态 grep + 运行时 call-trap `calls: 0`）⇒ **结构性恒 `false`**。
+
+⇒ **本票是「死路径上的 latent 缺陷」，不是当前可见缺陷。** 触发条件（已实测）：
+一旦该函数被接回或新增置位路径，诊断串会立刻可见**并被 TTS 念出**（`#ttsSpeakingText`）。
+
+> **已作废的证据**：初稿把 `getVlmDisplayText("Empty model response: stop")` 原样返回
+> 当作「诊断串漏到用户可见面」的决定性证据 —— **不成立**（那是**跳过守卫**的函数级注入，
+> 与真实路径不同构）。实测反证：30 条真实诊断串到达时 `lastText` 恒 `''`。
 
 ### 装置
 

@@ -37,7 +37,7 @@
 |---|---|---|
 | 模型**真的产出**了内容 | 同图 image-only 直连 7060 → `"这张图片展示的是一个视频采集或屏幕捕获工具的界面…"`（64 token，`finish_reason=length`） | 本轮实测 |
 | webinfer 的**决策契约**也正常 | image-only 请求 → HTTP 200，`streamingharness.decision="silence"`，`usage.completion_tokens=2` | 本轮实测 |
-| 但 webui 显示的文本是**占位诊断串** | `text="Empty model response: stop"` | 台账 §1 #13 + 本轮复现 |
+| webui 拿到的文本是**占位诊断串** | `metrics.user_prompt=""` 且回落成 `text="Empty model response: stop"` | 台账 §1 #13 + 本轮复现 |
 | **决策契约在 `frame` 路径上无人消费** | `vlm_service.py` 全文**没有** `streamingharness` / `decision` 字样；而 live/jarvis 三条路径都读 `harness.get("decision")` | `vlm_service.py` vs `live_llm.py:365` / `live_proactive.py:297` / `jarvis_mode.py:1610` |
 
 **因果链（机制层面确证）**：帧路径（`ws_handler.py` → `svc.process_frame` → `analyze_image`）
@@ -46,13 +46,54 @@
 `streamingharness.raw_content` —— 于是「模型按契约选择沉默」这件事到达 webui 时
 **只剩一个空字符串**，`_extract_response_text` 便回落成
 `f"Empty model response{': ' + finish_reason}"` 这个**诊断串**（`vlm_service.py:629`）。
-⇒ 决策语义在网络层**丢失**，用户可见面收到的是内部诊断文案。
+⇒ **决策语义在 webui 的 VLM 服务层丢失。**
+
+> ⚠️ **踩过的措辞错误（必读，否则会误判严重度）**：本条最初写成
+> 「**用户可见面**收到的是内部诊断文案」—— **那句话是错的**，见本节末尾
+> 「★ 可见面实测」：诊断串在当前 HEAD 上**到不了用户可见面**。
+> 准确表述是「**webui 的 VLM 服务层**丢失了决策语义、产出诊断串」，
+> 至于它能否显示，是一个**独立的、已单独实测**的问题。
 **依据取自决策态承诺**：`doc/subsystems/screen-capture.md` §3.5.5「视频框实时显示游戏画面
 **同时** BT-7274 看到同一路画面，玩家喊『bt，这个怪怎么打』→ BT 回复攻略」
 + §4.3「1 fps 视频帧 → VLM 识别 → BT-7274『这个螳螂帮…』」；
 `doc/specs/live-visual-cb.md` §1「用户说话时最近 1-N 帧作为视觉输入一起送 LLM → 模型
 **看着画面回答**」。两处承诺的都是**有内容**的作答，**没有任何一处**把「无 prompt 时
 回一句内部诊断串」写成预期行为。⇒ **判缺陷**，另立工单（本票不修，见 spec §2「不改被测对象」）。
+
+**★ 可见面实测（2026-09-22 补做，独立于上面的判定）**：
+
+上面判的是「**webui 的 VLM 服务层丢失了决策语义**」。它**是否显示给用户**是另一个问题，
+单独实测（装置：`logs/frame-link/dom_visibility_probe.mjs`；**WS 通道与 DOM 通道分开记录**）：
+
+| 实验 | 装置 | 读数 | 测量时间 |
+|---|---|---|---|
+| **A（真机）** | 真实 `getDisplayMedia` 1 fps 采集，50 帧 | **后端发了 39 条** `Empty model response: stop`；用户可见面（`document.body.innerText`）**50/50 次采样全为 false**；`#resultText` 长度恒 `281`（**DOM 一个字符都没动**，`inner_sig` 仅 1 个取值） | 2026-09-22T11:15Z |
+| **C（受控正控）** | 同一装置，**唯一改动**：`isAnalysisRunning = true` | `body_has_target: false → **true**`、`#resultText 343 → 370`；还原后 `false` | 2026-09-22T11:03:58Z |
+| **G（内部状态）** | 干净页 + 32 条响应（其中 30 条恰为诊断串） | `lastText` 长度**恒 `[0]`**、`vlmHistory` **从未新增条目** ⇒ 守卫下游的内部状态也从未被写入 | 2026-09-22T11:22Z |
+
+**结论：诊断串在当前 HEAD 上到不了用户可见面。** 机制（静态 + 运行时双侧确证）：
+
+* `ws_dispatcher.js:24` 是唯一分派点，第一条语句就是 `if (!isAnalysisRunning) return;`
+* `#resultText` 的唯一写入路径 `updateResultText` **只被 `ws_dispatcher.js:43` 调用**，
+  而该行在守卫**之后**（结构性证据）
+* `isAnalysisRunning` 全仓库**只有一处置位**（`app_main.js:1192`），在其内部函数
+  `showProcessedVideoStream`（`:1182`）里；**该函数零调用点**
+  （静态 grep 排除 `.bak` + 运行时 call-trap 实测 `calls: 0`，覆盖动态调用）
+* ⇒ `isAnalysisRunning` **结构性恒 `false`**，`vlm_response` 被无条件丢弃
+
+**这使 #168 成为「死路径上的 latent 缺陷」，而非当前可见的缺陷。** 触发条件（已实测）：
+只要有人把 `showProcessedVideoStream` 接回去或新增置位路径，实验 C-2 显示诊断串
+**会立刻可见，并被送进 TTS 念出来**（`#ttsSpeakingText` 出现 348 字符）。
+⇒ 降级而非关闭 —— 详见 #168。
+
+> ⚠️ **本轮作废了一条此前被当作「决定性证据」的读数**（防后人继续引用）：
+> 早先记录写「`getVlmDisplayText("Empty model response: stop")` → **原样返回该串**
+> ⇒ 诊断串确实漏到用户可见面」。**该推理不成立，已作废。**
+> 理由：`getVlmDisplayText` 是**纯函数**（`vlm_render.js:20`），**跳过守卫**直接调用它
+> 当然原样返回 —— 这与该串**是否真的会流经它**无关。**这是「装置与真实路径不同构」
+> 的又一实例**（同 §1 更正里「自建 WebSocket 收不到 vlm_response」那类错误）。
+> 实测反证：30 条真实诊断串到达时 `lastText` 恒 `''` ⇒ 该函数在真实路径上
+> **从未被以该串调用**。（函数自身行为对；错的是**推理**。）
 
 **四轮结果（命令 / 结果 / 真机 / 时间）**：
 
@@ -72,9 +113,9 @@
 > `metrics.latency_breakdown_ms.api_call_ms`），且只在 `--require-content` 档对
 > `Empty model response` 判红。于是：A 因**误读**一个不存在的键而 FAIL（**假红**），
 > A2 因不带 `--require-content` 而 PASS（**放过**了诊断串）。**两轮的 `verdict`
-> 都不是对「内容空」的判定** —— 对它的判定见上方「判定结论」表，由
-> **判决性对照实验**（直连 7060 / 直连 8070 / `getVlmDisplayText`）给出，
-> 与这两轮的 `verdict` 无关。修正后重跑（R 行）如实判 **FAIL**。
+> 都不是对「内容空」的判定** —— 对它的判定见上方「判定结论」表，
+> 由**判决性对照实验**（直连 7060 / 直连 8070）给出，与这两轮的 `verdict` 无关。
+> 修正后重跑（R 行）如实判 **FAIL**。
 > ⇒ **读本表时请以「读数」为准，不要以 A/A2 的 `verdict` 为准。**
 >
 > **② 两条负控的档不同（不是冗余也不是重复）。**
@@ -440,8 +481,9 @@
 
 | # | 面 | 现状 | 影响 |
 |---|---|---|---|
-| 1 | **帧链路**（摄像头/屏幕 → VLM） | ✅ **2026-09-22 已判定 + 已建基线（§1 #163 轮）**：真机四轮（无 prompt / 正常基线 / 两条负控）；「内容空」判定为**读侧缺陷**（另立工单） | 已收口；缺陷修复走独立工单 |
-| 1b | 帧链路分辨率/`max_pixels` | ✅ **2026-09-22 实测**：1fps / 764×540（协商值）；图像 token 764×540→**826**、1280×720→1850、2560×1440→2074（`max_pixels` 削后） | 已收口（见 §1 #163 轮 AC4 表） |
+| 1 | **帧链路**（摄像头/屏幕 → VLM） | ✅ **2026-09-22 已判定 + 已建基线 + 已定可见性（§1 #163 轮）**：真机四轮（无 prompt / 正常基线 / 两条负控）+ 可见面三实验（A/C/G）；判定为**读侧缺陷**（另立 #168），且其实测**到不了用户可见面** ⇒ 降级为「死路径上的 latent 缺陷」 | 已收口；#168 走独立工单 |
+| 1b | 帧链路分辨率/`max_pixels` | ✅ **2026-09-22 实测**：1fps / 764×540（协商值）；图像 token 764×540→**399**、1280×720→911、2560×1440→1023（`max_pixels` 削后）。⚠️ 早先记的 826/1850/2074 **已作废**（会话复用导致累加污染），见 §1 #163 轮 AC4 表 | 已收口（见 §1 #163 轮 AC4 表） |
+| 1c | 帧链路的**输出可见性**（VLM 输出是否到主显示位） | ✅ **2026-09-22 实测**：`#resultText` 的 `vlm_response` 通道当前**结构性不可达**（守卫 `isAnalysisRunning` 恒 `false`，因唯一置位函数零调用点）。**已记入 #168，未另立工单** —— 这是本 fork 有意的架构收敛（`ARCHITECTURE.md:11-14` 明写 `VideoProcessorTrack` 零构造点、四态只在用户说话/proactive 轮发生），**不是新缺陷** | 已收口；与 #168 同源 |
 | 2 | **proactive 轮真机** | ❌ 从未真跑。`LIVE_PROACTIVE_ENABLED` 默认 OFF，`proactive_supported:false` | live 两条产出决策的路径之一完全未验 |
 | 3 | **多轮取中位** | ❌ 未做。存量只有 2 轮（且 26 例非面向中 12–14 例两轮不一致） | #157 的硬要求 |
 | 4 | `delegate` 真实行为 | ❌ 只有单测；真机未验 | `delegate` 是四态之一 |
