@@ -145,8 +145,8 @@ class WorkflowAudit:
 class ExtractionMismatchError(RuntimeError):
     """应当被提取、却无法归约成唯一一条命令的 ruff 步骤.
 
-    旧版把这类步骤静默丢掉（计数变小、摘要仍 `N/N PASS`、退出码仍 0），
-    故「丢了一步」与「全过了」在输出上无法区分（见模块文档）。
+    旧版把这类步骤静默丢掉（计数变小、摘要仍 `N/N PASS`、退出码仍 0），故
+    「丢了一步」与「全过了」在输出上无法区分（见模块文档）。
     """
 
     def __init__(self, audit: WorkflowAudit) -> None:
@@ -174,10 +174,8 @@ class ExtractedCommands(list):
 def _step_blocks(lines: list[str]) -> list[list[str]]:
     """把每个 job 的 ``steps:`` 序列切成一段段「步骤原文」.
 
-    ``steps:`` 的缩进决定这一段的边界：`steps:` 之后的、缩进更深的行都属于它；
-    遇到缩进不大于 ``steps:`` 的非空行（下一个 job 键 / 下一个顶格键）即结束。
-    步骤边界取该段内 ``- `` 的**最小**缩进 —— 这样 ``with:`` 下的嵌套序列不会被
-    误当成新步骤，而 `run: |` 的内容行也只可能缩进更深。
+    ``steps:`` 的缩进决定这段的边界：缩进更深的行属于它，遇到缩进不大于它的
+    非空行（下一个 job 键 / 下一个顶格键）即结束。
     """
     blocks: list[list[str]] = []
     index, total = 0, len(lines)
@@ -195,6 +193,7 @@ def _step_blocks(lines: list[str]) -> list[list[str]]:
                 break
             region.append(line)
             cursor += 1
+        # 步骤边界取该段内 `- ` 的最小缩进：`with:` 下的嵌套序列不会被误当成新步骤。
         indents = [len(m.group(1)) for line in region if (m := _ITEM_RE.match(line))]
         if indents:
             item_indent = min(indents)
@@ -217,10 +216,10 @@ def _block_commands(body: list[str], *, folded: bool) -> list[str]:
     r"""把 ``run: |`` / ``run: >`` 的块标量还原成命令列表.
 
     ★ 不能只是 ``" ".join(lines)``：块里可能有两三条**互相独立**的命令，拼成一条
-    会跑出一条 CI 里不存在的命令 —— 那是另一种撒谎。YAML 语义必须区分：
-    ``|``（literal）每个物理换行是一条命令，以 ``\\`` 结尾的行按 shell 续行规则
-    与下一行合并（多行 ruff 命令就是这么写的）；``>``（folded）整块折成**一条**。
-    返回多条时由调用方**拒绝**（见 :func:`_parse_step`），不猜。
+    会跑出一条 CI 里不存在的命令 —— 那是另一种撒谎。``|``（literal）每个物理换行
+    是一条命令，以 ``\\`` 结尾的行按 shell 续行规则与下一行合并（多行 ruff 命令就是
+    这么写的）；``>``（folded）整块折成**一条**。返回多条时由调用方**拒绝**
+    （见 :func:`_parse_step`），不猜。
     """
     parts: list[str] = []
     buffer = ""
@@ -246,13 +245,11 @@ def _block_commands(body: list[str], *, folded: bool) -> list[str]:
 def _parse_step(block: list[str]) -> _Step:
     """解析一个步骤：取名、取 working-directory、把 `run:` 归一成恰好一条命令.
 
-    判定「本该产出命令」用两个独立信号，任一成立即**期望**：
-
-      1. 命名约定 ``Ruff …``（workflow 自己一致遵守，见 :data:`_RUFF_STEP_NAME_RE`）；
-      2. 结构信号：``run:`` 里确实调用了 ruff（:data:`_RUFF_INVOCATION_RE`）。
-
-    信号 2 是给「步骤被改名、run 没变」留的网 —— 只靠信号 1，一次改名会让期望数
-    与被解析数**一起**变小，差异消失、绿照旧（正是旧版被证伪的形态）。
+    判定「本该产出命令」用两个独立信号，任一成立即**期望**：① 命名约定 ``Ruff …``
+    （见 :data:`_RUFF_STEP_NAME_RE`）；② 结构信号：``run:`` 里确实调用了 ruff
+    （:data:`_RUFF_INVOCATION_RE`）。信号 ② 是给「步骤被改名、run 没变」留的网 ——
+    只靠 ① 的话，一次改名会让期望数与被解析数**一起**变小，差异消失、绿照旧
+    （正是旧版被证伪的形态）。
     """
     name: str | None = None
     working_dir: str | None = None
@@ -282,10 +279,8 @@ def _parse_step(block: list[str]) -> _Step:
         index += 1
         while index < block_len:
             continuation = block[index]
-            if (
-                continuation.strip()
-                and (len(continuation) - len(continuation.lstrip())) <= key_indent
-            ):
+            cont_indent = len(continuation) - len(continuation.lstrip())
+            if continuation.strip() and cont_indent <= key_indent:
                 break
             body.append(continuation)
             index += 1
@@ -325,12 +320,9 @@ def _parse_step(block: list[str]) -> _Step:
 def audit_workflow(workflow_path: Path = WORKFLOW) -> WorkflowAudit:
     """解析 workflow 并给出完整账本（不抛 :class:`ExtractionMismatchError`）.
 
-    :func:`extract_commands` 与它共用这条路径；测试与诊断用这个入口，是因为它把
-    「拿到了什么」和「本该拿到多少」**一起**返回，调用方可自行核对差异。
-
-    Raises
-    ------
-        FileNotFoundError: workflow 缺失 —— 明说原因，绝不报「0 条命令全过」。
+    :func:`extract_commands` 与它共用这条路径；测试用这个入口，是因为它把「拿到了
+    什么」和「本该拿到多少」**一起**返回，调用方可自行核对差异。workflow 缺失时
+    抛 ``FileNotFoundError``（明说原因），绝不报「0 条命令全过」。
     """
     if not workflow_path.is_file():
         raise FileNotFoundError(
@@ -370,19 +362,14 @@ def extract_commands(workflow_path: Path = WORKFLOW) -> ExtractedCommands:
     ``scripts-tests`` job installs only ``pytest`` and ``ruff``, so a ``PyYAML``
     import here would turn this runner into an ImportError in CI.
 
-    Returns
-    -------
-        One entry per ruff step, in workflow order, as an
-        :class:`ExtractedCommands` (a ``list`` carrying the expected count).
+    Returns one entry per ruff step, in workflow order, as an
+    :class:`ExtractedCommands` (a ``list`` carrying the expected count).
 
-    Raises
-    ------
-        FileNotFoundError: the workflow is missing — fail loud rather than
-            silently report "0 commands, all passed".
-        ExtractionMismatchError: the workflow contains a ruff step this parser could
-            not reduce to exactly one command. **This is the point of the
-            function**: the old version returned a shorter list here and let the
-            caller report success.
+    Raises ``FileNotFoundError`` when the workflow is missing (fail loud rather
+    than report "0 commands, all passed"), and :class:`ExtractionMismatchError`
+    when the workflow contains a ruff step this parser could not reduce to exactly
+    one command. **That second case is the point of this function**: the old
+    version returned a shorter list here and let the caller report success.
     """
     audit = audit_workflow(workflow_path)
     if audit.unparsed:
@@ -449,11 +436,11 @@ def target_paths(command: str) -> list[str]:
     make this very script lie about matching CI. So resolve the paths ourselves
     and refuse to run a command whose targets are not on disk.
 
-    Parsing rules (each exists because a naive version got it wrong — the first
-    cut treated ``check`` and the value of ``--extend-ignore`` as paths and
-    flagged all 14 jobs): the leading ``ruff`` token is dropped by the caller; a
-    token after a :data:`_VALUE_FLAGS` flag is that flag's value, not a path;
-    :data:`_SUBCOMMANDS` are commands, not paths; everything else is a path.
+    Parsing rules (each exists because a naive version got it wrong — the first cut
+    treated ``check`` and ``--extend-ignore``'s value as paths, flagging all 14
+    jobs): the leading ``ruff`` token is dropped by the caller; a token after a
+    :data:`_VALUE_FLAGS` flag is that flag's value, not a path; :data:`_SUBCOMMANDS`
+    are commands, not paths; everything else is a path.
     """
     tokens = command.split()[1:]  # skip the leading "ruff"
     out: list[str] = []
@@ -480,8 +467,7 @@ def preflight(jobs: list[tuple[str, str | None, str]]) -> list[str]:
 
     ``--select``/``--extend-ignore`` take a value, so their arguments look like
     bare tokens. Those values are rule codes (``F821``, ``D101,...``), not paths,
-    and cannot exist on disk. Filter them by shape rather than by position:
-    a value that looks like a rule list is skipped.
+    and cannot exist on disk. Filter them by shape rather than by position.
     """
     problems: list[str] = []
     for name, working_dir, command in jobs:
@@ -507,11 +493,9 @@ def run_all(
     workflow fixture and exercise the **real** parser (rather than monkeypatching
     the extractor away and testing nothing).
 
-    Returns
-    -------
-        ``0`` when the extraction was complete (``extracted == expected``) and
-        every command passed, ``1`` otherwise. Fail-closed: a missing workflow, an
-        incomplete extraction, or a missing ruff are all non-zero.
+    Returns ``0`` when the extraction was complete (``extracted == expected``) and
+    every command passed, ``1`` otherwise. Fail-closed: a missing workflow, an
+    incomplete extraction, or a missing ruff are all non-zero.
     """
     try:
         jobs = extract_commands(workflow_path)
@@ -540,8 +524,7 @@ def run_all(
             print(f"  {name}{where}\n      {command}")
         return 0
 
-    # ★ ruff 缺席 ⇒ 判红。见 ruff_available() 的说明：不挡这一条，
-    #   「环境里没有 ruff」会被读成一次绿色运行。
+    # ★ ruff 缺席 ⇒ 判红（见 ruff_available()）：否则「环境里没有 ruff」会被读成绿。
     if not ruff_available():
         print(
             "✗ 本解释器里**没有 ruff** —— 无法复现 CI 的 lint 步骤。\n"
@@ -551,8 +534,8 @@ def run_all(
         )
         return 1
 
-    # ★ 前置守卫：见 target_paths() 的说明 —— ruff 对不存在的路径**退出 0**，
-    #   故「绿」可能只是「一个文件都没 lint」。先把这种情形挡在跑之前。
+    # ★ 前置守卫：ruff 对不存在的路径**退出 0**（实测），故「绿」可能只是
+    #   「一个文件都没 lint」。把这种情形挡在跑之前。
     missing = preflight(jobs)
     if missing:
         print("✗ 前置检查失败 —— 下列命令的目标路径不在磁盘上：", file=sys.stderr)
@@ -600,7 +583,9 @@ def run_all(
         print()
 
     passed = len(jobs) - len(failures)
-    print(f"=== {passed}/{len(jobs)} CI ruff steps PASS ===")
+    # 输出里两处都给 `extracted/expected`：只看 `passed/total` 的话，一次「丢了一步
+    # 但其余全过」会印成 `13/13 PASS` —— 外观与真全过完全一样，正是缺陷的形态。
+    print(f"=== {passed}/{len(jobs)} CI ruff steps PASS ({len(jobs)}/{expected} extracted) ===")
     if failures:
         print(
             "★ 本地红 = CI 也会红（这些命令就是从 CI 抄的）。\n"

@@ -35,7 +35,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import run_ci_ruff as runner  # noqa: E402
 
-
 # --- 1. 提取：命令来自 workflow，不是重打的 ---------------------------------
 
 
@@ -379,9 +378,7 @@ def test_extract_handles_a_block_scalar_run(tmp_path: Path):
         "          ruff check services/asr --extend-ignore D103\n",
     )
     jobs = runner.extract_commands(workflow)
-    assert [cmd for _n, _w, cmd in jobs] == [
-        "ruff check services/asr --extend-ignore D103"
-    ], jobs
+    assert [cmd for _n, _w, cmd in jobs] == ["ruff check services/asr --extend-ignore D103"], jobs
     assert jobs.expected == 1
 
 
@@ -399,9 +396,9 @@ def test_extract_joins_a_backslash_continued_block(tmp_path: Path):
         "            --extend-ignore D103,D101\n",
     )
     jobs = runner.extract_commands(workflow)
-    assert [cmd for _n, _w, cmd in jobs] == [
-        "ruff check services/asr --extend-ignore D103,D101"
-    ], jobs
+    assert [cmd for _n, _w, cmd in jobs] == ["ruff check services/asr --extend-ignore D103,D101"], (
+        jobs
+    )
 
 
 def test_extract_handles_python_m_ruff(tmp_path: Path):
@@ -416,9 +413,7 @@ def test_extract_handles_python_m_ruff(tmp_path: Path):
         "        run: python -m ruff check services/asr --extend-ignore D103\n",
     )
     jobs = runner.extract_commands(workflow)
-    assert [cmd for _n, _w, cmd in jobs] == [
-        "ruff check services/asr --extend-ignore D103"
-    ], jobs
+    assert [cmd for _n, _w, cmd in jobs] == ["ruff check services/asr --extend-ignore D103"], jobs
 
 
 def test_extract_refuses_an_unsupported_shape_and_names_the_step(tmp_path: Path):
@@ -464,8 +459,7 @@ def test_extract_refuses_two_commands_in_one_step(tmp_path: Path):
     assert "Ruff lint (two commands)" in str(excinfo.value)
 
 
-def test_incomplete_extraction_exits_nonzero(capsys: pytest.CaptureFixture,
-                                             tmp_path: Path):
+def test_incomplete_extraction_exits_nonzero(capsys: pytest.CaptureFixture, tmp_path: Path):
     """★★ 端到端负控：提取不完整 ⇒ 退出码 1，且**不打印任何 PASS**.
 
     ★ 这一条直接对住缺陷的输出层：旧版在丢步时仍打印 `N/N PASS` 并 exit 0。
