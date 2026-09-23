@@ -25,6 +25,7 @@ Run: cd services/webinfer && python -m pytest tests/test_decision_eval_criteria.
 from __future__ import annotations
 
 import json
+import statistics
 import sys
 from pathlib import Path
 
@@ -501,16 +502,141 @@ def test_every_statement_carries_the_same_number_as_its_threshold():
     )
 
 
-def test_statement_number_check_would_catch_a_mismatch(monkeypatch):
-    """★★ 负控：把某条判据的 statement 改成另一个数字 ⇒ 上面的检查必须报出来。"""
+def test_statement_template_forbids_hardcoded_thresholds():
+    """★★ 阈值**只能**经 ``{threshold}`` 占位符出现 —— 不许写死在模板里。
+
+    「同一事实两处数字」这类缺陷的**结构性**修法：阈值不再是「写两遍、靠守卫比对」
+    的两个数，而是**一个数渲两次**。分叉因此**不可表示**。
+    """
+    for criterion in criteria.CRITERIA:
+        assert "{threshold}" in criterion.statement_template, (
+            f"{criterion.criterion_id} 的模板没有 {{threshold}} 占位符 ⇒ 阈值会被写死"
+        )
+    assert criteria.statements_match_bounds() == []
+
+
+def test_statement_guard_catches_a_wrong_number_even_when_the_right_one_appears(
+    monkeypatch,
+):
+    """★★★ 对抗性复核查出的真洞：**子串守卫可被「正确数字恰好出现在别处」绕过**。
+
+    复核用的这一句 —— 「不得超过 99% …（上一基线为 63%）」—— 让初版的
+    ``f"{threshold:.0f}" not in statement`` 保持沉默：``threshold`` 是 63，
+    而「63」确实出现在括号里。于是守卫绿、自检绿、4 条 pytest 绿，
+    **而被发表出去的那句话印着 99%**。
+
+    这与守卫当初要修的那个 HIGH 缺陷**同形态、同后果**。
+    本测试钉住的是：这种绕过**必须**被抓住 —— 靠「未声明的百分数」而不是子串。
+    """
     original = criteria.CRITERIA
-    bad = original[0].__class__(
-        **{**original[0].__dict__, "statement": "非面向句里「开口」的比例不得超过 99%"},
+    first = original[0]
+    bypassed = first.__class__(
+        **{
+            **first.__dict__,
+            "statement_template": (
+                "非面向句里「开口」（response ∪ delegation）的比例不得超过 99%"
+                " —— 这是「乱插」的宽口径（上一基线为 {threshold}%）："
+                "delegation 会触发外部检索与播报，比单纯应答更糟。"
+            ),
+        }
+    )
+    monkeypatch.setattr(criteria, "CRITERIA", (bypassed, *original[1:]))
+    problems = criteria.statements_match_bounds()
+    assert problems, (
+        "「正确数字恰好出现在别处」这种绕过没被抓住 ⇒ 守卫仍是子串匹配，"
+        "与它自称修好的那个 HIGH 缺陷同形态"
+    )
+    assert "99.0" in problems[0]
+    # 自查守卫本身：那处「{threshold}」确实渲染成了 63，故不是靠「找不到 63」抓到的。
+    assert "63%" in bypassed.statement
+
+
+def test_declared_context_percentages_are_required_not_optional(monkeypatch):
+    """★ 语境数字必须**逐个显式声明**，不能默认放过。
+
+    反向对照：把模板里的语境数字**声明**进 ``context_percent`` ⇒ 守卫放行。
+    没有这条，上一条可能是因为「守卫恒报错」而通过的。
+    """
+    original = criteria.CRITERIA
+    first = original[0]
+    with_context = first.__class__(
+        **{
+            **first.__dict__,
+            "statement_template": "不得超过 {threshold}%（旧字段恒为 0.0%）。",
+            "context_percent": (0.0,),
+        }
+    )
+    monkeypatch.setattr(criteria, "CRITERIA", (with_context, *original[1:]))
+    assert criteria.statements_match_bounds() == [], (
+        "已声明的语境数字不该报错 ⇒ 否则守卫是恒报错的，上一条证明不了什么"
+    )
+
+
+def test_self_check_itself_runs_the_statement_guard(monkeypatch):
+    """★★★ 洞的第二半：``self_check()`` 原先**从不调用** ``statements_match_bounds()``。
+
+    一个存在、也有单测、但**不在自检路径上**的守卫，在运行时与没有守卫等效 ——
+    于是「把判据改成恒真式会被自检抓到」这句话对 ``threshold`` 成立，
+    对**被发表出去的那句话**不成立。
+
+    本测试断言：statement 被改坏时，**自检本身**必须转红。
+    """
+    original = criteria.CRITERIA
+    first = original[0]
+    bad = first.__class__(
+        **{
+            **first.__dict__,
+            "statement_template": "不得超过 99%（上一基线为 {threshold}%）。",
+        }
     )
     monkeypatch.setattr(criteria, "CRITERIA", (bad, *original[1:]))
-    problems = criteria.statements_match_bounds()
-    assert problems, "statement 与 threshold 不一致时没被检出 ⇒ 这条守卫是装饰"
-    assert bad.criterion_id in problems[0]
+    assert criteria.self_check() != 0, "statement 被改坏后自检仍通过 ⇒ 该守卫没有接进自检路径"
+
+
+def test_cost_index_guard_arithmetic_is_computed_not_written_down():
+    """★★ 「cost_index 挡不住沉默桩」的算术必须**现算**，不得写死数字。
+
+    对抗性复核逐项核对发现，该结论原先把数字写死在注释与常量里，
+    而**三个数互不相符**：按其算式是 ``100×41/51 = 80.4``、真实产物是 **82.4**、
+    文字写的 **84.3** 两者都不是。这正是本模块反复记的「同一事实两处数字分叉」，
+    只不过分叉的是**注释与代码**。
+
+    ★ 本条同时把算术钉死：桩更便宜 ⟺ ``C_FP/C_FN > (25−FN)/FP``。
+    """
+    arith = criteria.cost_index_cannot_guard_arithmetic()
+    assert arith["silent_units"] == 25, "桩 = C_FN × 25 个漏判单位"
+    assert arith["silent_index"] == 49.0
+    assert arith["silent_is_cheaper"] is True, "结论：沉默桩确实更便宜（故 cost_index 挡不住它）"
+    # 等代价比的代数式：桩更便宜 ⟺ C_FP/C_FN > (25 − FN)/FP。
+    # 用**独立**推法核对一次（不调被测函数）：默认参数 FP=13 / FN=3 ⇒ (25−3)/13。
+    assert arith["break_even_ratio"] == pytest.approx((25 - 3) / 13, abs=1e-3)
+    assert arith["default_ratio"] > arith["break_even_ratio"], (
+        "默认 3:1 必须已越过等代价点，否则「沉默更便宜」这个结论不成立"
+    )
+
+
+@pytest.mark.skipif(not ARTIFACT.exists(), reason="入库产物不在")
+def test_cost_index_guard_arithmetic_matches_the_real_artifact():
+    """★★ 上一条的读数必须与**真产物**逐项吻合（不是自己算自己）。
+
+    默认参数取自入库产物 ``P`` 的中位轮（FP=13 / FN=3）；这里从产物**重新读出**
+    那两个数并比对，于是「注释里的数字」与「产物里的数字」不可能分叉。
+    """
+    loaded = card.load_artifact(ARTIFACT)
+    payload = loaded["variants"]["P_live4_prod_prompt"]
+    blocks = [axis.axis_block(rows, payload["prompt"]) for rows in payload["rounds"]]
+    aggregated = axis.aggregate_axis_blocks(blocks)
+    overall = aggregated["overall"]
+    fp = axis.counter_value(overall, "false_positives")
+    fn = axis.counter_value(overall, "false_negatives")
+    median_fp = int(statistics.median(fp["per_round"]))
+    median_fn = int(statistics.median(fn["per_round"]))
+
+    arith = criteria.cost_index_cannot_guard_arithmetic(median_fp, median_fn)
+    assert arith["production_index"] == overall["cost_index"]["median"], (
+        f"现算 {arith['production_index']} 与产物里的中位读数 "
+        f"{overall['cost_index']['median']} 不一致 ⇒ 算术已与产物分叉"
+    )
 
 
 def test_not_for_me_tokens_must_not_be_the_silence_special_token():

@@ -1078,9 +1078,16 @@ python -m decision_eval_card --json --diff-against <上一份卡片.json>
 > 两个窄口径也照常输出，**差额可见**才是重点。
 >
 > ⚠️ **`cost_index` 单独挡不住「永远沉默」**（实测）：在 25 面向 / 26 非面向的基率下，
-> 平凡沉默桩的加权代价（49.0）**低于**生产 prompt（84.3）—— C_FN×25 小于
-> 3×FP + 1×FN。⇒ 挡住沉默策略的是 **D2/D4 两条召回下限**。卡片里的
+> 平凡沉默桩的加权代价（**49.0**）**低于**生产 prompt（**82.4**）——
+> 桩更便宜 ⟺ `C_FP/C_FN > (25−FN)/FP`；3:1 已越过等代价点（该轮为 1.69）。
+> ⇒ 挡住沉默策略的是 **D2/D4 两条召回下限**。卡片里的
 > `cost_index_always_silent` / `cost_index_always_speaking` 就是为此提供的参照。
+>
+> ⚠️ **本段数字原为「84.3」，已更正为 82.4**（2026-09-23 对抗性复核查出）：
+> 84.3 既不符合其自身算式（`100×41/51 = 80.4`）也不符合产物读数（82.4）——
+> 典型的「同一事实两处数字分叉」。现已改为由
+> `decision_eval_criteria.cost_index_cannot_guard_arithmetic()` **从产物现算**，
+> 并有 `test_cost_index_guard_arithmetic_matches_the_real_artifact` 钉住。
 
 
 

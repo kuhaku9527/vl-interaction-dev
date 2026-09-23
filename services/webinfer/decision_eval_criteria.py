@@ -37,6 +37,7 @@ Self-check: python -m decision_eval_criteria --self-check
 from __future__ import annotations
 
 import argparse
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -146,7 +147,9 @@ class Criterion:
     Attributes
     ----------
         criterion_id: 稳定 id（负控与结果文件都用它引用）。
-        statement: 人读的一句话，含方向与阈值 —— **判据本身必须能被读懂**。
+        statement_template: 人读的一句话，**必须含 ``{threshold}`` 占位符**
+            —— 阈值由渲染时插值，**不写死在模板里**。
+        context_percent: 模板里**合法出现**的其它百分数（非阈值）。
         metric: :func:`decision_eval_axis.axis_metrics` 产出的指标名。
         direction: ``"upper"``（越小越好）或 ``"lower"``（越大越好）。
         threshold: 阈值，取自 :data:`BOUNDS`。
@@ -161,13 +164,32 @@ class Criterion:
     """
 
     criterion_id: str
-    statement: str
+    statement_template: str
     metric: str
     direction: str
     threshold: float
     source: str
     scope: tuple[str, ...] = ("overall",)
     min_denominator: str | None = None
+    #: 模板里**合法**出现的其它百分数（例如「旧字段恒为 0.0%」这类语境数字）。
+    #: ★ 必须**逐个显式声明**，不能默认放过 —— 见 :func:`statements_match_bounds`
+    #: 与模块底部「published statement 不得与 threshold 分叉」那段。
+    context_percent: tuple[float, ...] = ()
+
+    @property
+    def statement(self) -> str:
+        """渲染后的判据文本 —— 阈值由模板占位符插值而来.
+
+        ★ 这是「同一事实两处数字」这一类缺陷的**结构性**修法：
+        阈值不再是「写两遍、靠守卫比对」的两个数，而是**一个数渲两次**。
+        分叉因此**不可表示**，而不是「可以被检测」。
+
+        背景：本模块初版把阈值写死在 statement 里（「54%」「27%」…）而
+        ``threshold`` 是 63/21/17/101；补的子串守卫又被对抗性复核用
+        「不得超过 99%（上一基线为 63%）」绕过 —— 因为「63」确实**出现**在句子里。
+        子串匹配永远可以被「正确数字恰好出现在别处」骗过；占位符插值不能。
+        """
+        return self.statement_template.format(threshold=f"{self.threshold:.0f}")
 
     def evaluate(self, block: dict) -> dict:
         """对一张定向轴卡片作出 PASS / FAIL / 无法测量 的判定.
@@ -243,6 +265,46 @@ class Criterion:
         }
 
 
+def cost_index_cannot_guard_arithmetic(
+    false_positives: int = 13, false_negatives: int = 3, cost_fp: int = 3, cost_fn: int = 1
+) -> dict:
+    """现算「为什么 cost_index 挡不住沉默桩」—— 不写死任何数字.
+
+    Args:
+        false_positives: 生产 prompt 的误响应数（默认取入库产物 ``P`` 的**中位轮**）。
+        false_negatives: 生产 prompt 的漏判数（同上）。
+        cost_fp: 误响应代价权重。
+        cost_fn: 漏判代价权重。
+
+    Returns
+    -------
+        ``{silent_units, production_units, silent_index, production_index,
+        break_even_ratio, default_ratio, silent_is_cheaper}``。
+
+    ★ 存在的理由：这段结论原先以**写死的数字**写在注释与常量里，
+    而对抗性复核逐项核对发现三个数互不相符（算式 80.4 / 真实 82.4 / 文字 84.3）。
+    数字一旦写两遍就会分叉 —— 这里的做法是**只留代数式，数字现算**，
+    并由 ``test_cost_index_guard_arithmetic_matches_the_artifact`` 钉在真产物上。
+    """
+    n_directed, n_nondirected = 25, 26
+    total = n_directed + n_nondirected
+    silent_units = cost_fn * n_directed
+    production_units = cost_fp * false_positives + cost_fn * false_negatives
+    # 桩更便宜 ⟺ cost_fp*FP + cost_fn*FN > cost_fn*25 ⟺ cost_fp/cost_fn > (25−FN)/FP
+    break_even = (
+        round((n_directed - false_negatives) / false_positives, 4) if false_positives else None
+    )
+    return {
+        "silent_units": silent_units,
+        "production_units": production_units,
+        "silent_index": round(100.0 * silent_units / total, 1),
+        "production_index": round(100.0 * production_units / total, 1),
+        "break_even_ratio": break_even,
+        "default_ratio": round(cost_fp / cost_fn, 4),
+        "silent_is_cheaper": silent_units < production_units,
+    }
+
+
 def _resolve_scope(block: dict, scope: tuple[str, ...]) -> dict:
     """按 ``("by_subset", "generalization")`` 这类路径取子块；缺则给空 dict."""
     node: object = block
@@ -265,9 +327,8 @@ def _resolve_scope(block: dict, scope: tuple[str, ...]) -> dict:
 CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         criterion_id="D1-nondirected-no-spurious",
-        statement=(
-            "非面向句里「开口」（response ∪ delegation）的比例不得超过 "
-            f"{BOUNDS['nondirected_spurious_response_rate_pct']:.0f}%"
+        statement_template=(
+            "非面向句里「开口」（response ∪ delegation）的比例不得超过 {threshold}%"
             " —— 这是「乱插」的宽口径：delegation 会触发外部检索与播报，比单纯应答更糟。"
         ),
         metric="nondirected_spurious_response_rate_pct",
@@ -278,12 +339,12 @@ CRITERIA: tuple[Criterion, ...] = (
     ),
     Criterion(
         criterion_id="D2-directed-nonresponse",
-        statement=(
-            "面向句里「不开口」的比例不得超过 "
-            f"{BOUNDS['directed_nonresponse_rate_pct']:.0f}% —— 宽口径："
+        statement_template=(
+            "面向句里「不开口」的比例不得超过 {threshold}% —— 宽口径："
             "被 </not-for-me> 误杀与被 </silence> 吞掉**同罪**"
             "（旧字段只数前者，故恒为 0.0%）。"
         ),
+        context_percent=(0.0,),
         metric="directed_nonresponse_rate_pct",
         direction="upper",
         threshold=BOUNDS["directed_nonresponse_rate_pct"],
@@ -292,9 +353,8 @@ CRITERIA: tuple[Criterion, ...] = (
     ),
     Criterion(
         criterion_id="D3-not-for-me-precision",
-        statement=(
-            "判成 not-for-me 的句子里，真实非面向的比例不低于 "
-            f"{BOUNDS['not_for_me_precision_pct']:.0f}%"
+        statement_template=(
+            "判成 not-for-me 的句子里，真实非面向的比例不低于 {threshold}%"
             " —— ★ 附非退化守卫：一条 not-for-me 都没预测时判「无法测量」，"
             "不得判绿（这正是旧判据被刷过的方式）。"
         ),
@@ -311,9 +371,8 @@ CRITERIA: tuple[Criterion, ...] = (
     ),
     Criterion(
         criterion_id="D4-not-for-me-recall-generalization",
-        statement=(
-            "**泛化子集**上 not-for-me 召回率不低于 "
-            f"{BOUNDS['not_for_me_recall_pct_generalization']:.0f}%（开卷子集不计入）"
+        statement_template=(
+            "**泛化子集**上 not-for-me 召回率不低于 {threshold}%（开卷子集不计入）"
             " —— 生产 prompt 的 few-shot 与测试集逐字重叠 10 句，"
             "混算会把记忆当成能力。"
         ),
@@ -326,12 +385,12 @@ CRITERIA: tuple[Criterion, ...] = (
     ),
     Criterion(
         criterion_id="D5-cost-index",
-        statement=(
-            "代价加权主指标 cost_index ≤ "
-            f"{BOUNDS['cost_index']:.0f}（每 100 例里 3×误响应 + 1×漏判）"
+        statement_template=(
+            "代价加权主指标 cost_index ≤ {threshold}（每 100 例里 3×误响应 + 1×漏判）"
             " —— 单一 accuracy 已被本工单否决：它在两类错误上等权，"
             "而项目两类错误代价明确不对称。"
         ),
+        context_percent=(100.0,),
         metric="cost_index",
         direction="upper",
         threshold=BOUNDS["cost_index"],
@@ -340,25 +399,64 @@ CRITERIA: tuple[Criterion, ...] = (
 )
 
 
+_PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+
+
+def statement_percentages(criterion: Criterion) -> set[float]:
+    """抽出 ``statement`` 里所有百分数（**不含**由占位符插值进来的那一个）.
+
+    做法：把渲染后的文本里**恰好是阈值的那一处**换成占位符再扫，
+    于是「阈值自己」不会被重复计入，而其它数字全部浮现。
+    """
+    rendered = criterion.statement
+    marker = "\x00THRESHOLD\x00"
+    # 只替换一次：模板只允许一个阈值位。
+    rendered = rendered.replace(f"{criterion.threshold:.0f}%", marker, 1)
+    return {float(m) for m in _PERCENT_RE.findall(rendered)}
+
+
 def statements_match_bounds() -> list[str]:
-    """★ 自检用：``statement`` 里出现的数字是否与 ``threshold`` 一致.
+    """★ 自检用：``statement`` 里的百分数**除了阈值**必须都在白名单里.
 
     Returns
     -------
-        不一致的说明列表（空 = 全部一致）。
+        有问题的说明列表（空 = 全部一致）。
 
-    存在的理由：``statement`` 是随卡片落进 JSON、供门禁作者照抄的那句话。
-    它与 ``threshold`` 是**同一个事实的两处呈现**，因此必须有东西钉住它们 ——
-    否则「阈值有出处、不会静默分叉」这条声明只对 ``threshold`` 成立，
-    而对**被发表出去的那一句话**不成立（评审查出的 HIGH 缺陷）。
+    ★ 为什么不是「阈值是否出现在句子里」这种子串检查
+    ------------------------------------------------
+    初版守卫就是子串检查（``f"{threshold:.0f}" not in statement``），
+    被对抗性复核用这一句绕过::
+
+        「…不得超过 99% —— 这是「乱插」的宽口径（上一基线为 63%）…」
+
+    ``threshold`` 是 63，「63」确实**出现在句子里**（在括号里），于是守卫沉默、
+    自检绿、4 条 pytest 绿 —— 而被发表出去的那句话印着 **99%**。
+    这与守卫当初要修的那个 HIGH 缺陷**同形态、同后果**。
+
+    ⇒ 子串匹配永远可以被「正确数字恰好出现在别处」骗过。故现在的规矩是:
+
+    1. 阈值**只能**经 ``{threshold}`` 占位符出现（模板里不许写死）；
+    2. 句子里任何**其它**百分数都必须在 ``context_percent`` 里**逐个声明**；
+    3. 未声明的数字 ⇒ 报错（不静默放过）。
+
+    于是「同一个事实有两个数字」这件事**不可表示**，而不是「可以被检测」。
     """
     problems: list[str] = []
     for criterion in CRITERIA:
-        expected = f"{criterion.threshold:.0f}"
-        if expected not in criterion.statement:
+        if "{threshold}" not in criterion.statement_template:
             problems.append(
-                f"{criterion.criterion_id}: threshold={criterion.threshold}，"
-                f"但 statement 里找不到「{expected}」—— 两处数字已分叉"
+                f"{criterion.criterion_id}: statement_template 里没有 {{threshold}} 占位符 "
+                "⇒ 阈值会被写死在文本里，与 threshold 分叉"
+            )
+            continue
+        allowed = set(criterion.context_percent)
+        extra = statement_percentages(criterion) - allowed
+        if extra:
+            problems.append(
+                f"{criterion.criterion_id}: statement 里出现未声明的百分数 {sorted(extra)} "
+                f"（threshold={criterion.threshold}，已声明语境值={sorted(allowed)}）"
+                " —— 作者会照抄这句话，两处数字分叉就是缺陷；"
+                "若该数字确属语境（如「旧字段恒为 0.0%」），请显式加进 context_percent"
             )
     return problems
 
@@ -366,8 +464,14 @@ def statements_match_bounds() -> list[str]:
 #: ★ **实测逼出来的一条边界**（不是设计出来的，故单列而不做判据）：
 #:
 #: 在本测试集的基率下（25 面向 / 26 非面向），**「永远沉默」这个平凡桩的加权代价
-#: 比生产 prompt 更低**：`C_FP:C_FN = 3:1` 时，桩的代价是 ``1×25 = 25`` 个单位，
-#: 而生产 prompt 是 ``3×12 + 1×5 = 41`` 个单位（实测 cost_index 中位 49.0 vs 84.3）。
+#: 比生产 prompt 更低**。代数量化：桩的代价是 ``C_FN×25`` 个单位，生产 prompt 是
+#: ``C_FP×FP + C_FN×FN`` 个单位 ⇒ 桩更便宜 ⟺  ``C_FP/C_FN > (25−FN)/FP``。
+#:
+#: ★ 那些数**不在这里写死**（由 :func:`cost_index_cannot_guard_arithmetic` 现算）——
+#: 本条注释初版写死了「3×12 + 1×5 = 41，中位 49.0 vs 84.3」，而对抗性复核逐项核对发现
+#: **三个数互不相符**：按其算式是 ``100×41/51 = 80.4``，真实产物是 **82.4**，
+#: 而文字写的 84.3 两者都不是。这正是本模块反复记的「同一事实两处数字分叉」形态，
+#: 只不过这次分叉的是**注释与代码**。⇒ 现在只留代数式，数字由函数从产物现算。
 #:
 #: ⇒ **`cost_index` 单独挡不住「沉默刷分」**。真正挡住那个桩的是 D2（面向句非响应率）
 #: 与 D4（泛化召回）：它们让「什么都不说」当场判红。
@@ -378,8 +482,8 @@ def statements_match_bounds() -> list[str]:
 #: 判据会让 #159 的门禁从第一天起就没法用，也会诱使人去放宽阈值而不是去看问题。
 #: 记成一条**可读的实测事实**既留了痕，又不越权。
 COST_INDEX_CANNOT_GUARD_AGAINST = (
-    "「永远沉默」的桩。实测其 cost_index（49.0）低于生产 prompt（84.3）："
-    "在 25/26 的基率下，C_FP:C_FN=3:1 赋予漏判的代价乘以 25 仍小于误响应乘以 12。"
+    "「永远沉默」的桩。在 25/26 的基率下，C_FP:C_FN=3:1 赋予漏判的代价乘以 25 "
+    "仍小于生产 prompt 的误响应代价 —— 见 cost_index_cannot_guard_arithmetic() 现算的数值。"
     "⇒ 挡住沉默策略的是 D2/D4 两条召回下限，不是代价指数。"
     "卡片里的 cost_index_always_silent / cost_index_always_speaking 就是为此提供的参照。"
 )
@@ -843,6 +947,13 @@ def self_check() -> int:
     baseline_verdicts = _verdict_map(_block(baseline_rounds, card_mod.synthetic_prompt()))
 
     problems: list[str] = []
+
+    # 0. ★★ **判据文本与阈值的分叉守卫必须由自检自己调用**。
+    #    对抗性复核查出的第二半缺陷：`statements_match_bounds()` 存在、也被单测覆盖，
+    #    但 `self_check()` **从不调用它** ⇒ 「把判据改成恒真式会被自检抓到」这句话，
+    #    只对 `threshold` 成立，对**被发表出去的那句话**不成立。
+    #    一个存在但不在自检路径上的守卫，与没有守卫在运行时的效果相同。
+    problems.extend(statements_match_bounds())
 
     # 1 & 5. 覆盖完整性：以**卡片实际产出的判据集合**为准。
     card_criteria_ids = {item["criterion_id"] for item in card_mod.criteria_registry()}
