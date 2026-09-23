@@ -56,7 +56,7 @@ dev = [
 joyvl-webinfer-adapter = "live_adapter:main"
 
 [tool.setuptools]
-# All 30 top-level modules shipped by this adapter package.
+# All 34 top-level modules shipped by this adapter package.
 # Keep this list in sync with the *.py files at the package root
 # (excluding the tests/ subpackage, which is not a top-level module).
 # See the package-smoke CI job for a regression gate; that gate only
@@ -69,11 +69,15 @@ py-modules = [
     "chat_payload",
     "config",
     "decision_eval_axis",
+    "decision_eval_bounds",
     "decision_eval_card",
     "decision_eval_criteria",
+    "decision_eval_report",
     "decision_eval_rounds",
     "decision_eval_score",
     "decision_eval_set",
+    "decision_eval_sources",
+    "decision_eval_synthetic",
     "decision_events",
     "frame_parsing",
     "infer_loop",

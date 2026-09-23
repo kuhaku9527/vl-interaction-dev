@@ -24,6 +24,7 @@ Run: cd services/webinfer && python -m pytest tests/test_decision_eval_criteria.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -37,6 +38,9 @@ if str(ROOT) not in sys.path:
 import decision_eval_axis as axis  # noqa: E402
 import decision_eval_card as card  # noqa: E402
 import decision_eval_criteria as criteria  # noqa: E402
+from decision_eval_set import (  # noqa: E402
+    GROUP_NONDIRECTED,
+)
 
 ARTIFACT = REPO_ROOT / card.DEFAULT_ARTIFACT
 
@@ -306,12 +310,51 @@ def test_drift_report_is_honest_about_a_regenerated_artifact():
     drift = card.bound_drift_report()
     assert drift["exists"] is True
     assert isinstance(drift["artifact_sha256"], str) and len(drift["artifact_sha256"]) == 64
+    # ★ 不变式（与产物是否重跑无关，故两边都要断言）：
+    #   报告必须**同时**给出两个哈希与按当前产物重算的阈值 —— 三样缺一，
+    #   读者就无法自己判断「产物是否还是基线那一份」。
+    assert drift["snapshot_sha256"] != drift["artifact_sha256"] or drift["sha_matches_snapshot"]
     if drift["sha_matches_snapshot"]:
+        # 同一份产物 ⇒ 重算必须逐项等于声明值且差值为零。
+        assert drift["recomputed_from_artifact"] == drift["declared"]
         assert all(delta == 0.0 for delta in drift["deltas"].values())
     else:
-        # 产物被重跑过：必须如实给出差值，而不是继续声称一致。
+        # 产物被重跑过：必须如实给出重算值（不是 None、不是继续声称一致）。
         assert drift["recomputed_from_artifact"] is not None
-        assert any(delta != 0.0 for delta in drift["deltas"].values()) or True
+        assert set(drift["deltas"]) == set(drift["declared"])
+        assert drift["recomputed_from_artifact"] != drift["declared"]
+
+
+def test_drift_report_notices_a_tampered_artifact(tmp_path):
+    """★★ 负控：把产物**改坏**（明显退化）⇒ 报告必须检出并给出正差值。
+
+    这是上一条的可证伪形态。没有它，「sha_matches_snapshot 为 False 时如实报差值」
+    这段逻辑从没被执行过 —— 而它恰恰是防「线跟着退化挪走」的那段。
+
+    做法：把入库产物复制到临时目录，把某一轮的非面向决策**全改成开口**
+    （误响应率必然暴涨），再让报告读它。
+    """
+    import shutil
+
+    tampered = tmp_path / "rounds.json"
+    shutil.copyfile(ARTIFACT, tampered)
+    payload = json.loads(tampered.read_text(encoding="utf-8"))
+    variant = next(iter(payload["results"]))
+    for rows in payload["results"][variant]["per_round_rows"]:
+        for row in rows:
+            if row["expected"] == "nondirected":
+                row["decision"] = "response"
+                row["first_token_id"] = 151670
+    tampered.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8", newline="\n")
+
+    drift = card.bound_drift_report(tampered)
+    assert drift["exists"] is True
+    assert drift["sha_matches_snapshot"] is False, "改坏后的产物不该再匹配快照 sha"
+    assert drift["recomputed_from_artifact"] is not None
+    assert drift["deltas"]["nondirected_spurious_response_rate_pct"] > 0, (
+        "把非面向句全判成开口后，按新产物算的误响应率阈值必须**升高** —— "
+        "否则说明这段漂移检测根本没在读产物"
+    )
 
 
 def test_drift_report_reports_a_missing_artifact_as_not_matching(tmp_path):
@@ -435,3 +478,129 @@ def test_self_check_is_falsifiable_by_a_broken_criterion(monkeypatch):
     finally:
         criteria.CRITERIA = original
     assert result != 0, "把判据改成恒真后自检仍通过 ⇒ 这个自检是装饰"
+
+
+# ---------------------------------------------------------------------------
+# 6. ★ /code-review 查出并修掉的三处（每条都有负控，防复发）
+# ---------------------------------------------------------------------------
+
+
+def test_every_statement_carries_the_same_number_as_its_threshold():
+    """★★ HIGH：``statement`` 与 ``threshold`` 必须说同一个数字。
+
+    评审查出：初版把「54%」「27%」「19%」「≤93」写死在 ``statement`` 里，
+    而 ``threshold`` 是 63/21/17/101 —— **同一份产出的两处数字互相矛盾**。
+    而 ``statement`` 会随卡片落进 JSON，正是门禁作者会照抄的那句话；
+    ``--verify-bounds`` 只守 ``threshold``，于是这处分叉没有任何东西挡着。
+
+    「阈值有出处、不会静默分叉」这条声明，若只对内部字段成立、
+    对**发表出去的那句话**不成立，那它就只是一半的保证。
+    """
+    assert criteria.statements_match_bounds() == [], (
+        "statement 里的数字与 threshold 分叉了：" + str(criteria.statements_match_bounds())
+    )
+
+
+def test_statement_number_check_would_catch_a_mismatch(monkeypatch):
+    """★★ 负控：把某条判据的 statement 改成另一个数字 ⇒ 上面的检查必须报出来。"""
+    original = criteria.CRITERIA
+    bad = original[0].__class__(
+        **{**original[0].__dict__, "statement": "非面向句里「开口」的比例不得超过 99%"},
+    )
+    monkeypatch.setattr(criteria, "CRITERIA", (bad, *original[1:]))
+    problems = criteria.statements_match_bounds()
+    assert problems, "statement 与 threshold 不一致时没被检出 ⇒ 这条守卫是装饰"
+    assert bad.criterion_id in problems[0]
+
+
+def test_not_for_me_tokens_must_not_be_the_silence_special_token():
+    """★★ MEDIUM：``not-for-me`` 行的 token 证据也必须被校验。
+
+    评审查出的反例：把每一行 ``not-for-me`` 的 token 换成 ``[151669]``
+    （``</silence>``，即模型实际吐的是沉默而非 not-for-me）**不触发任何判据** ——
+    因为早先只对 ``silence`` 做矛盾检查，``not-for-me`` 一侧的「证据」
+    实际上从未被看过。而「token 级证据区分判定沉默与空输出」正是本工单的核心 AC。
+    """
+    row = {
+        "id": "N1",
+        "expected": GROUP_NONDIRECTED,
+        "decision": "not-for-me",
+        "ok": True,
+        "emitted_token_ids": [151669],
+    }
+    assert axis.quiet_evidence(row) == axis.EVIDENCE_CONTRADICTORY, (
+        "not-for-me 却吐了 </silence> 的 special token ⇒ 必须判为矛盾"
+    )
+    # 反向对照：真实的 not-for-me token 形态（</ + not + - + for + -me>）必须放行。
+    real = {**row, "emitted_token_ids": [151670, 222, 99507]}
+    assert axis.quiet_evidence(real) == axis.EVIDENCE_EVIDENCED
+
+
+def test_swapping_not_for_me_evidence_to_silence_fires_a_criterion():
+    """★ 上一条的端到端形态：整轮改写后必须有判据判红（而不只是函数级断言）。"""
+    rounds = _rounds()
+
+    def swap(rows: list[dict]) -> list[dict]:
+        return [
+            {**row, "emitted_token_ids": [151669, 151645]}
+            if row["decision"] == "not-for-me"
+            else dict(row)
+            for row in rows
+        ]
+
+    verdicts = _verdicts(criteria._every_round(swap)(rounds))
+    assert verdicts["S4-no-unattributed-quiet"] == criteria.VERDICT_FAIL, (
+        "把 not-for-me 的证据换成沉默 token 后，S4 必须判红 —— 否则该证据从未被校验"
+    )
+
+
+def test_s3_is_unmeasurable_when_the_evidence_coverage_block_is_missing():
+    """★★ LOW：覆盖块**整体缺失**时 S3 不得判绿（fail-open 修正）。
+
+    评审查出：``structural_checks({})`` 原先返回 S3 = PASS ——
+    ``coverage.get(...)`` 返回 ``None``，``not None`` 为真 ⇒ 判绿。
+    而「覆盖块缺失」意味着**这次测量没留下可比对的证据**，
+    与「一条都不缺」是两件事。缺输入被当成通过，是本仓最贵的那一类缺陷。
+    """
+    verdicts = {item["criterion_id"]: item["verdict"] for item in criteria.structural_checks({})}
+    assert verdicts["S3-token-evidence-complete"] == criteria.VERDICT_UNMEASURABLE
+    assert verdicts["S3-token-evidence-complete"] != criteria.VERDICT_PASS
+
+
+def test_s3_verdict_has_three_reachable_states():
+    """★ S3 的三态**都可达**（否则「三值」只是说说）。"""
+    assert criteria._s3_verdict({}) == criteria.VERDICT_UNMEASURABLE
+    assert criteria._s3_verdict({"quiet_rows": 0, "rows_without_token_evidence": 0}) == (
+        criteria.VERDICT_UNMEASURABLE
+    )
+    assert criteria._s3_verdict({"quiet_rows": 5, "rows_without_token_evidence": 0}) == (
+        criteria.VERDICT_PASS
+    )
+    assert criteria._s3_verdict({"quiet_rows": 5, "rows_without_token_evidence": 2}) == (
+        criteria.VERDICT_FAIL
+    )
+
+
+@pytest.mark.parametrize("criterion_id", list(criteria.STRUCTURAL_CRITERIA))
+def test_every_structural_criterion_can_be_driven_to_fail(criterion_id):
+    """★★ 父 spec §七对 S1–S5 同样适用：每条结构性判据都必须**能判红**。
+
+    评审查出的缺口：``test_self_check_is_falsifiable_by_a_broken_criterion``
+    只 monkeypatch 了 ``Criterion.evaluate``（指标判据），
+    而 S1–S5 是 dict 驱动的、没有对应的可证伪性证明。
+    本测试为每条结构性判据构造一份「必须让它判红」的输入。
+    """
+    builders = {
+        "S1-denominators-present": lambda: criteria._drop_group(GROUP_NONDIRECTED)(_rounds()),
+        "S2-no-round-errors": lambda: criteria._every_round(criteria._mark_failed)(_rounds()),
+        "S3-token-evidence-complete": lambda: criteria._every_round(
+            lambda rows: [
+                {k: v for k, v in row.items() if k != "emitted_token_ids"} for row in rows
+            ]
+        )(_rounds()),
+    }
+    assert criterion_id in builders, f"{criterion_id} 没有可证伪性构造 —— 请在 builders 里补上"
+    verdicts = _verdicts(builders[criterion_id]())
+    assert verdicts[criterion_id] == criteria.VERDICT_FAIL, (
+        f"{criterion_id} 的故意做错的输入没有让它判红（实际 {verdicts[criterion_id]}）"
+    )

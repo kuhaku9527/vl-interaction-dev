@@ -34,9 +34,24 @@
 > 报 P2 = **100%** / P = **0.0%（分母退化）**，看起来「达标」；而把**真正会出声**的
 > 路径（`response` ∪ `delegation`）算进来后，非面向句误响应率是 **34.6% / 50.0%**。
 
-**装置**：`services/webinfer/decision_eval_axis.py`（宽窄口径 + 代价加权 + token 证据）、
-`decision_eval_criteria.py`（判据 + 负控 + 冻结基线快照）、`decision_eval_card.py`（一条命令出卡）。
-三者均在 **CI 的 pytest 矩阵内**（放 `services/scripts/` 会永不被收集 —— #152 的形态）。
+**装置**（六个模块，按「一个模块一个变化原因」拆分 —— `coding-standards.md` §7）：
+
+| 模块 | 职责 | 行数 |
+|---|---|---|
+| `decision_eval_axis.py` | 怎么算：宽窄口径 + 代价加权 + token 证据 + 跨轮聚合 | 717 ⚠️ |
+| `decision_eval_criteria.py` | 怎么判：判据 + 负控 + 冻结基线快照 | 946 ⚠️ |
+| `decision_eval_sources.py` | 从哪读：产物 → 逐轮行（卡片与阈值核验共用） | 113 |
+| `decision_eval_synthetic.py` | 离线夹具（三处共用同一份，不各自造） | 90 |
+| `decision_eval_bounds.py` | 阈值出处核验 + 漂移报告 | 188 |
+| `decision_eval_report.py` | 怎么印 / 怎么 diff | 257 |
+| `decision_eval_card.py` | **组装成一张卡 + CLI**（公开入口，再导出下层符号） | 704 |
+
+全部在 **CI 的 pytest 矩阵内**（放 `services/scripts/` 会永不被收集 —— #152 的形态）。
+
+> ⚠️ `axis` 与 `criteria` 仍在 §7 的 600 行「smell」之上（但已低于 1000 行「problem」线）。
+> 两者的大头是**判据与负控的说明性文本**（每条判据都带出处与「为什么这么定」），
+> 这些文字是交付物的一部分（供后人复核判据是否仍有效），压缩它们等于删证据。
+> 若继续增长，按「判据定义 / 负控 / 结构性守卫」再拆。</
 
 **命令**：`cd services/webinfer && python -m decision_eval_card`　**退出码**：`1`
 （两个 variant 的 `D4` 判红 ⇒ 判定 FAIL 映射为 1；**「无法测量」映射为 2，永不返回 0**）
@@ -109,11 +124,11 @@ verdict: PASS（卡片全部 10 条判据各有负控；13 个故意做错的输
 | 阈值核验 | `python -m decision_eval_card --verify-bounds` | **5/5 一致**（`declared == derive(snapshot)`）；产物 sha 仍等于快照绑定值 | 离线 | 2026-09-23T13:2x |
 | 判据负控自检 | `python -m decision_eval_criteria --self-check` | **PASS**，13 个负控全部按声明判红 | 离线 | 2026-09-23T13:2x |
 | 卡片自检（含单轮判红 + 永远沉默桩） | `python -m decision_eval_card --self-check` | **PASS** | 离线 | 2026-09-23T13:2x |
-| 定向轴行为测试 | `python -m pytest tests/test_decision_eval_axis.py -q` | **35 passed** | 离线 | 2026-09-23T13:2x |
-| 判据/负控行为测试 | `python -m pytest tests/test_decision_eval_criteria.py -q` | **38 passed** | 离线 | 2026-09-23T13:2x |
+| 定向轴行为测试 | `python -m pytest tests/test_decision_eval_axis.py -q` | **35 passed** | 离线 | 2026-09-23T13:5x |
+| 判据/负控行为测试 | `python -m pytest tests/test_decision_eval_criteria.py -q` | **48 passed**（含评审后补的 10 条） | 离线 | 2026-09-23T13:5x |
 | 卡片行为测试 | `python -m pytest tests/test_decision_eval_card.py -q` | **28 passed** | 离线 | 2026-09-23T13:2x |
-| webinfer 全量 | `python -m pytest -o asyncio_mode=auto -q` | **707 passed**（#165 时 602 → 本轮 **+105**） | 离线 | 2026-09-23T13:2x |
-| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,…` + `ruff format --check` | **All checks passed** / 78 files already formatted | 离线 | 2026-09-23T13:2x |
+| webinfer 全量 | `python -m pytest -o asyncio_mode=auto -q` | **717 passed**（#165 时 602 → 本轮 **+115**） | 离线 | 2026-09-23T13:5x |
+| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,…` + `ruff format --check` | **All checks passed** / 82 files already formatted | 离线 | 2026-09-23T13:5x |
 | 行尾核验 | `git diff --numstat` 对比 `--ignore-cr-at-eol` | 一**致**（产物写入显式 `newline="\n"`） | 离线 | 2026-09-23T13:2x |
 
 **★ 产物必须带 token 级证据（否则 AC 在数据上不可能成立）**
@@ -126,6 +141,30 @@ verdict: PASS（卡片全部 10 条判据各有负控；13 个故意做错的输
 > ⚠️ 未产出 token 列表时投影写 **`None`（无证据）而不是 `0`（零输出）**：
 > 两者含义相反（「没采集到」vs「模型什么都没吐」），混起来正是本工单要消除的混淆。
 > 有专门的负控测试钉住这一点（`test_round_projection_reports_missing_token_evidence_as_none_not_zero`）。
+
+**★ `/code-review` 两轴各查出真缺陷（本轮全部修掉）**
+
+**Standards 轴**（2 处真缺陷）：
+① **两条恒真断言** —— `assert ... or True`（`test_decision_eval_criteria.py`、
+`test_decision_eval_card.py` 各一处）。★ 在一份以「可证伪」为主题的改动里写恒真断言，
+正是本工单要消灭的病；已换成真正的不变式，并为原先没被执行的「产物漂移」分支
+补了一个**篡改产物**的负控。
+② **模块越线**：`decision_eval_card.py` 1172 行 > §7 的 1000 行「problem」线 ⇒ 按职责拆成
+六个模块（见上表，最大 703 行）。
+
+**Spec 轴**（3 处真缺陷，拿真反例证出来的）：
+① **HIGH —— 阈值的「发表版」与「执行版」分叉**：`Criterion.statement` 里写死了
+「54%」「27%」「19%」「≤93」，而 `threshold` 是 63/21/17/101。`statement` 会随卡片
+落进 JSON，**正是门禁作者会照抄的那句话**，而 `--verify-bounds` 只守 `threshold`。
+⇒ 改为 f-string 从 `BOUNDS` 插值 + `statements_match_bounds()` + 配套负控。
+② **MEDIUM —— `not-for-me` 的 token 证据从未被校验**：把每一行 `not-for-me` 的 token
+换成 `[151669]`（模型其实吐的是沉默）**不触发任何判据**。⇒ 补上该侧矛盾检查 + 负控。
+③ **LOW —— `structural_checks({})` 的 S3 fail-open**：覆盖块**整体缺失**时
+`.get()` 返回 `None`、`not None` 为真 ⇒ **判绿**。⇒ 改三值（缺块/无对象 ⇒ 无法测量）。
+
+评审同时**证伪失败**的三条声明（即它们成立）：永远沉默的桩确实判红且 D3 判「无法测量」；
+负控非装饰（恒等对照 + `must_not_pass` + 覆盖完整性都是机器强制的，评审未能造出装饰性负控）；
+`BOUNDS` 本身确实 sha 绑定、5/5 重算一致。
 
 **★ 本轮修的四类缺陷（全部由**自检/测试**发现，不是我先想对的）**
 

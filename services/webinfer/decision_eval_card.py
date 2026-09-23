@@ -8,7 +8,7 @@
     python -m decision_eval_card --json          # 结构化，供门禁 / diff
     python -m decision_eval_card --self-check    # 离线负控自检（不需要模型）
     python -m decision_eval_card --show-bounds   # 阈值 + 出处
-    python -m decision_eval_card --verify-bounds # 从产物**重算**阈值并比对
+    python -m decision_eval_card --verify-bounds # 从**冻结快照**重算阈值并比对
     python -m decision_eval_card --diff-against FILE
 
 这张卡回答一个问题：**「它该不该开口，判断得对不对」**。
@@ -22,8 +22,8 @@
 2. **多轮取中位 + 离散度**（复用 :mod:`.decision_eval_rounds` 已实测过的聚合）：
    单轮数字已被证明不可作点估计（同一配置三次真机跑的误响应率中位 38.5→26.9→46.2）。
 3. **判据自带出处与负控**（:mod:`.decision_eval_criteria`）：
-   ``--verify-bounds`` 从**已入库产物重算**阈值，与代码里声明的常量比对；
-   不一致即报错。于是常量与它的证据**没法**静默分叉。
+   ``--verify-bounds`` 从**冻结基线快照**重算阈值并与声明值比对，不一致即报错；
+   而产物若被重跑过，:mod:`.decision_eval_bounds` 的漂移报告会把它**报出来**。
 
 ★ 一张卡同时说清「分数」与「这份分数能不能信」
 -----------------------------------------------
@@ -31,203 +31,125 @@
 哪些行有 token 级证据、哪几轮被聚合、开卷/泛化如何分列。**只读分数不读这两块**，
 就会重犯「precision 100% 而召回 0%」那次事故 —— 数字是真的，结论是错的。
 
+模块划分（``coding-standards.md`` §7：一个模块一个变化原因）
+------------------------------------------------------------
+================================================================  ==========================
+:mod:`.decision_eval_axis`                                          怎么算（宽窄口径 / 代价 / token 证据 / 聚合）
+:mod:`.decision_eval_criteria`                                      怎么判（判据 / 负控 / 冻结快照）
+:mod:`.decision_eval_sources`                                       从哪读（产物 → 逐轮行）
+:mod:`.decision_eval_synthetic`                                     离线夹具（负控自检用）
+:mod:`.decision_eval_bounds`                                        阈值出处核验与漂移报告
+:mod:`.decision_eval_report`                                        怎么印 / 怎么 diff
+**本模块**                                                          把上面这些组装成一张卡 + CLI
+================================================================  ==========================
+
 Run tests: cd services/webinfer && python -m pytest tests/test_decision_eval_card.py -q
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import math
-import statistics
 from pathlib import Path
 
+# ★ 本模块是**公开入口**（`python -m decision_eval_card`、门禁与测试都从它取），
+#   故它有意识地**再导出**下层符号，使调用方只依赖一个名字。
+#   这里用 `X as X` 形式显式声明「这是 re-export 而非本地使用」——
+#   简洁但有效的写法，且 ruff 的 F401 会认得它，不用逐行 noqa。
 from decision_eval_axis import (
-    AXIS_METRIC_KEYS,
-    EVIDENCE_CONTRADICTORY,
-    EVIDENCE_EMPTY_OUTPUT,
-    EVIDENCE_NOT_QUIET,
-    aggregate_axis_blocks,
-    axis_block,
-    counter_value,
+    EVIDENCE_CONTRADICTORY as EVIDENCE_CONTRADICTORY,
+)
+from decision_eval_axis import (
+    EVIDENCE_EMPTY_OUTPUT as EVIDENCE_EMPTY_OUTPUT,
+)
+from decision_eval_axis import (
+    EVIDENCE_NOT_QUIET as EVIDENCE_NOT_QUIET,
+)
+from decision_eval_axis import (
+    aggregate_axis_blocks as aggregate_axis_blocks,
+)
+from decision_eval_axis import (
+    axis_block as axis_block,
+)
+from decision_eval_bounds import (
+    bound_drift_report as bound_drift_report,
+)
+from decision_eval_bounds import (
+    derive_bounds as derive_bounds,
+)
+from decision_eval_bounds import (
+    explain_bounds as explain_bounds,
+)
+from decision_eval_bounds import (
+    verify_bounds as verify_bounds,
 )
 from decision_eval_criteria import (
-    BASELINE_SNAPSHOT,
-    BOUNDS,
-    CRITERIA,
-    MUTATIONS,
-    STRUCTURAL_CRITERIA,
-    VERDICT_FAIL,
-    VERDICT_PASS,
-    VERDICT_UNMEASURABLE,
-    structural_checks,
+    BASELINE_SNAPSHOT as BASELINE_SNAPSHOT,
+)
+from decision_eval_criteria import (
+    BOUNDS as BOUNDS,
+)
+from decision_eval_criteria import (
+    CRITERIA as CRITERIA,
+)
+from decision_eval_criteria import (
+    MUTATIONS as MUTATIONS,
+)
+from decision_eval_criteria import (
+    STRUCTURAL_CRITERIA as STRUCTURAL_CRITERIA,
+)
+from decision_eval_criteria import (
+    VERDICT_FAIL as VERDICT_FAIL,
+)
+from decision_eval_criteria import (
+    VERDICT_PASS as VERDICT_PASS,
+)
+from decision_eval_criteria import (
+    VERDICT_UNMEASURABLE as VERDICT_UNMEASURABLE,
+)
+from decision_eval_criteria import (
+    structural_checks as structural_checks,
+)
+from decision_eval_report import (
+    diff_cards as diff_cards,
+)
+from decision_eval_report import (
+    diff_reports as diff_reports,
+)
+from decision_eval_report import (
+    render_card as render_card,
+)
+from decision_eval_report import (
+    render_scorecard as render_scorecard,
 )
 from decision_eval_set import (
-    GROUP_DIRECTED,
-    GROUP_NONDIRECTED,
-    SUBSET_GENERALIZATION,
-    SUBSETS,
-    production_live_prompt,
+    SUBSET_GENERALIZATION as SUBSET_GENERALIZATION,
+)
+from decision_eval_set import (
+    SUBSETS as SUBSETS,
+)
+from decision_eval_sources import (
+    DEFAULT_ARTIFACT as DEFAULT_ARTIFACT,
+)
+from decision_eval_sources import (
+    _include_profile as _include_profile,
+)
+from decision_eval_sources import (
+    load_artifact as load_artifact,
+)
+from decision_eval_synthetic import (
+    TOKEN_FOR_DECISION as _TOKEN_FOR_DECISION,  # noqa: F401  (re-export)
+)
+from decision_eval_synthetic import (
+    synthetic_findings as synthetic_findings,
+)
+from decision_eval_synthetic import (
+    synthetic_prompt as synthetic_prompt,
 )
 
-#: 入库的多轮真机产物（阈值与卡片都以它为准；`doc/research/data/` 是**入库**目录）。
-DEFAULT_ARTIFACT = "doc/research/data/benchmark_production_live_prompt_rounds.json"
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-#: variant 名 → 是否含 persona（与 :func:`decision_eval_score.load_rows_from_results`
-#: 同一条规则：名字里带 profile 的就是带 persona 跑的那一份）。
-def _include_profile(variant: str) -> bool:
-    """该 variant 是否使用带 persona 的组装 prompt."""
-    return "profile" in variant or "prod_prompt_profile" in variant
-
-
-# --- 离线合成输入（负控自检用；不需要模型、不需要产物）----------------------
-
-#: 合成输入里的「该开口」句。
-SYNTHETIC_DIRECTED: tuple[tuple[str, str], ...] = (
-    ("D01", "response"),
-    ("D02", "response"),
-    ("D03", "delegation"),
-    ("D04", "response"),
-    ("D05", "response"),
-    ("D06", "silence"),
-)
-
-#: 合成输入里的「不该开口」句。
-SYNTHETIC_NONDIRECTED: tuple[tuple[str, str], ...] = (
-    ("N01", "silence"),
-    ("N02", "not-for-me"),
-    ("N03", "silence"),
-    ("N04", "response"),
-    ("N05", "silence"),
-)
-
-#: 决策 → token 级证据（首位 token）。``silence`` 的首位是 special token 151669；
-#: ``not-for-me`` 的首位是 151670 但后面跟普通 token —— 这正是「不能用首位 token
-#: 判定说话与否」的实测依据。
-_TOKEN_FOR_DECISION: dict[str, list[int]] = {
-    "silence": [151669, 151645],
-    "response": [151670, 200],
-    "delegation": [151670, 300],
-    "not-for-me": [151670, 222, 99507],
-}
-
-
-def synthetic_findings() -> dict:
-    """一份**离线**跑分行，含已知的两类错误（供自检与负控使用）.
-
-    刻意做得「有好有坏」：3 例非面向被正确判成不开口、1 例被误响应、
-    5 例面向里 1 例被吞。于是四项比例都不在退化点上，判据有东西可判。
-    """
-    rows: list[dict] = []
-    for case_id, decision in SYNTHETIC_DIRECTED:
-        rows.append(
-            {
-                "id": case_id,
-                "expected": GROUP_DIRECTED,
-                "decision": decision,
-                "ok": True,
-                "emitted_token_ids": list(_TOKEN_FOR_DECISION[decision]),
-            }
-        )
-    for case_id, decision in SYNTHETIC_NONDIRECTED:
-        rows.append(
-            {
-                "id": case_id,
-                "expected": GROUP_NONDIRECTED,
-                "decision": decision,
-                "ok": True,
-                "emitted_token_ids": list(_TOKEN_FOR_DECISION[decision]),
-            }
-        )
-    return {"rows": rows}
-
-
-def synthetic_prompt() -> str:
-    """合成输入对应的 prompt —— **零逐字重叠**，故全部落在泛化子集.
-
-    刻意不重叠：自检要走的正是「扣掉记忆效应之后还剩多少」那条路径。
-    """
-    return "（离线合成输入：与任何 case 文本都不逐字重叠）"
-
-
-# --- 从产物读回逐轮跑分行 ---------------------------------------------------
-
-
-def _round_rows_with_evidence(entry: dict, *, source: str) -> list[list[dict]]:
-    """把产物里的 ``per_round_rows`` 还原成「每轮一组完整跑分行」.
-
-    ``per_round_rows`` 是 #165 为「产物自足」而落的**投影**（每行只留
-    ``id`` / ``expected`` / ``decision`` / ``ok``）。#157 追加了 token 级证据字段
-    （``first_token_id`` / ``n_tokens``）—— 没有它，「判定沉默」与「空输出」
-    在多轮上就分不开（:mod:`decision_eval_axis` 的 ``quiet_evidence`` 会判
-    ``no_token_evidence`` 而不是假装知道）。
-
-    Raises
-    ------
-        KeyError: 产物里既没有 ``per_round_rows`` 也没有 ``rows`` —— 宁可不给卡片，
-            也不拿空轮算出一个像结论的数字。
-    """
-    stored = entry.get("per_round_rows")
-    if stored:
-        rounds = []
-        for index, rows in enumerate(stored, 1):
-            usable = [dict(r) for r in rows if r.get("id")]
-            if not usable:
-                raise KeyError(f"{source} 的第 {index} 轮没有任何跑分行")
-            rounds.append(usable)
-        return rounds
-    rows = [dict(r) for r in entry.get("rows", []) if r.get("id")]
-    if not rows:
-        raise KeyError(f"{source} 里既没有 per_round_rows 也没有 rows")
-    return [rows]
-
-
-def load_artifact(path: str | Path, variants: list[str] | None = None) -> dict:
-    """读入库的多轮产物，返回 ``{variant: {"rounds": [[row…]…], "meta": {...}}}``.
-
-    Raises
-    ------
-        FileNotFoundError: 产物不存在（**不**静默给空卡片：缺结果就是没测）。
-        KeyError: 指定的 variant 不存在。
-    """
-    artifact_path = Path(path)
-    if not artifact_path.is_absolute():
-        artifact_path = _REPO_ROOT / artifact_path
-    if not artifact_path.exists():
-        raise FileNotFoundError(
-            f"定向轴记分卡的输入产物不存在：{artifact_path} —— "
-            "缺结果等于「没测」，不判绿（这正是本工单要消灭的那类假绿）"
-        )
-    data = json.loads(artifact_path.read_text(encoding="utf-8"))
-    results = data.get("results") or {}
-    if not results:
-        raise KeyError(f"{artifact_path} 里没有任何 variant")
-    wanted = list(variants) if variants else list(results)
-    missing = [v for v in wanted if v not in results]
-    if missing:
-        raise KeyError(f"{artifact_path} 里没有 variant {missing}（有 {sorted(results)}）")
-
-    return {
-        "path": str(artifact_path),
-        "model": data.get("model"),
-        "test_set_size": data.get("test_set_size"),
-        "decoding": data.get("decoding"),
-        "variants": {
-            name: {
-                "rounds": _round_rows_with_evidence(
-                    results[name], source=f"{artifact_path}#{name}"
-                ),
-                "prompt": production_live_prompt(include_profile=_include_profile(name)),
-            }
-            for name in wanted
-        },
-    }
-
-
+#: 全部判据 id（指标 + 结构性 + 卡片自己补的多轮两条）。
+#: ★ 由 :func:`criteria_registry` 产出，负控覆盖完整性检查拿它当**判据集合的真值**
+#: —— 早先那份检查只看 ``CRITERIA``，于是卡片补的 S4/S5 完全没有负控却全绿。
 # --- 多轮聚合（实现住在 decision_eval_axis；此处只做转发，保持单一实现）-----
 #
 # ★ 聚合最早写在本模块里，但判据的自检需要构造一个**多轮块**才能测出
@@ -554,402 +476,6 @@ def build_card(
     }
 
 
-# --- 阈值的可证伪核验 -------------------------------------------------------
-
-
-def derive_bounds(snapshot: dict | None = None) -> dict[str, float]:
-    """★ 从**冻结基线快照**重算每个阈值（**不**从活产物派生）.
-
-    取法：每个 variant 的逐轮读数 → ``ceil(median + pstdev)``（容纳基线自身的抖动），
-    再跨 variant 取**最大**值。
-
-    ⚠️ **不从当前入库产物派生** —— 那是循环的：门禁要挡质量退化，而退化若伴随
-    一次产物重跑，阈值就会跟着退化一起动，那条线永远拦不住东西。快照是冻结的，
-    产物重跑只会被 :func:`bound_drift_report` **报出来**，不会悄悄改线。
-
-    两个刻意不派生的阈值（``not_for_me_precision_pct``）原样返回声明值，
-    并在 :func:`explain_bounds` 里明说它们是**保守取值而非实测**：
-    真机 not-for-me 预测数只有 1–7 例，样本不足以定阈值。
-    把保守取值伪造成「派生」正是本工单要消灭的那类谎。
-    """
-    data = BASELINE_SNAPSHOT if snapshot is None else snapshot
-    derived: dict[str, float] = {}
-    for key, per_variant in data["series"].items():
-        candidates = [
-            math.ceil(statistics.median(values) + statistics.pstdev(values))
-            for values in per_variant.values()
-            if values
-        ]
-        derived[key] = float(max(candidates))
-    derived["not_for_me_precision_pct"] = float(BOUNDS["not_for_me_precision_pct"])
-    return derived
-
-
-def explain_bounds(snapshot: dict | None = None) -> list[dict]:
-    """逐条说明阈值：声明值 / 从快照重算值 / 一致与否 / 出处."""
-    derived = derive_bounds(snapshot)
-    rows = []
-    for key, declared in BOUNDS.items():
-        recomputed = derived.get(key)
-        rows.append(
-            {
-                "bound": key,
-                "declared": declared,
-                "recomputed_from_snapshot": recomputed,
-                "matches": recomputed == declared,
-                "derived": not key.startswith("not_for_me_precision"),
-                "source": (
-                    "保守下界（真机 not-for-me 预测数只 1–7 例，样本不足以定阈值）"
-                    if key.startswith("not_for_me_precision")
-                    else f"max over variants of ceil(median + pstdev)，取自 {BASELINE_SNAPSHOT['artifact']} 的冻结快照"
-                ),
-            }
-        )
-    return rows
-
-
-def verify_bounds(snapshot: dict | None = None) -> tuple[bool, list[dict]]:
-    """核验「声明的阈值 == 从冻结快照重算的阈值」。不一致即报错（返回 False）."""
-    rows = explain_bounds(snapshot)
-    return all(row["matches"] for row in rows if row["derived"]), rows
-
-
-def bound_drift_report(artifact_path: str | Path = DEFAULT_ARTIFACT) -> dict:
-    """★ 活产物是否已经偏离阈值所依据的那份基线快照.
-
-    这不是错误检查（重跑产物是**正当操作**），而是**可见性**检查：
-    一次「退化 + 重跑」若无人看见，就会变成「线自己挪了」。
-    故本函数把三件事一起给出：产物 sha 是否等于快照绑定的 sha、
-    按新产物算阈值会是多少、以及差值。
-
-    Returns
-    -------
-        ``{artifact, sha_matches_snapshot, snapshot_sha256, artifact_sha256,
-        declared, recomputed_from_artifact, deltas, note}``。
-        产物缺失时 ``artifact_sha256`` 与 ``recomputed_from_artifact`` 为 ``None``
-        （缺结果不是通过）。
-    """
-    artifact_path = Path(artifact_path)
-    if not artifact_path.is_absolute():
-        artifact_path = _REPO_ROOT / artifact_path
-    report: dict = {
-        "artifact": str(artifact_path),
-        "snapshot_sha256": BASELINE_SNAPSHOT["artifact_sha256"],
-        "declared": dict(BOUNDS),
-        "note": (
-            "阈值取自**冻结快照**，不随产物自动漂移 —— 否则一次退化 + 一次重跑"
-            "就能把线一起挪走。本报告只做可见性：产物变了就报出来。"
-        ),
-    }
-    if not artifact_path.exists():
-        report.update(
-            {
-                "artifact_sha256": None,
-                "sha_matches_snapshot": False,
-                "recomputed_from_artifact": None,
-                "deltas": None,
-                "exists": False,
-            }
-        )
-        return report
-
-    digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
-    report["artifact_sha256"] = digest
-    report["sha_matches_snapshot"] = digest == BASELINE_SNAPSHOT["artifact_sha256"]
-    report["exists"] = True
-    try:
-        patterns = _artifact_bound_series(artifact_path)
-    except (KeyError, ValueError) as exc:
-        report["recomputed_from_artifact"] = None
-        report["deltas"] = None
-        report["error"] = f"{type(exc).__name__}: {exc}"
-        return report
-    recomputed = {
-        key: float(
-            max(
-                math.ceil(statistics.median(values) + statistics.pstdev(values))
-                for values in per_variant.values()
-                if values
-            )
-        )
-        for key, per_variant in patterns.items()
-    }
-    recomputed["not_for_me_precision_pct"] = BOUNDS["not_for_me_precision_pct"]
-    report["recomputed_from_artifact"] = recomputed
-    report["deltas"] = {
-        key: round(recomputed[key] - BOUNDS[key], 3) for key in BOUNDS if key in recomputed
-    }
-    return report
-
-
-def _artifact_bound_series(artifact_path: Path) -> dict[str, dict[str, list[float]]]:
-    """从活产物抽出与快照同形的逐轮序列（供漂移比较用）."""
-    loaded = load_artifact(artifact_path)
-    mapping = {
-        "nondirected_spurious_response_rate_pct": (
-            ("overall",),
-            "nondirected_spurious_response_rate_pct",
-        ),
-        "directed_nonresponse_rate_pct": (("overall",), "directed_nonresponse_rate_pct"),
-        "cost_index": (("overall",), "cost_index"),
-        "not_for_me_recall_pct_generalization": (
-            ("by_subset", SUBSET_GENERALIZATION),
-            "not_for_me_recall_pct",
-        ),
-    }
-    out: dict[str, dict[str, list[float]]] = {}
-    for key, (scope_path, metric) in mapping.items():
-        per_variant: dict[str, list[float]] = {}
-        for name, payload in loaded["variants"].items():
-            blocks = [axis_block(rows, payload["prompt"]) for rows in payload["rounds"]]
-            aggregated = blocks[0] if len(blocks) == 1 else aggregate_axis_blocks(blocks)
-            scope: object = aggregated
-            for part in scope_path:
-                scope = scope[part]  # type: ignore[index]
-            series = scope[metric]  # type: ignore[index]
-            per_variant[name] = [float(v) for v in series["per_round"] if v is not None]
-        out[key] = per_variant
-    return out
-
-
-# --- 渲染与 diff ------------------------------------------------------------
-
-
-def _fmt(value: object, width: int = 7) -> str:
-    """数值右对齐；``None`` 打成 ``--``（未测，不是 0）."""
-    if value is None:
-        return "--".rjust(width)
-    if isinstance(value, float):
-        return f"{value:.1f}".rjust(width)
-    return str(value).rjust(width)
-
-
-def _per_round_suffix(counter: dict) -> str:
-    """多轮时附上逐轮分布；单轮时留空（避免把 ``[56]`` 这种噪声打进正文）."""
-    if counter["n_rounds"] <= 1:
-        return ""
-    return f" 逐轮 {counter['per_round']}"
-
-
-def _render_scope(name: str, scope: dict, lines: list[str]) -> None:
-    """渲染一个作用域（overall 或某个子集）."""
-    if not scope.get("n_cases"):
-        lines.append(f"  {name:16s} (无样本)")
-        return
-    # ★ 句数一律经 counter_value 读：多轮块里它是结构化三件套，
-    #   直接 f-string 插值会把整个 dict 打进文本（可读性归零，且读起来像乱码）。
-    directed = (
-        counter_value(scope, "n_directed_cases")
-        if scope.get("n_directed_cases")
-        else counter_value(scope, "n_directed")
-    )
-    nondirected = (
-        counter_value(scope, "n_nondirected_cases")
-        if scope.get("n_nondirected_cases")
-        else counter_value(scope, "n_nondirected")
-    )
-    lines.append(
-        f"  {name:16s} n={scope['n_cases']:3d} "
-        f"(面向 {directed['sum']}{_per_round_suffix(directed)}"
-        f" / 非面向 {nondirected['sum']}{_per_round_suffix(nondirected)})"
-    )
-    rows = (
-        ("误响应率% (非面向→开口)", "nondirected_spurious_response_rate_pct", "upper"),
-        ("  窄口径: 仅 response%", "nondirected_response_only_rate_pct", "upper"),
-        ("面向句非响应率%", "directed_nonresponse_rate_pct", "upper"),
-        ("  窄口径: 仅 nfm%", "directed_nonresponse_as_not_for_me_pct", "upper"),
-        ("nfm 精确率%", "not_for_me_precision_pct", "lower"),
-        ("nfm 召回率%", "not_for_me_recall_pct", "lower"),
-        ("nfm 预测率%", "not_for_me_prediction_rate_pct", "lower"),
-        ("宽口径沉默召回% (仅语境)", "quiet_recall_pct", "lower"),
-        ("代价加权 cost_index", "cost_index", "upper"),
-    )
-    for label, key, _direction in rows:
-        series = scope.get(key) or {}
-        if "median" in series:
-            lines.append(
-                f"    {label:28s} median={_fmt(series['median'])} "
-                f"worst_hi={_fmt(series['max'], 6)} worst_lo={_fmt(series['min'], 6)} "
-                f"stdev={_fmt(series['stdev'], 5)} rounds={series['per_round']}"
-            )
-        else:  # 单轮块（合成输入 / 直接喂行）
-            lines.append(f"    {label:28s} value={_fmt(scope.get(key))}")
-    # ★ 计数一律走 counter_value（单轮裸 int / 多轮结构化）。
-    #   显示「和 + 逐轮 + 有几轮非零」而不是光一个和：本卡片的比率是**跨轮取中位**，
-    #   只报和会让读者拿一个混合口径的读数去解释中位数（真机产物就有
-    #   not_for_me_predicted=[1,0,0] 这种形状，只报「1」会看着像三轮都测到了）。
-    fp = counter_value(scope, "false_positives")
-    fn = counter_value(scope, "false_negatives")
-    nfm_pred = counter_value(scope, "not_for_me_predicted")
-    nfm_true = counter_value(scope, "not_for_me_true")
-    errors = counter_value(scope, "n_errors")
-    lines.append(
-        f"    {'计数(和/逐轮) FP':28s} {_fmt(fp['sum'], 3)} / {fp['per_round']}"
-        f"   [{fp['n_rounds_nonzero']}/{fp['n_rounds']} 轮非零]"
-    )
-    lines.append(
-        f"    {'FN':28s} {_fmt(fn['sum'], 3)} / {fn['per_round']}"
-        f"   [{fn['n_rounds_nonzero']}/{fn['n_rounds']} 轮非零]"
-    )
-    lines.append(
-        f"    {'nfm 预测 (精确率分母)':28s} {_fmt(nfm_pred['sum'], 3)} / {nfm_pred['per_round']}"
-        f"   [{nfm_pred['n_rounds_nonzero']}/{nfm_pred['n_rounds']} 轮非零]"
-        "  ← 守卫要求**每轮**非零"
-    )
-    lines.append(
-        f"    {'nfm 真值 (召回率分子)':28s} {_fmt(nfm_true['sum'], 3)} / {nfm_true['per_round']}"
-    )
-    lines.append(
-        f"    {'break_even C_FP/C_FN':28s} "
-        f"{_fmt(_scalar(scope.get('break_even_fp_fn_ratio')), 5)}"
-        "  ← 两类错误等代价点"
-    )
-    if errors["sum"]:
-        lines.append(
-            f"    ⚠️ 推理失败行 {errors['sum']}（逐轮 {errors['per_round']}）"
-            " —— 「没测到」不是「判定沉默」"
-        )
-
-
-def _scalar(value: object) -> object:
-    """单轮块里的值是标量、多轮块里是聚合 dict；取标量视图."""
-    if isinstance(value, dict):
-        return value.get("median")
-    return value
-
-
-def render_card(card: dict) -> str:
-    """把一张卡渲染成人读文本（分数 + 可证伪性 + 证据 + 结构判定）."""
-    out: list[str] = []
-    src = card["source"]
-    out.append(
-        f"=== 定向轴记分卡 (#157) — variant {src['variant']}"
-        f"{' [带 persona]' if src['include_profile'] else ' [裸 prompt]'} ==="
-    )
-    out.append(
-        f"  产物: {src['artifact']}   model={src['model']}   "
-        f"聚合 {card['measurement']['rounds_aggregated']} 轮 × "
-        f"{card['measurement']['rows_per_round'][0] if card['measurement']['rows_per_round'] else 0} 例"
-    )
-    out.append(
-        "  代价加权: " + card["cost"]["ratio"] + "（误响应 : 漏判）—— " + card["cost"]["meaning"]
-    )
-    out.append("")
-    _render_scope("overall", card["overall"], out)
-    out.append("")
-    out.append("  --- 按子集分列（不混算）---")
-    for subset in SUBSETS:
-        label = "泛化(真本事)" if subset == SUBSET_GENERALIZATION else "开卷(记忆可见)"
-        out.append(f"  {label}:")
-        _render_scope(f"    {subset}", card["by_subset"][subset], out)
-    out.append("")
-    out.append("  --- token 级证据（区分「判定沉默」与「空输出」）---")
-    evidence = card["evidence"]
-    out.append(
-        "    overall: "
-        + "  ".join(f"{k}={evidence['overall'][k]}" for k in evidence["states"])
-        + f"  (非不开口行 {evidence['overall'][EVIDENCE_NOT_QUIET]})"
-    )
-    cov = evidence["coverage"]
-    out.append(
-        f"    覆盖率: 不开口 {cov['quiet_rows']} 行，有 token 证据 "
-        f"{cov['rows_with_token_evidence']}，缺证据 {cov['rows_without_token_evidence']}"
-    )
-    out.append("")
-    out.append("  --- 判据判定（指数判据 + 结构性判据，逐条含出处）---")
-    for item in (*card["criteria"]["index"], *card["criteria"]["structural"]):
-        mark = {"pass": "PASS", "fail": "FAIL", "unmeasurable": "无法测量"}[item["verdict"]]
-        out.append(f"    [{mark:6s}] {item['criterion_id']}: {item['reason']}")
-    out.append(f"  总判定: {card['criteria']['verdict'].upper()}")
-    out.append("")
-    out.append("  --- 负控（每条判据都有一份故意做错的输入证明它会判红）---")
-    for item in card["negative_controls"]:
-        out.append(
-            f"    {item['status']:9s} {item['mutation_id']:24s} 必须判红={item['must_fail']}"
-        )
-    return "\n".join(out)
-
-
-def render_scorecard(report: dict) -> str:
-    """渲染整份报告（全部 variant）."""
-    out = [
-        f"定向轴记分卡 · 工单 {report['ticket']} · 父 spec {report['spec']}",
-        f"产物: {report['artifact']}",
-        "",
-    ]
-    for card in report["cards"].values():
-        out.append(render_card(card))
-        out.append("")
-    return "\n".join(out)
-
-
-def diff_cards(before: dict, after: dict) -> str:
-    """两次卡片的结构化差异（**逐指标**列出中位与离散度的变化）.
-
-    本工单 AC 要求「两次运行之间的指标变化能一眼看出」。JSON 本身可 diff，
-    但那需要读者自己在几百行里找 —— 这里给的是那张结论表。
-    """
-    lines: list[str] = []
-    for key in ("overall", *(f"by_subset/{s}" for s in SUBSETS)):
-        scope_a = _scope_of(before, key)
-        scope_b = _scope_of(after, key)
-        for metric in AXIS_METRIC_KEYS:
-            series_a = scope_a.get(metric)
-            series_b = scope_b.get(metric)
-            if series_a is None or series_b is None:
-                continue
-            med_a = _scalar(series_a)
-            med_b = _scalar(series_b)
-            sd_a = series_a.get("stdev") if isinstance(series_a, dict) else None
-            sd_b = series_b.get("stdev") if isinstance(series_b, dict) else None
-            if med_a != med_b or sd_a != sd_b:
-                lines.append(
-                    f"{key}.{metric}  median {med_a} -> {med_b}  |  stdev {sd_a} -> {sd_b}"
-                )
-
-    verdicts_a = _verdict_map(before)
-    verdicts_b = _verdict_map(after)
-    for criterion_id in sorted(set(verdicts_a) | set(verdicts_b)):
-        if verdicts_a.get(criterion_id) != verdicts_b.get(criterion_id):
-            lines.append(
-                f"判据 {criterion_id}  {verdicts_a.get(criterion_id)} -> {verdicts_b.get(criterion_id)}"
-            )
-
-    if not lines:
-        return "两次运行在定向轴指标与判据判定上无差异。"
-    return "\n".join(lines)
-
-
-def _scope_of(card: dict, key: str) -> dict:
-    """``"overall"`` / ``"by_subset/generalization"`` → 子块."""
-    node: object = card
-    for part in key.split("/"):
-        if not isinstance(node, dict) or part not in node:
-            return {}
-        node = node[part]
-    return node if isinstance(node, dict) else {}
-
-
-def _verdict_map(card: dict) -> dict[str, str]:
-    """卡片里全部判据的 id → 判定."""
-    return {
-        item["criterion_id"]: item["verdict"]
-        for item in (*card["criteria"]["index"], *card["criteria"]["structural"])
-    }
-
-
-def diff_reports(before: dict, after: dict) -> str:
-    """全 variant 的差异."""
-    blocks: list[str] = []
-    for name, card in after["cards"].items():
-        old = (before.get("cards") or {}).get(name)
-        if not old:
-            blocks.append(f"[{name}] 对照文件里没有这个 variant —— 无法 diff")
-            continue
-        blocks.append(f"[{name}]\n{diff_cards(old, card)}")
-    return "\n\n".join(blocks)
-
-
 # --- 离线自检 ---------------------------------------------------------------
 
 
@@ -1077,7 +603,8 @@ def main(argv: list[str] | None = None) -> int:
         "--self-check", action="store_true", help="离线负控自检（不需要模型与产物）"
     )
     parser.add_argument("--show-bounds", action="store_true", help="打印阈值与出处")
-    parser.add_argument("--verify-bounds", action="store_true", help="从产物重算阈值并比对")
+    parser.add_argument("--verify-bounds", action="store_true", help="从冻结快照重算阈值并比对")
+    parser.add_argument("--drift", action="store_true", help="报告当前产物是否已偏离基线快照")
     parser.add_argument("--diff-against", default=None, help="与另一份卡片 JSON 逐指标对比")
     args = parser.parse_args(argv)
 
@@ -1095,36 +622,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"      source: {row['source']}")
         return 0
 
-    if args.verify_bounds:
-        ok, rows = verify_bounds()
-        for row in rows:
-            print(
-                f"  {row['bound']:42s} declared={row['declared']:>7} "
-                f"recomputed={row['recomputed_from_snapshot']:>7} matches={row['matches']}"
-            )
-        if not ok:
-            print(
-                "✗ 声明的阈值与从**冻结快照**重算的不一致 —— BOUNDS 与 BASELINE_SNAPSHOT "
-                "已分叉（不得静默放过）：要么改回阈值，要么同步更新快照并说明理由"
-            )
-            return 1
-        drift = bound_drift_report()
-        if drift["sha_matches_snapshot"]:
-            print("✓ 每个派生阈值都与**冻结基线快照**一致；产物的 sha256 仍等于快照绑定值")
-        else:
-            print("✓ 每个派生阈值都与**冻结基线快照**一致（关键：阈值不随产物漂移）")
-            print("⚠️ 但当前产物已不是基线快照绑定的那一份：")
-            print(f"     快照 sha256 = {drift['snapshot_sha256']}")
-            print(f"     产物 sha256 = {drift['artifact_sha256']}")
-            print(
-                f"     按当前产物算阈值会是 {drift['recomputed_from_artifact']}"
-                f"（差值 {drift['deltas']}）"
-            )
-            print(
-                "   重跑产物是正当操作，但**必须可见** —— 否则一次退化 + 一次重跑"
-                "就能把门禁的线一起挪走。若要重新基线化，请同步更新 BASELINE_SNAPSHOT。"
-            )
-        return 0
+    if args.verify_bounds or args.drift:
+        return _report_bounds(args.verify_bounds)
 
     if args.out and not args.json:
         args.json = True  # --out 必然落结构化内容
@@ -1165,6 +664,39 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if VERDICT_UNMEASURABLE in verdicts:
         return 2
+    return 0
+
+
+def _report_bounds(verify: bool) -> int:
+    """阈值核验 / 漂移报告的共用输出（``--verify-bounds`` 与 ``--drift``）."""
+    if verify:
+        ok, rows = verify_bounds()
+        for row in rows:
+            print(
+                f"  {row['bound']:42s} declared={row['declared']:>7} "
+                f"recomputed={row['recomputed_from_snapshot']:>7} matches={row['matches']}"
+            )
+        if not ok:
+            print(
+                "✗ 声明的阈值与从**冻结快照**重算的不一致 —— BOUNDS 与 BASELINE_SNAPSHOT "
+                "已分叉（不得静默放过）：要么改回阈值，要么同步更新快照并说明理由"
+            )
+            return 1
+    drift = bound_drift_report()
+    if drift["sha_matches_snapshot"]:
+        print("✓ 每个派生阈值都与**冻结基线快照**一致；产物的 sha256 仍等于快照绑定值")
+        return 0
+    print("✓ 每个派生阈值都与**冻结基线快照**一致（关键：阈值不随产物漂移）")
+    print("⚠️ 但当前产物已不是基线快照绑定的那一份：")
+    print(f"     快照 sha256 = {drift['snapshot_sha256']}")
+    print(f"     产物 sha256 = {drift['artifact_sha256']}")
+    print(
+        f"     按当前产物算阈值会是 {drift['recomputed_from_artifact']}（差值 {drift['deltas']}）"
+    )
+    print(
+        "   重跑产物是正当操作，但**必须可见** —— 否则一次退化 + 一次重跑"
+        "就能把门禁的线一起挪走。若要重新基线化，请同步更新 BASELINE_SNAPSHOT。"
+    )
     return 0
 
 

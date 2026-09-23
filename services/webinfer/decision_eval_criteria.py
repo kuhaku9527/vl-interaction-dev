@@ -46,6 +46,7 @@ from decision_eval_axis import (
     axis_block,
     counter_is_measured_every_round,
     counter_value,
+    median_view,
 )
 from decision_eval_set import GROUP_DIRECTED, GROUP_NONDIRECTED
 
@@ -187,7 +188,7 @@ class Criterion:
             statement, source, reason}`` —— 可直接落 JSON。
         """
         scope = _resolve_scope(block, self.scope)
-        observed = _scalar(scope.get(self.metric))
+        observed = median_view(scope.get(self.metric))
         denominator_ok = (
             counter_is_measured_every_round(scope, self.min_denominator)
             if self.min_denominator
@@ -242,20 +243,6 @@ class Criterion:
         }
 
 
-def _scalar(value: object) -> float | None:
-    """单轮块给标量、多轮块给聚合 dict；统一取「中位」（标量则原样）.
-
-    ★ ``None`` 一路透到判据，由判据判「无法测量」—— 不在这一层把它换成 0.0，
-    那正是「没测被读成测到 0」的形态。
-    """
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        median = value.get("median")
-        return None if median is None else float(median)
-    return float(value)
-
-
 def _resolve_scope(block: dict, scope: tuple[str, ...]) -> dict:
     """按 ``("by_subset", "generalization")`` 这类路径取子块；缺则给空 dict."""
     node: object = block
@@ -268,11 +255,19 @@ def _resolve_scope(block: dict, scope: tuple[str, ...]) -> dict:
 
 #: 全部判据。★ 每条都在 :data:`MUTATIONS` 里至少有一个「必须让它判红」的负控
 #: （由 :func:`self_check` 强制，缺失即报错）。
+#:
+#: ★★ :attr:`Criterion.statement` 里的阈值**一律由 f-string 从 :data:`BOUNDS` 插值**，
+#: 不写死数字。这是评审查出的一处 HIGH 缺陷的修法：初版把「54%」「27%」「19%」「≤93」
+#: 写死在 statement 里，而 threshold 是 63/21/17/101 —— **同一份产出的两处数字互相矛盾**，
+#: 而 `--verify-bounds` 只守 threshold。`statement` 会随卡片落进 JSON，
+#: 正是门禁作者会照抄的那句话。数字写两遍，就一定会分叉；由 :func:`statements_match_bounds`
+#: 与配套测试钉住。
 CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         criterion_id="D1-nondirected-no-spurious",
         statement=(
-            "非面向句里「开口」（response ∪ delegation）的比例不得超过 54%"
+            "非面向句里「开口」（response ∪ delegation）的比例不得超过 "
+            f"{BOUNDS['nondirected_spurious_response_rate_pct']:.0f}%"
             " —— 这是「乱插」的宽口径：delegation 会触发外部检索与播报，比单纯应答更糟。"
         ),
         metric="nondirected_spurious_response_rate_pct",
@@ -284,7 +279,8 @@ CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         criterion_id="D2-directed-nonresponse",
         statement=(
-            "面向句里「不开口」的比例不得超过 27% —— 宽口径："
+            "面向句里「不开口」的比例不得超过 "
+            f"{BOUNDS['directed_nonresponse_rate_pct']:.0f}% —— 宽口径："
             "被 </not-for-me> 误杀与被 </silence> 吞掉**同罪**"
             "（旧字段只数前者，故恒为 0.0%）。"
         ),
@@ -297,7 +293,8 @@ CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         criterion_id="D3-not-for-me-precision",
         statement=(
-            "判成 not-for-me 的句子里，真实非面向的比例不低于 70%"
+            "判成 not-for-me 的句子里，真实非面向的比例不低于 "
+            f"{BOUNDS['not_for_me_precision_pct']:.0f}%"
             " —— ★ 附非退化守卫：一条 not-for-me 都没预测时判「无法测量」，"
             "不得判绿（这正是旧判据被刷过的方式）。"
         ),
@@ -305,16 +302,18 @@ CRITERIA: tuple[Criterion, ...] = (
         direction="lower",
         threshold=BOUNDS["not_for_me_precision_pct"],
         source=(
-            "70 不是实测基线（4 轮真机里 not-for-me 预测数的中位为 2，样本小到"
-            "不足以定阈值）⇒ 取一个**保守下界**并**显式标注**它是有意保守的："
-            "它只用来挡住「往 not-for-me 倾泻」这一类退化，不声称等于基线水平。"
+            f"{BOUNDS['not_for_me_precision_pct']:.0f} 不是实测基线（真机里 not-for-me "
+            "预测数只 1–7 例，样本小到不足以定阈值）⇒ 取一个**保守下界**并**显式标注**"
+            "它是有意保守的：它只用来挡住「往 not-for-me 倾泻」这一类退化，"
+            "不声称等于基线水平。"
         ),
         min_denominator="not_for_me_predicted",
     ),
     Criterion(
         criterion_id="D4-not-for-me-recall-generalization",
         statement=(
-            "**泛化子集**上 not-for-me 召回率不低于 19%（开卷子集不计入）"
+            "**泛化子集**上 not-for-me 召回率不低于 "
+            f"{BOUNDS['not_for_me_recall_pct_generalization']:.0f}%（开卷子集不计入）"
             " —— 生产 prompt 的 few-shot 与测试集逐字重叠 10 句，"
             "混算会把记忆当成能力。"
         ),
@@ -328,7 +327,8 @@ CRITERIA: tuple[Criterion, ...] = (
     Criterion(
         criterion_id="D5-cost-index",
         statement=(
-            "代价加权主指标 cost_index ≤ 93（每 100 例里 3×误响应 + 1×漏判）"
+            "代价加权主指标 cost_index ≤ "
+            f"{BOUNDS['cost_index']:.0f}（每 100 例里 3×误响应 + 1×漏判）"
             " —— 单一 accuracy 已被本工单否决：它在两类错误上等权，"
             "而项目两类错误代价明确不对称。"
         ),
@@ -338,6 +338,30 @@ CRITERIA: tuple[Criterion, ...] = (
         source=f"{BOUND_DERIVATION}（各 variant 的最坏轮）",
     ),
 )
+
+
+def statements_match_bounds() -> list[str]:
+    """★ 自检用：``statement`` 里出现的数字是否与 ``threshold`` 一致.
+
+    Returns
+    -------
+        不一致的说明列表（空 = 全部一致）。
+
+    存在的理由：``statement`` 是随卡片落进 JSON、供门禁作者照抄的那句话。
+    它与 ``threshold`` 是**同一个事实的两处呈现**，因此必须有东西钉住它们 ——
+    否则「阈值有出处、不会静默分叉」这条声明只对 ``threshold`` 成立，
+    而对**被发表出去的那一句话**不成立（评审查出的 HIGH 缺陷）。
+    """
+    problems: list[str] = []
+    for criterion in CRITERIA:
+        expected = f"{criterion.threshold:.0f}"
+        if expected not in criterion.statement:
+            problems.append(
+                f"{criterion.criterion_id}: threshold={criterion.threshold}，"
+                f"但 statement 里找不到「{expected}」—— 两处数字已分叉"
+            )
+    return problems
+
 
 #: ★ **实测逼出来的一条边界**（不是设计出来的，故单列而不做判据）：
 #:
@@ -381,7 +405,7 @@ def structural_checks(block: dict) -> list[dict]:
     """跑结构性判据，返回逐条结果（全部 fail-closed）.
 
     ★ 计数一律经 :func:`decision_eval_axis.counter_value` 读（单轮是裸 int、
-    多轮是结构化三件套）。**不用 ``_scalar``** —— 那个函数取的是「中位」，
+    多轮是结构化三件套）。**不用 ``median_view``** —— 那个函数取的是「中位」，
     对计数是错的：句集规模跨轮应当稳定，但错误数才是要看的量，
     而「取中位」会把「一轮全崩」稀释掉（本模块自检抓到过这个）。
     """
@@ -440,20 +464,45 @@ def structural_checks(block: dict) -> list[dict]:
                 "rows_without_token_evidence": coverage.get("rows_without_token_evidence"),
                 "quiet_rows": coverage.get("quiet_rows"),
             },
-            "verdict": (
-                VERDICT_PASS if not coverage.get("rows_without_token_evidence") else VERDICT_FAIL
-            ),
-            "reason": (
-                "所有不开口决策都有 token 证据"
-                if not coverage.get("rows_without_token_evidence")
-                else (
-                    f"{coverage.get('rows_without_token_evidence')} 行不开口决策缺 token 证据"
-                    " ⇒ 不可归因，判红"
-                )
-            ),
+            # ★ **三值**，不是两值。评审查出的 fail-open：早先写成
+            #   ``PASS if not coverage.get(...rows_without_token_evidence)`` ——
+            #   当 ``evidence.coverage`` **整个缺失**时，``.get`` 返回 ``None``，
+            #   ``not None`` 为真 ⇒ **判绿**。而「覆盖块缺失」恰恰意味着
+            #   「这次测量没有留下可比对的证据」，与「一条都不缺」是两件事。
+            #   这是本仓最贵的那一类缺陷（缺输入被当成通过），故这里逐态分开：
+            #   * 缺覆盖块 ⇒ 无法测量（不是通过，也不是被测对象的错）
+            #   * 覆盖块在但没有不开口行 ⇒ 无适用对象 ⇒ 无法测量
+            #   * 有不开口行且行行有证据 ⇒ 通过
+            #   * 有不开口行缺证据 ⇒ 判红
+            "verdict": _s3_verdict(coverage),
+            "reason": _s3_reason(coverage),
         },
     ]
     return results
+
+
+def _s3_verdict(coverage: dict) -> str:
+    """S3 的三值判定（详见该条 ``observed`` 旁的注释）."""
+    if "rows_without_token_evidence" not in coverage:
+        return VERDICT_UNMEASURABLE
+    if not coverage.get("quiet_rows"):
+        return VERDICT_UNMEASURABLE
+    if coverage["rows_without_token_evidence"]:
+        return VERDICT_FAIL
+    return VERDICT_PASS
+
+
+def _s3_reason(coverage: dict) -> str:
+    """S3 的说明文字，与 :func:`_s3_verdict` 逐态对齐."""
+    if "rows_without_token_evidence" not in coverage:
+        return "覆盖块整体缺失 ⇒ 本次测量没留下可比对的 token 证据，判「无法测量」（不得判绿）"
+    quiet_rows = coverage.get("quiet_rows")
+    if not quiet_rows:
+        return "没有任何「不开口」行 ⇒ 无适用对象，不判通过"
+    missing = coverage["rows_without_token_evidence"]
+    if missing:
+        return f"{missing} 行不开口决策缺 token 证据 ⇒ 不可归因，判红"
+    return "所有不开口决策都有 token 证据"
 
 
 # --- 负控：故意做错的输入 ---------------------------------------------------
@@ -740,7 +789,7 @@ def _block(per_round_rows: list[list[dict]], prompt: str) -> dict:
     ★ **只有一轮时不做聚合**，直接返回单轮块。理由是 :func:`aggregate_axis_blocks`
       刻意拒绝单轮（单轮给不出离散度，它会 fail loud）—— 而「单轮」本身是一条
       待判定的输入形态，不能让它变成异常。单轮块照样能被全部判据读取
-      （:func:`_scalar` 对标量与聚合 dict 一视同仁），S5 会在那里判红。
+      （:func:`decision_eval_axis.median_view` 对标量与聚合 dict 一视同仁），S5 会在那里判红。
       这也让「单轮」这条负控与真实路径用**同一套**判据，而不是另写一份。
     """
     blocks = [axis_block(rows, prompt) for rows in per_round_rows]

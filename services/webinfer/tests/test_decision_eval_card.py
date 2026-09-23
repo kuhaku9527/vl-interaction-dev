@@ -91,7 +91,12 @@ def test_card_carries_metrics_criteria_evidence_and_negative_controls():
     ):
         assert key in result, f"卡片缺 {key} —— 只给分数不足以支撑结论"
     assert result["axis"] == "directed"
-    assert "accuracy" not in json.dumps(result["axis_question"]).lower() or True
+    # ★ 「不合成单一 accuracy」是父 spec 明确否决的那条设计，故它必须**可被证伪**：
+    #   断言卡片里任何地方都不出现等权 accuracy 字段（原先这里写了 `or True`，
+    #   使它恒真 —— 在一条以「可证伪」为主题的改动里写恒真断言，正是本工单要消灭的病）。
+    metrics = json.dumps({**result["overall"], **result["by_subset"]}).lower()
+    assert "accuracy" not in metrics, "单一 accuracy 已被 #154 明确否决，却出现在卡片指标里"
+    assert "cost_index" in metrics, "代价加权主指标必须在场（否则上一条可能是因为指标为空而恒真）"
 
 
 def test_card_reports_both_subsets_separately():

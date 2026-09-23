@@ -235,8 +235,23 @@ def quiet_evidence(row: dict) -> str:
     判据（**只看 token，不看 content**）：
     ``</silence>`` / ``</response>`` 是 special token 会被服务端从 content 剥离，
     因此「content 是否为空」**推不出**任何事；只有 ``logprobs`` 里的实际 token id 能。
+
+    ★ 两种不开口决策的 token 形态**不同**，故两者的矛盾判定也不同：
+
+    * ``silence`` ⇒ 模型应吐 **special token 151669**。首位不是它 ⇒ 矛盾。
+    * ``not-for-me`` ⇒ 该标记**不是词表 token**（= ``</``+``not``+``-``+``for``+``-me>``
+      五个普通 token）⇒ 它**不可能**表现为单个 special token。
+      首位是 **151669**（``</silence>``）⇒ 模型实际吐的是沉默而不是 not-for-me ⇒ 矛盾。
+
+    ⚠️ **评审查出的缺陷（这里原先是漏的）**：早先只对 ``silence`` 做矛盾检查，
+    于是把每一行 ``not-for-me`` 的 token 证据换成 ``[151669]``（模型其实吐的是沉默）
+    **不会触发任何判据** —— 该行的 token 证据实际上从未被校验过，
+    而「token 级证据区分判定沉默与空输出」正是本工单的核心 AC。
+    现已补上 ``not-for-me`` 一侧；由
+    ``test_not_for_me_tokens_must_not_be_the_silence_special_token`` 钉住。
     """
-    if decision_of(row) not in DECISIONS_QUIET:
+    decision = decision_of(row)
+    if decision not in DECISIONS_QUIET:
         return EVIDENCE_NOT_QUIET
     has_evidence, n_tokens, first_token_id = token_evidence(row)
     if not has_evidence:
@@ -244,7 +259,9 @@ def quiet_evidence(row: dict) -> str:
         return EVIDENCE_NO_TOKEN_EVIDENCE
     if n_tokens == 0:
         return EVIDENCE_EMPTY_OUTPUT
-    if decision_of(row) == "silence" and first_token_id != TOKEN_ID_SILENCE:
+    if decision == "silence" and first_token_id != TOKEN_ID_SILENCE:
+        return EVIDENCE_CONTRADICTORY
+    if decision == "not-for-me" and first_token_id == TOKEN_ID_SILENCE:
         return EVIDENCE_CONTRADICTORY
     return EVIDENCE_EVIDENCED
 
@@ -596,6 +613,25 @@ def _aggregate_evidence(per_round: list[dict]) -> dict:
         "why": per_round[0]["coverage"]["why"],
     }
     return block
+
+
+def median_view(value: object) -> float | None:
+    """单轮块给标量、多轮块给聚合 dict；统一取「中位」（标量则原样）.
+
+    ★ **本特性的唯一一份实现**。早先 ``decision_eval_card._scalar`` 与
+    ``decision_eval_criteria._scalar`` 各有一份**同名但契约不同**的版本
+    （一个保留 ``None``、一个把 ``None`` 透出去给别处处理），而两者都在做
+    「把块里的值读成标量」这同一件事 —— 两份迟早分叉，而分叉的那一份是没被测过的。
+    （评审查出；这正是本仓反复记的 Duplicated Code 形态。）
+
+    ★ ``None`` 一路透传，**不换成 0.0**：那是「没测」，不是「测到 0」。
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        median = value.get("median")
+        return None if median is None else float(median)
+    return float(value)  # type: ignore[arg-type]
 
 
 def counter_value(scope: dict, key: str) -> dict:
