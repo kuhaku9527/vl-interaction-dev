@@ -1,0 +1,221 @@
+{
+  "kind": "decision-timing-gold-labels",
+  "ticket": "#158",
+  "spec": "#154",
+  "authority_split": "决策 / ts / latency_ms **只**由 live_decision_timing_events.jsonl 承载；本文件只放真值（gold labels），按事件自身的 (session_id, ts) 键对齐。一个事实只有一处来源 —— 两处写同一件事必然分叉。",
+  "truth_source": "case_id 指向 decision_eval_set.CASES（本仓唯一真值源），expected 由它的 expected_action 映射：respond/delegate ⇒ speak，silent ⇒ quiet。本文件**不重抄**句子或组别。",
+  "labels_are_authored": "★ 本夹具的**决策**与 `user_still_speaking_at_decision` 都是**作者写的回放输入**，不是真机读数（与 #156 的事件夹具同性质）。它证明的是「时序轴能从冻结输入算出并且判红」，**不是**「生产模型的实际时机质量」。真机读数须另跑评估并落新产物。",
+  "premature_labeling_rule": "每一轮**开口**都有标注（True/False），故 premature rate 的分母完整；不开口的轮次不需要该标注（抢话只在开口时才可能发生）。",
+  "premature_requires_write_side": "★ 真机链路**当前不记录**「决策那一刻用户是否仍在说话」⇒ 本标注在真机上**没有来源**。故 premature rate 在真机产物上必然判「无法测量」（不得判绿）；补齐写入点是一条独立的接线工作。",
+  "sessions": [
+    {
+      "session_id": "sess-timing-a",
+      "n_rounds": 20
+    },
+    {
+      "session_id": "sess-timing-b",
+      "n_rounds": 14
+    }
+  ],
+  "labels": [
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:00:00.000Z",
+      "case_id": "D01",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:00:09.400Z",
+      "case_id": "D02",
+      "user_still_speaking_at_decision": true
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:00:21.700Z",
+      "case_id": "N01"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:00:34.200Z",
+      "case_id": "D05",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:00:48.900Z",
+      "case_id": null,
+      "expected": null,
+      "why_no_truth": "proactive 轮：事件流里没有对应的测试句，故无真值"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:01:03.100Z",
+      "case_id": "D09",
+      "user_still_speaking_at_decision": true
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:01:17.800Z",
+      "case_id": "N02"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:01:32.400Z",
+      "case_id": null,
+      "expected": null,
+      "why_no_truth": "proactive 轮：事件流里没有对应的测试句，故无真值",
+      "why_no_premature": "主动轮：定时器在 LISTENING 时发起，没有「用户正在说哪句话」这个前提 ⇒ premature 不适用（不是缺失）"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:01:48.600Z",
+      "case_id": "G01",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:02:04.300Z",
+      "case_id": "N05"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:02:21.900Z",
+      "case_id": "D12",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:02:38.200Z",
+      "case_id": null,
+      "expected": null,
+      "why_no_truth": "proactive 轮：事件流里没有对应的测试句，故无真值"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:02:52.500Z",
+      "case_id": "D15"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:03:10.800Z",
+      "case_id": "N11"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:03:26.400Z",
+      "case_id": "D18",
+      "user_still_speaking_at_decision": true
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:03:44.100Z",
+      "case_id": "G03",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:04:01.600Z",
+      "case_id": "N19"
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:04:19.300Z",
+      "case_id": "D23",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:04:36.000Z",
+      "case_id": "N24",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-a",
+      "ts": "2026-09-22T05:04:53.700Z",
+      "case_id": "D25",
+      "user_still_speaking_at_decision": true
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:00:00.000Z",
+      "case_id": "D03",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:00:14.600Z",
+      "case_id": "D04",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:00:29.800Z",
+      "case_id": "N03"
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:00:44.200Z",
+      "case_id": null,
+      "expected": null,
+      "why_no_truth": "proactive 轮：事件流里没有对应的测试句，故无真值",
+      "why_no_premature": "主动轮：定时器在 LISTENING 时发起，没有「用户正在说哪句话」这个前提 ⇒ premature 不适用（不是缺失）"
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:00:59.700Z",
+      "case_id": "G02",
+      "user_still_speaking_at_decision": true
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:01:14.100Z",
+      "case_id": "N09"
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:01:29.500Z",
+      "case_id": "D07",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:01:44.800Z",
+      "case_id": "N13"
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:02:00.300Z",
+      "case_id": "D08",
+      "user_still_speaking_at_decision": true
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:02:16.900Z",
+      "case_id": "N17"
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:02:32.400Z",
+      "case_id": "D21",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:02:48.800Z",
+      "case_id": "N21"
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:03:05.200Z",
+      "case_id": "D19",
+      "user_still_speaking_at_decision": false
+    },
+    {
+      "session_id": "sess-timing-b",
+      "ts": "2026-09-22T07:03:20.600Z",
+      "case_id": "G05",
+      "user_still_speaking_at_decision": false
+    }
+  ]
+}

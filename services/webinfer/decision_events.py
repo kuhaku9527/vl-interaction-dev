@@ -342,8 +342,15 @@ def order_rounds(rounds: list[Round]) -> list[Round]:
     return ordered
 
 
-def _percentile(sorted_values: list[int], fraction: float) -> float | None:
-    """线性插值分位数（空集返回 ``None``）."""
+def percentile(sorted_values: list[int] | list[float], fraction: float) -> float | None:
+    """线性插值分位数（空集返回 ``None``）.
+
+    ★ 公开的名字（原 ``_percentile``）：#158 的时序轴要算同一族的
+    onset 中位/p90，而 :func:`_latency_summary` 已经有一份。两份实现会让
+    「同一个 p90」在一个仓里有两个值 —— 那正是本仓反复付费学过的缺陷形态
+    （见 ``decision_eval_axis`` 的宽/窄口径与 ``decision_eval_rounds`` 的
+    重复聚合）。故把唯一实现公开，两边共用。
+    """
     if not sorted_values:
         return None
     if len(sorted_values) == 1:
@@ -367,8 +374,8 @@ def _latency_summary(rounds: list[Round]) -> dict[str, Any]:
         "n_present": len(present),
         "n_missing": len(missing),
         "n_zero": sum(1 for value in present if value == 0),
-        "median": _percentile(present, 0.5),
-        "p90": _percentile(present, 0.9),
+        "median": percentile(present, 0.5),
+        "p90": percentile(present, 0.9),
         "min": present[0] if present else None,
         "max": present[-1] if present else None,
         "missing_rounds": missing,
@@ -716,5 +723,6 @@ __all__ = [
     "order_rounds",
     "output_state",
     "parse_lines",
+    "percentile",
     "summarize",
 ]
