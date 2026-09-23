@@ -75,13 +75,29 @@ _PERFECT = {
     GROUP_DELEGATE: "delegation",
 }
 
+#: 决策 → 该决策在 token 层的典型首 token（#157 的读侧靠它区分沉默与空输出）。
+#: ``silence`` 是单 special token 151669；``not-for-me`` 首位实测就是 151670
+#: 后跟普通 token —— 所以读侧**不能**用首位 token 判「这一轮在不在说话」。
+_TOKENS_FOR_DECISION: dict[str, list[int]] = {
+    "silence": [151669, 151645],
+    "response": [151670, 200, 300],
+    "delegation": [151670, 400, 500],
+    "not-for-me": [151670, 222, 99507],
+}
 
-def _rows(decision_for_group=None):
+
+def _rows(decision_for_group=None, *, decisions_only=False):
     """One round of rows in the shape the real benchmark produces.
 
     ``emission`` is included deliberately: `emission_breakdown` reads it, and
     a fixture that omits it would make this contract test pass over a shape
     the real path can never produce.
+
+    ★ #157: ``emitted_token_ids`` is included for the same reason. It is the
+    only thing that separates "the model decided to stay silent" from "the model
+    emitted nothing" (``</silence>`` is a special token stripped from content),
+    and the projection that reaches the committed artifact is built from it.
+    A fixture without it would let the projection be silently evidence-less.
 
     ``decision_for_group`` overrides the per-group decision, so a round can be
     made deliberately different from its neighbours (needed to give the
@@ -90,19 +106,23 @@ def _rows(decision_for_group=None):
     mapping = dict(_PERFECT)
     if decision_for_group:
         mapping.update(decision_for_group)
-    return [
-        {
+    rows = []
+    for cid, text, group, category, *_r in CASES:
+        decision = mapping[group]
+        row = {
             "id": cid,
             "text": text,
             "expected": group,
             "category": category,
-            "decision": mapping[group],
+            "decision": decision,
             "emission": "response_special_token_151670",
             "ok": True,
             "correct": True,
         }
-        for cid, text, group, category, *_r in CASES
-    ]
+        if not decisions_only:
+            row["emitted_token_ids"] = list(_TOKENS_FOR_DECISION[decision])
+        rows.append(row)
+    return rows
 
 
 def _payload(rounds_n=3):
@@ -461,3 +481,118 @@ def test_variant_payload_stores_every_round_so_it_can_be_re_analysed(tmp_path):
     report = rounds.report_from_results_files([str(path)], "V")
     assert report["rounds_completed"] == 3
     assert report["metrics"]["not_for_me_recall_pct"]["per_round"] == [100.0, 0.0, 100.0]
+
+
+# ---------------------------------------------------------------------------
+# 5. ★ #157：产物的投影必须带 token 级证据（否则读侧判不出沉默 vs 空输出）
+# ---------------------------------------------------------------------------
+
+
+def test_round_projection_carries_token_evidence():
+    """★★ 投影里的每一行都必须带 ``n_tokens`` 与 ``first_token_id``。
+
+    没有它们，**入库产物在读侧不可判**「模型判定沉默」与「模型什么都没输出」
+    —— 因为 ``</silence>`` 是 special token，被服务端从 content 剥离后
+    content 也是空串。#157 的核心 AC 就落在这一条上，而它必须**在产物里**成立
+    （只在内存里的行上成立是不够的：卡片读的是入库产物）。
+    """
+    bench = _import_benchmark()
+    projected = bench._decision_only_rows(_rows())
+    assert projected, "投影为空 —— 夹具失效"
+    for entry in projected:
+        assert "n_tokens" in entry and "first_token_id" in entry, (
+            f"{entry.get('id')} 的投影缺 token 证据字段 ⇒ 读侧无法区分沉默与空输出"
+        )
+        assert entry["n_tokens"] is not None, "夹具给了 token 列表，投影不该变成「无证据」"
+
+
+def test_round_projection_reports_missing_token_evidence_as_none_not_zero():
+    """★ 未产出 token 列表时必须是 ``None``（无证据），**不是 0**（零输出）。
+
+    两者含义相反：``0`` 会说「模型什么都没吐」（失效输出），
+    而真相是「本次没有采集到证据」（不可归因）。把它们混起来，
+    正是本工单花大力气消除的那类缺陷。
+    """
+    bench = _import_benchmark()
+    stripped = [{k: v for k, v in row.items() if k != "emitted_token_ids"} for row in _rows()]
+    projected = bench._decision_only_rows(stripped)
+    assert all(entry["n_tokens"] is None for entry in projected)
+    assert all(entry["first_token_id"] is None for entry in projected)
+
+
+def test_round_projection_records_the_first_token_id_verbatim():
+    """★ 首位 token id 必须**原样**落进产物（它是判据的输入，不是展示字段）。"""
+    bench = _import_benchmark()
+    rows = _rows()
+    rows[0]["emitted_token_ids"] = [151669, 151645]
+    rows[1]["emitted_token_ids"] = [151670, 200, 300]
+    projected = bench._decision_only_rows(rows)
+    assert projected[0]["first_token_id"] == 151669
+    assert projected[0]["n_tokens"] == 2
+    assert projected[1]["first_token_id"] == 151670
+    assert projected[1]["n_tokens"] == 3
+
+
+def test_projected_rounds_feed_the_directed_axis_card_end_to_end(tmp_path):
+    """★★ 端到端：#157 的卡片必须能**只凭入库产物**判出沉默证据。
+
+    这条把两个模块钉在一起 —— 单独测 `_decision_only_rows` 会漏掉
+    「字段名对不上」这一整类（#165 真机崩溃的形态：两侧各自正确，接口不对）。
+    """
+    import json
+    import sys as _sys
+
+    bench = _import_benchmark()
+    rows = _rows()
+    # ★ 必须挑**不开口**的行来注入：只有它们才走 token 证据判定
+    #   （开口行的 ``quiet_evidence`` 是 ``not_quiet``，改它们什么也证明不了）。
+    quiet_indices = [
+        index for index, row in enumerate(rows) if row["decision"] in ("silence", "not-for-me")
+    ]
+    assert len(quiet_indices) >= 2, "夹具里没有足够的不开口行 —— 本测试会变成空断言"
+    silent_index, empty_index = quiet_indices[0], quiet_indices[1]
+    rows[silent_index]["decision"] = "silence"
+    rows[silent_index]["emitted_token_ids"] = [151669, 151645]
+    rows[empty_index]["emitted_token_ids"] = []
+    payload = bench.variant_result_payload(
+        rows=rows,
+        per_round_stats=[score.summarize(rows) for _ in range(3)],
+        per_round_rows=[rows, rows, rows],
+        per_round_wall=[1.0, 1.0, 1.0],
+        prompt="（离线桩，零重叠）",
+        rounds_requested=3,
+    )
+    path = tmp_path / "artifact.json"
+    path.write_text(
+        json.dumps(
+            {
+                "results": {
+                    "V": {
+                        "rows": payload["rows"],
+                        "per_round_rows": payload["per_round_rows"],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    if str(ROOT) not in _sys.path:
+        _sys.path.insert(0, str(ROOT))
+    import decision_eval_axis as axis_mod
+    import decision_eval_card as card_mod
+
+    loaded = card_mod.load_artifact(path)
+    rounds_rows = loaded["variants"]["V"]["rounds"]
+    by_id = {row["id"]: row for row in rounds_rows[0]}
+    evidences = {row["id"]: axis_mod.quiet_evidence(row) for row in rounds_rows[0]}
+    assert axis_mod.EVIDENCE_NO_TOKEN_EVIDENCE not in evidences.values(), (
+        "卡片从入库产物读回的行仍报「无 token 证据」⇒ 产物的投影字段与读侧对不上"
+    )
+    assert evidences[rows[silent_index]["id"]] == axis_mod.EVIDENCE_EVIDENCED, (
+        "151669 开头的沉默必须被读成「有留痕的判定」"
+    )
+    assert evidences[rows[empty_index]["id"]] == axis_mod.EVIDENCE_EMPTY_OUTPUT, (
+        "空 token 列表必须被读成「空输出」——否则读侧把失效输出洗成了有效证据"
+    )
+    # ★ 端到端到底：卡片自己也得看得见这条空输出（不只是模块函数单独能判）。
+    assert by_id[rows[empty_index]["id"]]["n_tokens"] == 0

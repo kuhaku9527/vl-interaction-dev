@@ -351,18 +351,34 @@ def _decision_only_rows(rows: list[dict]) -> list[dict]:
     (plus ``ok``, so a failed row stays distinguishable from a decision), which
     is ~13 KB instead of ~70 KB for the same three rounds.
 
+    ★ #157: **``first_token_id`` + ``n_tokens`` are part of that minimum**, not
+    extra. Without them the *committed* artifact cannot tell "the model decided
+    to stay silent" (``</silence>``, single special token 151669, stripped from
+    content) from "the model emitted nothing at all" — the distinction #157
+    exists to make. Storing the whole ``emitted_token_ids`` list would re-inflate
+    the file for no benefit: the axis only ever reads the count and the first id.
+
     Kept as an explicit projection rather than storing nothing: the whole point
     of the multi-round evidence is that it can be **re-read** without a re-run.
     """
-    return [
-        {
+    projected = []
+    for row in rows:
+        tokens = row.get("emitted_token_ids")
+        entry = {
             "id": row["id"],
             "expected": row["expected"],
             "decision": row.get("decision", ""),
             "ok": bool(row.get("ok", True)),
+            # ★ None (not 0, not omitted-when-unknown) when the run produced no
+            #   token list: the read side must be able to say "no evidence"
+            #   rather than mis-report it as a zero-token empty output.
+            "n_tokens": len(tokens) if isinstance(tokens, list) else None,
+            "first_token_id": (
+                tokens[0] if isinstance(tokens, list) and tokens else None
+            ),
         }
-        for row in rows
-    ]
+        projected.append(entry)
+    return projected
 
 
 def variant_result_payload(

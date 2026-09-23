@@ -21,6 +21,128 @@
 
 ## §1 当日新增（倒序，最新在上）
 
+### 2026-09-23（★ 定向轴记分卡：把「该不该开口判断得对不对」变成一条命令；工单 #157）
+
+> **这是父 spec #154 的第 2 片纵切**，也是欠账里最核心的那个数字。
+> **前置**：#155（冻结资产）与 #165（多轮取中位）均已交付 ⇒ 本票可开工。
+>
+> **一句话结论**：**两个生产 variant 在原判据下「达标」的东西，在宽口径判据下判红** ——
+> 泛化子集 nfm 召回 **0% / 11.1%**，低于阈值 17%。而旧字段
+> `directed_miss_rate_pct` 在同一批数据上**恒为 0.0%**（它只数 `→not-for-me`）。
+>
+> ★ **实测证实了工单正文对旧判据的否决**：`not-for-me precision >= 80%` 在这批真机上
+> 报 P2 = **100%** / P = **0.0%（分母退化）**，看起来「达标」；而把**真正会出声**的
+> 路径（`response` ∪ `delegation`）算进来后，非面向句误响应率是 **34.6% / 50.0%**。
+
+**装置**：`services/webinfer/decision_eval_axis.py`（宽窄口径 + 代价加权 + token 证据）、
+`decision_eval_criteria.py`（判据 + 负控 + 冻结基线快照）、`decision_eval_card.py`（一条命令出卡）。
+三者均在 **CI 的 pytest 矩阵内**（放 `services/scripts/` 会永不被收集 —— #152 的形态）。
+
+**命令**：`cd services/webinfer && python -m decision_eval_card`　**退出码**：`1`
+（两个 variant 的 `D4` 判红 ⇒ 判定 FAIL 映射为 1；**「无法测量」映射为 2，永不返回 0**）
+
+| 判据 | 指标 | 阈值 | `P`（裸 prompt） | `P2`（带 persona） | 判定 |
+|---|---|---|---|---|---|
+| **D1** | 非面向→开口率（**含 delegation**） | ≤63% | **50.0%** | **34.6%** | pass |
+| **D2** | 面向句非响应率（**含被 silence 吞掉**） | ≤21% | 12.0% | 12.0% | pass |
+| **D3** | nfm 精确率（**非退化守卫**） | ≥70% | **无法测量**（分母 `[1,0,0]`） | 100.0% | pass/unmeasurable |
+| **D4** | **泛化子集** nfm 召回 | ≥17% | **0.0%** | **11.1%** | ★ **fail** |
+| **D5** | 代价加权（3×误响应 + 1×漏判） | ≤101 | 82.4 | 62.7 | pass |
+| S1–S5 | 分母 / 失败行 / token 证据 / 可归因 / ≥2 轮 | 结构性 | 全 pass | 全 pass | — |
+
+> ★ **宽窄口径的差额就是本票的证据**：D1 把 `delegation` 算作开口、D2 把被 `</silence>`
+> 吞掉的面向句算作漏判。旧字段（`baseline_mis_response_rate_pct` 只数 `response`、
+> `directed_miss_rate_pct` 只数 `→not-for-me`）在**同一批数据**上给出的是 0.0% ——
+> 差的不是小数点，是「真正会出声的那一半」。
+>
+> ⚠️ **`cost_index` 单独挡不住「永远沉默」**（实测，写下来以免后人误信）：
+> 平凡沉默桩的加权代价是 **49.0**，而生产 prompt 是 **82.4** —— 在 25 面向 / 26 非面向
+> 的基率下 `C_FN×25 < 3×FP + 1×FN`。⇒ 挡住沉默策略的是 **D2/D4 两条召回下限**。
+> 卡片里的 `cost_index_always_silent` / `cost_index_always_speaking` 就是为此提供的参照。
+
+**★ 阈值不随产物漂移（一条被实测逼出来的修正）**
+
+初版让阈值**每次从当前入库产物重算**。看起来「阈值与证据绑在一起」很严谨，实则**循环**：
+门禁要挡的是质量退化，而退化若伴随一次产物重跑（一次真机 3 轮就会重写该文件），
+阈值会**跟着退化一起动** —— 那条线于是永远拦不住东西。**这正是 fail-open 且看起来在工作。**
+⇒ 现改为**冻结基线快照**（`BASELINE_SNAPSHOT`，含产物 `sha256` 与逐轮序列），
+`--verify-bounds` 绑快照；产物重跑由 `bound_drift_report()` **报出来**（不报错，但可见）。
+
+**★ 非退化守卫必须看「每轮是否非零」，不能只看总和**
+
+真机产物里 `not_for_me_predicted` 三轮是 **`[1, 0, 0]`** —— 总和为 1（非零），
+于是「总和式」守卫让**一轮里的一例**换来的 100% 精确率**判绿**。
+那与「precision 100% 而分母只有 3 例」是同一种缺陷，只是换了个地方发生。
+⇒ 判据读 `n_rounds_nonzero`（本卡片据此把 `P` 的 D3 判为**无法测量**）。
+
+**★ 可证伪性（AC 的 ★★ 两条）**
+
+**命令**：`python -m decision_eval_criteria --self-check`　**退出码**：`0`
+
+```
+identity                 判红=[]（应为空）
+always-silence           判红=['D2-directed-nonresponse', 'D4-not-for-me-recall-generalization']
+always-not-for-me        判红=['D2-directed-nonresponse', 'D3-not-for-me-precision']
+always-response          判红=['D1-...', 'D4-...', 'D5-cost-index']
+always-delegation        判红=['D1-...', 'D4-...', 'D5-cost-index']
+inverted-labels          判红=[全部五条指标判据]
+no-token-evidence        判红=['S3-token-evidence-complete']
+quiet-without-tokens     判红=['S4-no-unattributed-quiet']
+inverted-token-evidence  判红=['S4-no-unattributed-quiet']
+failed-round             判红=['D2-...', 'D4-...', 'S2-no-round-errors']
+single-round             判红=['S5-multi-round']
+empty-nondirected-denominator 判红=['S1-denominators-present']
+empty-directed-denominator    判红=['S1-denominators-present']
+verdict: PASS（卡片全部 10 条判据各有负控；13 个故意做错的输入全部按声明判红或「无法测量」）
+```
+
+① **★ 负控：「永远输出沉默」的桩必须判红** —— 旧判据下它 `precision=100%`、
+`directed_miss=0%`，**无条件通过**；本卡片下它在 D2/D4 上判红。
+② **★ 恒真式判据能被抓到** —— `test_self_check_is_falsifiable_by_a_broken_criterion`
+把 `Criterion.evaluate` 换成恒 PASS 的桩，自检**必须转红**（证明自检不是装饰）。
+③ **恒等对照**：`identity` 负控必须让**任何判据都不变红**（证明「变红」不是来自基线输入本身）。
+
+| 项 | 命令 | 结果 | 真机? | 测量时间 |
+|---|---|---|---|---|
+| 真机 3 轮（重跑，带 token 级证据） | `BENCH_ROUNDS=3 BENCH_PROD_OUT=…rounds.json python services/scripts/benchmark_production_live_prompt.py` | 退出码 0；产物含 `per_round_rows[].n_tokens`/`first_token_id`（**新增**，见下） | **真机**（7060 在位） | 2026-09-23T13:0x |
+| 一条命令出卡 | `cd services/webinfer && python -m decision_eval_card` | 两个 variant **判定 FAIL**（D4 泛化召回 0.0% / 11.1%）；exit **1** | 离线（读入库产物） | 2026-09-23T13:2x |
+| 阈值核验 | `python -m decision_eval_card --verify-bounds` | **5/5 一致**（`declared == derive(snapshot)`）；产物 sha 仍等于快照绑定值 | 离线 | 2026-09-23T13:2x |
+| 判据负控自检 | `python -m decision_eval_criteria --self-check` | **PASS**，13 个负控全部按声明判红 | 离线 | 2026-09-23T13:2x |
+| 卡片自检（含单轮判红 + 永远沉默桩） | `python -m decision_eval_card --self-check` | **PASS** | 离线 | 2026-09-23T13:2x |
+| 定向轴行为测试 | `python -m pytest tests/test_decision_eval_axis.py -q` | **35 passed** | 离线 | 2026-09-23T13:2x |
+| 判据/负控行为测试 | `python -m pytest tests/test_decision_eval_criteria.py -q` | **38 passed** | 离线 | 2026-09-23T13:2x |
+| 卡片行为测试 | `python -m pytest tests/test_decision_eval_card.py -q` | **28 passed** | 离线 | 2026-09-23T13:2x |
+| webinfer 全量 | `python -m pytest -o asyncio_mode=auto -q` | **707 passed**（#165 时 602 → 本轮 **+105**） | 离线 | 2026-09-23T13:2x |
+| ruff（CI 门禁同款） | `ruff check services/webinfer --extend-ignore D101,…` + `ruff format --check` | **All checks passed** / 78 files already formatted | 离线 | 2026-09-23T13:2x |
+| 行尾核验 | `git diff --numstat` 对比 `--ignore-cr-at-eol` | 一**致**（产物写入显式 `newline="\n"`） | 离线 | 2026-09-23T13:2x |
+
+**★ 产物必须带 token 级证据（否则 AC 在数据上不可能成立）**
+
+`per_round_rows` 的投影新增 `n_tokens` + `first_token_id` 两个字段。
+没有它们，**入库产物在读侧不可判**「模型判定沉默」（`</silence>` 是 special token，
+被服务端从 content 剥离后 content 也是空串）与「模型什么都没输出」——
+而 #157 的核心 AC 正落在这一条上。产物只增约 10 字节/行（全轮约 +4 KB）。
+
+> ⚠️ 未产出 token 列表时投影写 **`None`（无证据）而不是 `0`（零输出）**：
+> 两者含义相反（「没采集到」vs「模型什么都没吐」），混起来正是本工单要消除的混淆。
+> 有专门的负控测试钉住这一点（`test_round_projection_reports_missing_token_evidence_as_none_not_zero`）。
+
+**★ 本轮修的四类缺陷（全部由**自检/测试**发现，不是我先想对的）**
+
+| 缺陷 | 怎么暴露的 | 修法 |
+|---|---|---|
+| **阈值随产物漂移（循环）** | 重跑真机产物后 `--verify-bounds` 立刻报 5/5 不一致 —— 而「不一致」的正确解读不是「产物错了」，是**阈值设计错了** | 改为冻结基线快照（绑产物 sha256）；产物的偏离由 `bound_drift_report()` 报出 |
+| **非退化守卫只看总和** | 真机产物形状是 `[1,0,0]`：总和非零 ⇒ 一例换来的 100% 精确率判绿 | 守卫改读 `n_rounds_nonzero`，要求**每轮**非零 |
+| **S5 有一条永远不可达的分支** | 自检报「恒等对照让 S1 判红」时顺着查到：聚合层早已 `raise`，那条「判不可测量」的分支根本执行不到 | 删除该分支，只留可达的「轮数 < 2」；并写下「声称处理了却永不执行的分支比没有更坏」 |
+| **两条分母负控互相搞反** | 自检报「`empty-nondirected-denominator` 让 D1 判绿」—— 名为「清空非面向分母」的负控实际删掉了**面向**句（`_keep_only` 名字与语义相反） | 改名 `_drop_group`，名字与语义对齐 |
+| **两条 `F401`/`F821`** | `ruff check`：删错了仍被引用的 import，导致 `EVIDENCE_NOT_QUIET`、`AXIS_METRIC_KEYS` 未定义 | 补回并跑完整门禁 |
+
+> ★ **`cost_index` 只在「非不开口」的行上有效**：它在 `P` 上是 82.4 而平凡沉默桩是 49.0 ——
+> 若只读这一个数字会得出「沉默更好」的错误结论。故卡片**并列**两个平凡桩读数，
+> 并由 D2/D4 承担挡沉默的职责。
+
+---
+
 ### 2026-09-22（★ 多轮取中位 + 离散度：把「单轮结论」升级为可判稳的读数；工单 #165）
 
 > **这是欠账清单 §4 #3 的那一条**（「❌ 未做。存量只有 2 轮」），也是 **#157 的硬前置**
@@ -873,5 +995,53 @@ BENCH_DIFF_AGAINST=<上一轮 results.json> ... python services/scripts/benchmar
 
 **判据**：结果里 `median` 必须与 `per_round`**并列**，且 `dispersion.stdev/range` 同在；
 `metrics_note.degenerate_rounds` 非空时**不得**把该 ratio 的离散度当作模型抖动（那是分母退化）。
+
+**定向轴记分卡**（工单 #157 新建，`services/webinfer/decision_eval_card.py`）：
+
+```bash
+cd services/webinfer
+
+# ① 离线负控自检（不需要模型、不需要产物；秒级）—— 证明判据可证伪
+python -m decision_eval_card --self-check
+
+# ② 一条命令出卡（读入库的多轮真机产物；人读版）
+python -m decision_eval_card
+
+# ③ 结构化 + 落到稳定路径（供 #159 门禁与 diff 消费）
+python -m decision_eval_card --json --out <稳定路径>/directed-axis-card.json
+
+# ④ 阈值核验：从**入库产物重算**阈值并与代码里的声明比对（不一致即报错）
+python -m decision_eval_card --verify-bounds
+python -m decision_eval_card --show-bounds     # 含每条的出处与「是否派生」
+
+# ⑤ 成本可配 + 两次运行 diff
+python -m decision_eval_card --cost-fp 5 --cost-fn 1
+python -m decision_eval_card --json --diff-against <上一份卡片.json>
+```
+
+**退出码**：`0` 全绿 ／ `1` 有判据判红 ／ `2` **有「无法测量」项**（不是通过）。
+★ **「没测」永不返回 0** —— 与本仓 `scripts/verify_ritual.py` 同一条纪律（#162 已钉住）。
+
+**判据**（逐条自带出处；`--show-bounds` 可复核）：
+
+| 判据 | 指标 | 方向 | 阈值 | 出处 |
+|---|---|---|---|---|
+| `D1-nondirected-no-spurious` | 非面向→开口率（**含 delegation**） | ≤ | 54% | 入库产物重算（基线最差 variant 上界） |
+| `D2-directed-nonresponse` | 面向句非响应率（**含被 silence 吞掉**） | ≤ | 27% | 同上（最坏轮） |
+| `D3-not-for-me-precision` | nfm 精确率 | ≥ | 70% | **保守取值**（真机预测数中位仅 2，样本不足以定阈值） |
+| `D4-not-for-me-recall-generalization` | **泛化子集** nfm 召回 | ≥ | 19% | 入库产物重算（泛化子集最坏轮） |
+| `D5-cost-index` | 代价加权（3×误响应 + 1×漏判） | ≤ | 93 | 入库产物重算（最坏轮） |
+| `S1..S5` | 分母齐备 / 无失败行 / token 证据完整 / 无可归因缺失 / ≥2 轮 | — | 结构性 | fail-closed |
+
+> ★ **宽窄口径并列**：`D1` 把 `delegation` 算作开口（旧字段 `baseline_mis_response_rate_pct`
+> 只数 `response`），`D2` 把被 `</silence>` 吞掉的面向句算作漏判（旧字段
+> `directed_miss_rate_pct` 只数 `→not-for-me`，故在全部变体上**恒为 0.0%**）。
+> 两个窄口径也照常输出，**差额可见**才是重点。
+>
+> ⚠️ **`cost_index` 单独挡不住「永远沉默」**（实测）：在 25 面向 / 26 非面向的基率下，
+> 平凡沉默桩的加权代价（49.0）**低于**生产 prompt（84.3）—— C_FN×25 小于
+> 3×FP + 1×FN。⇒ 挡住沉默策略的是 **D2/D4 两条召回下限**。卡片里的
+> `cost_index_always_silent` / `cost_index_always_speaking` 就是为此提供的参照。
+
 
 
