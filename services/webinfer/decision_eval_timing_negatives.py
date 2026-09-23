@@ -145,6 +145,100 @@ def _missing_origin_field(block: dict) -> dict:
     return timing_block(rows)
 
 
+def _frame_lattice(block: dict) -> dict:
+    """★★ 绕过①：耗时**真的**取帧钟点阵（10 fps ⇒ 全是 100 ms 的整数倍），
+    而逐行 ``latency_source`` 一字不改.
+
+    ★ 这是对抗复核查出的绕过，**主控已独立复现**：初版只比对「恰好等于某个 ts
+    差值」，而点阵值**没有一个**等于 ts 差值 ⇒ 判绿；且 200–500 ms 落在 onset
+    阈值带内，**阈值也抓不到** ⇒ 卡片总判 pass。
+
+    ★ 为什么必须把 ``latency_source`` 保持成链上常量：`_frame_ts_source()` 看似
+    覆盖了帧钟，但它**同时**把逐行来源写成 ``frame_capture_ts_ms``，于是被来源
+    名单抓住 —— 那测的是「声明被改了会不会被发现」，不是「耗时是否真的来自帧钟」。
+    本例专测后者。
+    """
+    lattice = [200, 300, 400, 500]
+    out: list[dict] = []
+    index = 0
+    for row in synthetic_healthy_rows():
+        if not spoke(row):
+            out.append(row)
+            continue
+        out.append({**row, "latency_ms": lattice[index % len(lattice)]})
+        index += 1
+    return timing_block(out)
+
+
+def _ts_diff_with_offset(block: dict) -> dict:
+    """★★ 绕过②：耗时 = ts 差值 **+ 常数偏移**，逐行声明不改.
+
+    ★ 复核实测：初版的「恰好相等」检验对 offset 0..1999 **1999/2000 全盲**
+    （含 offset=1）—— 它当初之所以"有效"，靠的是 offset 恰好为 0 这个巧合。
+
+    ★ 修法不是再堵 offset=1 这个特例，而是把代数族一般化：**常数偏移在差分里
+    会自己消掉**（``latency_i − latency_j == ts_i − ts_j``），故仿射检验一次性
+    覆盖任意常数偏移。
+    """
+    return timing_block(_ts_affine_rows(offset=1))
+
+
+def _ts_diff_large_offset(block: dict) -> dict:
+    """★★ 绕过②的**大偏移**变体：offset=997（刻意取一个"不像 0"的数）.
+
+    ★ 单列一条是为了证明修复**不是**只针对 offset=1 打的补丁：
+    仿射检验对偏移大小**完全不敏感**（它在差分里消掉了）。
+    """
+    return timing_block(_ts_affine_rows(offset=997))
+
+
+def _non_iso_ts(block: dict) -> dict:
+    """★★ 绕过③：``ts`` 换成 **epoch 毫秒串**（非 ISO），逐行声明不改.
+
+    ★ 复核指出：两个解析器都返回 ``None`` ⇒ 差值集合**为空** ⇒ 代数检验
+    **空转恒真通过**，而 ``session_seconds`` 静默退化为 0。
+    修法：解析不了的 ts **直接判红**（fail-closed），不再空转。
+    """
+    rows = [{**row, "ts": "1758523200000"} for row in synthetic_healthy_rows()]
+    return timing_block(rows)
+
+
+def _ts_affine_rows(*, offset: int) -> list[dict]:
+    """构造「耗时 = 到会话首行的 ts 差值 + offset」的行（声明不动）."""
+    from datetime import datetime
+
+    base_rows = synthetic_healthy_rows()
+    first: dict[str, datetime] = {}
+    for row in base_rows:
+        first.setdefault(
+            str(row["session_id"]),
+            datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00")),
+        )
+    rows: list[dict] = []
+    for row in base_rows:
+        if not spoke(row):
+            rows.append(row)
+            continue
+        stamp = datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00"))
+        delta = round((stamp - first[str(row["session_id"])]).total_seconds() * 1000) + offset
+        rows.append({**row, "latency_ms": max(delta, 1)})
+    return rows
+
+
+def _failed_rounds(block: dict) -> dict:
+    """★ 把全部**开口**轮次标成失效输出（``empty_output``）—— 必须判红.
+
+    ★ 对抗复核 D2：失效输出原先被静默算进 ``n_quiet``，于是「没测到」在安静轮次里
+    消失，而 quiet 正是误触发率的分母侧。
+
+    ★ 用 ``output_state == empty_output``（读侧从 ``raw_text_len`` 算出、真机可得）
+    而**不是** ``ok=False`` —— 后者是 benchmark 行的概念，真机事件流里根本没有这个
+    形态（写入侧只在达成决策时才写事件），拿它判会是一条**死代码**。实测确认过。
+    """
+    rows = [{**row, "output_state": "empty_output"} for row in synthetic_healthy_rows()]
+    return timing_block(rows)
+
+
 def _add_combined_accuracy(block: dict) -> dict:
     """往块里塞一个 ``accuracy`` 字段（模拟「顺手合成一下」）."""
     return {**block, "accuracy": 0.83}
@@ -167,6 +261,17 @@ def _tiny_sample(block: dict) -> dict:
 def _no_timebase(block: dict) -> dict:
     """把所有 ``ts`` 抹成空串 —— 速率失去时间基准."""
     rows = [{**row, "ts": ""} for row in synthetic_healthy_rows()]
+    return timing_block(rows)
+
+
+def _no_truth(block: dict) -> dict:
+    """★ 抹掉全部真值（``expected=None``）—— **真机事件流的真实形状**.
+
+    ★ D1（真机核验查出）的负控：真机 09-21 的 204 轮里没有任何「该不该开口」
+    标注（``n_expected_speak = 0``），而初版仍报 ``0.0 次/秒`` 并让
+    ``T_SPURIOUS_TIMEBASE`` 判 pass —— 「0 次乱插话」与「不知道有几次」同形。
+    """
+    rows = [{**row, "expected": None} for row in synthetic_healthy_rows()]
     return timing_block(rows)
 
 
@@ -257,6 +362,52 @@ MUTATIONS: tuple[Mutation, ...] = (
         must_fail=("T_LATENCY_SOURCE",),
     ),
     Mutation(
+        mutation_id="frame-lattice-latency",
+        description=(
+            "★★ 绕过①：耗时**真的**取帧钟点阵（10 fps ⇒ 100 ms 的整数倍），"
+            "而逐行 latency_source **一字不改**。初版因「没有一个值等于 ts 差值」"
+            "而判绿，且值落在阈值带内 ⇒ 卡片总判 pass（对抗复核发现，主控复现）。"
+        ),
+        apply=_frame_lattice,
+        must_fail=("T_LATENCY_SOURCE",),
+    ),
+    Mutation(
+        mutation_id="ts-affine-offset-1",
+        description=(
+            "★★ 绕过②：耗时 = ts 差值 **+1 ms**，逐行声明不改。"
+            "初版「恰好相等」检验对 offset 0..1999 中 1999/2000 全盲。"
+        ),
+        apply=_ts_diff_with_offset,
+        must_fail=("T_LATENCY_SOURCE",),
+    ),
+    Mutation(
+        mutation_id="ts-affine-offset-997",
+        description=(
+            "★★ 绕过②的大偏移变体：offset=997 —— 证明修复不是只堵 offset=1 的补丁"
+            "（仿射检验对偏移大小不敏感：常数在差分里消掉）。"
+        ),
+        apply=_ts_diff_large_offset,
+        must_fail=("T_LATENCY_SOURCE",),
+    ),
+    Mutation(
+        mutation_id="non-iso-ts",
+        description=(
+            "★★ 绕过③：ts 换成 epoch 毫秒串（非 ISO）⇒ 初版差值集合为空、"
+            "代数检验**空转恒真**通过。必须判红（fail-closed）。"
+        ),
+        apply=_non_iso_ts,
+        must_fail=("T_LATENCY_SOURCE",),
+    ),
+    Mutation(
+        mutation_id="failed-rounds",
+        description=(
+            "★ 全部轮次标成推理失败（ok=False）⇒ 必须判红："
+            "「没测到」不是「判定沉默」，混入会把失效输出洗成正确的安静。"
+        ),
+        apply=_failed_rounds,
+        must_fail=("T_SPURIOUS_TIMEBASE",),
+    ),
+    Mutation(
         mutation_id="combined-accuracy",
         description=(
             "★ 往块里塞一个 accuracy 字段（「顺手合成两轴」）—— 父 spec §三明确否决，必须判红。"
@@ -277,7 +428,21 @@ MUTATIONS: tuple[Mutation, ...] = (
         mutation_id="tiny-sample",
         description="只留 2 次开口 —— onset 分位数不可作结论。",
         apply=_tiny_sample,
-        must_not_pass=("T_SAMPLE_FLOOR",),
+        # ★★ D2（真机核验查出）：初版这里**只**声明了 T_SAMPLE_FLOOR，于是那两条
+        #   带阈值的 onset 判据在 2 个样本上照报 pass 而没人管 —— 负控自检还报 killed。
+        #   实测真机卡片并排打印「T_SAMPLE_FLOOR=无法测量（样本 1<10）」与
+        #   「T_ONSET_MEDIAN=pass（16.0<=898）」。⇒ 三条一起声明。
+        must_not_pass=("T_SAMPLE_FLOOR", "T_ONSET_MEDIAN", "T_ONSET_P90"),
+    ),
+    Mutation(
+        mutation_id="no-truth",
+        description=(
+            "★ 抹掉**全部真值**（``expected=None``）—— 这正是真机事件流的形状。"
+            "「误触发」是真值相关量：没有真值就没有「误」可言，故每秒误触发必须判"
+            "「无法测量」，**不得**给 0.0。"
+        ),
+        apply=_no_truth,
+        must_not_pass=("T_SPURIOUS_TIMEBASE",),
     ),
     Mutation(
         mutation_id="no-timebase",

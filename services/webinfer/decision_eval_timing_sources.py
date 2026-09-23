@@ -212,11 +212,20 @@ def build_rows(
             "decision": payload["decision"],
             "latency_ms": payload["latency_ms"],
             # ★★ 每一行的**耗时出处**是数据的一部分，不是调用方的一句话。
-            #   读侧在这里从事件流（或资产的逐行字段）把它取出来，于是
-            #   「这一行的耗时从哪来」可被 :func:`decision_eval_timing.latency_audit`
-            #   **取证**。缺这个字段的行会被记为不可归因并由判据判红 ——
-            #   这正是对抗性复核推翻初版声明式守卫之后补上的那一环。
+            #   读侧在这里从事件流（或资产的逐行字段）把它取出来，供
+            #   :func:`decision_eval_timing.latency_audit` 做**自洽性检查**
+            #   （⚠️ 只证伪不证明 —— 见该函数的 cannot_prove）。
             "latency_source": _latency_source_of(payload),
+            # ★★ 「失效输出」随行带下来（对抗复核 D2）。
+            #   真机事件流里**没有** ``ok=False`` 这种形态 —— 写入侧只在**达成决策**
+            #   时才写事件（实测 09-21+09-22 共 208 轮，decision 取值只有
+            #   response / not-for-me / silence / delegation）。故判「这一轮的输出
+            #   是不是失效的」必须用读侧**已有**的 ``output_state``
+            #   （``len(raw_text_len) == 0`` 且决策是开口类 ⇒ ``empty_output``）。
+            #   ★ 把 ``ok`` 从 benchmark 行搬到这里会是**死代码**：读侧不产它，
+            #   于是 ``n_errors`` 恒 0（实测确认）。这正是我自己批评过的形态，
+            #   所以这里改为读真正在真机上可得的那个字段。
+            "output_state": payload.get("output_state"),
             # ★ 事件流里没有真值 ⇒ ``None``。**不默认成 speak**。
             "expected": None,
             "case_id": label.get("case_id"),
@@ -264,9 +273,66 @@ def build_rows(
             "n_with_truth": sum(1 for r in rows if r["expected"] is not None),
             "n_skipped_other_events": loaded.skipped_other_events,
             "n_malformed": len(loaded.malformed),
-            # ★ 「这份输入是夹具还是真机」必须可判 —— 评测结论可信度的前提。
-            "is_frozen_fixture": True,
+            # ★★ 「这份输入是夹具还是真机」必须**判出来**，不是一句常量。
+            #   ★ 真机核验查出的 **D3**：这里原先是硬编码 ``True``，于是
+            #   真机 09-21 事件流也返回 ``True``，渲染层照抄夹具告警
+            #   「⚠️ 这是冻结夹具（决策为作者写的回放输入）」—— 对真机**说反了**。
+            #   一条「必须可判」的注释配一个常量，得到的正是一个**不可判**的字段；
+            #   而它守的是评测结论可信度的前提（读者据此决定要不要把数字当真）。
+            **is_frozen_fixture_reading(truth["meta"], rows),
         },
+    }
+
+
+def is_frozen_fixture_reading(truth_meta: dict, rows: list[dict]) -> dict:
+    """判定这批输入来自**冻结夹具**还是**真机事件流**（含判据，不猜）.
+
+    ★ 判据取**最接近原始出处**的那一个：真值 sidecar 里的 ``labels_are_authored``。
+    夹具的 sidecar 自己声明「本夹具的决策是作者写的回放输入」，真机评估的 sidecar
+    不会这么声明。**不**从数据特征反推（例如「有没有写入侧字段」）——那会把
+    「#158 之前的旧真机事件」（没有那些字段）误判成夹具，而那一批**正是**真机数据。
+
+    Returns
+    -------
+        ``{is_frozen_fixture, input_kind, input_kind_why}``：
+        ``input_kind`` ∈ ``"fixture"`` / ``"real"`` / ``"unknown"``。
+
+    ⚠️ **一处必须承认的残余不确定**：sidecar 既没声明「作者写的」、也没有任何
+    真机痕迹时，两种成因（旧版真机 / 一个没声明的夹具）在输入上无法区分，
+    故报 ``"unknown"`` —— 三值分开报，读侧据此决定要不要显示夹具告警。
+    把这种情形判成 ``"real"`` 会让一个未声明的夹具冒充真机读数；
+    判成 ``"fixture"`` 会让真机读数被打上夹具告警。两者都比 ``unknown`` 坏。
+    """
+    authored = truth_meta.get("labels_are_authored")
+    if isinstance(authored, str) and authored.strip():
+        return {
+            "is_frozen_fixture": True,
+            "input_kind": "fixture",
+            "input_kind_why": (
+                "真值 sidecar 的 ``labels_are_authored`` 非空 ⇒ 它自己声明了"
+                "「决策是作者写的回放输入」= 冻结夹具"
+            ),
+        }
+    write_side_fields = ("latency_source", FIELD_STILL_SPEAKING)
+    has_write_side = any(row.get(field) is not None for row in rows for field in write_side_fields)
+    if has_write_side:
+        return {
+            "is_frozen_fixture": False,
+            "input_kind": "real",
+            "input_kind_why": (
+                "sidecar 未声明「作者写的」，且事件流带写入侧字段"
+                "（latency_source / user_still_speaking_at_decision）⇒ 真机事件产物"
+            ),
+        }
+    return {
+        # ★ ``None``（而不是 ``True``/``False``）：判不出来就说判不出来。
+        "is_frozen_fixture": None,
+        "input_kind": "unknown",
+        "input_kind_why": (
+            "sidecar 未声明「作者写的」，事件流也没有任何写入侧字段 ⇒ 无法区分"
+            "「#158 之前的旧真机事件」与「一个没声明的夹具」。故给 ``unknown``，"
+            "**不假装知道** —— 这正是当初不该把它写成常量的原因。"
+        ),
     }
 
 
@@ -277,5 +343,6 @@ __all__ = [
     "FIELD_STILL_SPEAKING",
     "build_rows",
     "expected_by_case_id",
+    "is_frozen_fixture_reading",
     "load_truth",
 ]

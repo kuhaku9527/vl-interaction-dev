@@ -187,6 +187,65 @@ def test_tiny_sample_is_unmeasurable():
     assert verdicts["T_SAMPLE_FLOOR"] == C.VERDICT_UNMEASURABLE
 
 
+# --- ★ 真机核验查出的三处缺陷的回归测试 -------------------------------------
+
+
+def test_missing_truth_makes_the_rate_unmeasurable_not_zero():
+    """★★ D1 回归：**零真值** ⇒ 每秒误触发判「无法测量」，**不得**是 0.0.
+
+    ★ 真机核验（204 轮真机事件流）查出的 fail-open：初版只看时间基准，
+    于是零真值输入报 ``0.0 次/秒`` 且 ``T_SPURIOUS_TIMEBASE`` 判 **pass** ——
+    「0 次乱插话」与「不知道有几次」在输出上完全同形。
+
+    ★ 讽刺得很具体：本条判据存在的理由正是「不得把未测读成 0」，
+    而它自己放行了那个 0。真机 09-21 正是这个形状（``n_expected_speak = 0``）。
+    """
+    rows = [{**r, "expected": None} for r in synthetic_healthy_rows()]
+    block = timing_block(rows)
+    metrics = block["metrics"]
+    assert metrics["n_expected_speak"] == 0
+    assert metrics["n_expected_quiet"] == 0
+    assert metrics["spurious_triggers_per_second"] is None, (
+        "零真值下仍给出一个速率 ⇒ 「不知道」被读成「0 次乱插」"
+    )
+    assert metrics["spurious_triggers_per_minute"] is None
+    assert metrics["spurious_rate_measurable"] is False
+    assert _verdicts(block)["T_SPURIOUS_TIMEBASE"] == C.VERDICT_UNMEASURABLE
+
+
+def test_truth_present_still_yields_a_real_rate():
+    """★ D1 的**对照**：有真值时速率照常产出（防止修复把功能一起关掉）."""
+    metrics = timing_block(synthetic_healthy_rows())["metrics"]
+    assert metrics["spurious_rate_measurable"] is True
+    assert metrics["spurious_triggers_per_second"] is not None
+    assert metrics["spurious_triggers_per_second"] > 0
+
+
+def test_onset_criteria_respect_the_sample_floor():
+    """★★ D2 回归：样本不足时两条**带阈值的** onset 判据也须判「无法测量」.
+
+    ★ 真机核验查出：它们**没有**样本下限，于是样本不足时报「测量」而不是
+    「不适用」。实测真机卡片并排打印「T_SAMPLE_FLOOR=无法测量（样本 1<10）」
+    与「T_ONSET_MEDIAN=pass（16.0<=898）」—— **语义自相矛盾**，而门禁（#159）
+    若读后者就会被误导。
+
+    ★ 两条判据必须在**同一事实**上给出同一判定，否则卡片自己跟自己打架。
+    """
+    verdicts = _verdicts(timing_block(synthetic_healthy_rows()[:3]))
+    assert verdicts["T_SAMPLE_FLOOR"] == C.VERDICT_UNMEASURABLE
+    assert verdicts["T_ONSET_MEDIAN"] == C.VERDICT_UNMEASURABLE, (
+        "样本不足却报「测量」⇒ 与 T_SAMPLE_FLOOR 自相矛盾"
+    )
+    assert verdicts["T_ONSET_P90"] == C.VERDICT_UNMEASURABLE
+
+
+def test_onset_criteria_still_measure_with_enough_samples():
+    """★ D2 的**对照**：样本充足时两条 onset 判据照常给出判定."""
+    verdicts = _verdicts(timing_block(synthetic_healthy_rows()))
+    assert verdicts["T_ONSET_MEDIAN"] == C.VERDICT_PASS
+    assert verdicts["T_ONSET_P90"] == C.VERDICT_PASS
+
+
 # ---------------------------------------------------------------------------
 # 6. 总判定规则
 # ---------------------------------------------------------------------------

@@ -224,6 +224,29 @@ class TimingCriterion:
                     "「没测」既不是通过也不是 0 分。"
                 ),
             }
+        # ★★ 真机核验查出的 **D2**：带阈值的 onset 判据**没有**样本下限，
+        #   于是样本不足时它报「测量」而不是「不适用」。
+        #   实测：真机卡片并排打印
+        #     ``T_SAMPLE_FLOOR=无法测量（样本 1<10）`` 与
+        #     ``T_ONSET_MEDIAN=pass（16.0<=898）``  ← 语义自相矛盾
+        #   而门禁（#159）若读 ``T_ONSET_MEDIAN=pass`` 就会被误导。
+        #   ⇒ 任何读 ``onset_latency_ms`` 的带阈值判据，都必须在样本不足时
+        #     判「无法测量」—— 分位数在 1 个样本上不是测量，是噪声。
+        if self.metric == "onset_latency_ms":
+            onset = (block.get("metrics") or {}).get("onset_latency_ms") or {}
+            if not onset.get("enough_samples"):
+                return {
+                    **base,
+                    "observed": observed,
+                    "verdict": VERDICT_UNMEASURABLE,
+                    "reason": (
+                        f"开口样本只有 {onset.get('n')} 个，低于 MIN_SPEAKING_ROUNDS="
+                        f"{onset.get('min_speaking_rounds')} ⇒ 判「无法测量」："
+                        "分位数在这个样本量下与「同一配置的偶然抖动」不可区分。"
+                        "★ 与 T_SAMPLE_FLOOR 同一口径 —— 两条判据必须在同一事实"
+                        "上给出同一个判定，否则门禁会读到自相矛盾的卡片。"
+                    ),
+                }
         passing = (
             observed <= self.threshold if self.direction == "upper" else observed >= self.threshold
         )
@@ -287,20 +310,24 @@ def _judge_latency_source(block: dict) -> tuple[str, str]:
     用帧时间戳或 ``ts`` 差值 ⇒ **判红**（不是「无法测量」：那两种来源会产出
     一个看起来正常的数字，只是归因是错的 —— 而错误的归因比缺失更坏）。
 
-    ★★ **判据读的是取证结果，不是声明。**
+    ★★ **判据读的是自洽性检查结果，而它只证伪、不证明。**
     初版读 ``latency_source_block.legal``，而那个块当时完全由调用方的一句
     ``latency_source=...`` 决定 —— 对抗性复核当场推翻：把 ``latency_ms`` 真的
     换成由事件 ``ts`` 差值算出来的数，调用方什么都不用改，判据照样判绿。
-    现在该块由 :func:`decision_eval_timing.latency_audit` 从**逐行数据**构造
-    （逐行出处字段 + 「耗时恰好等于某段 ts 差值」的代数检验），故「用墙钟算耗时」
-    的实现**无法**再蒙混过去。
+    第二轮改成「从数据取证」（逐行字段 + 恰好相等的代数检验），复核**再次**推翻，
+    且给出三种绕过（帧钟点阵 / ts 差值+常数偏移 / 非 ISO ts）——
+    三次绕过均已由主控独立复现。
+
+    ⇒ 现在本判据的措辞与它的**能力**一致：它判「**未发现矛盾**」，
+    **不**判「已证明出自链上打点」。``cannot_prove`` 字段把边界写进机器可读的产物。
     """
     provenance = block.get("latency_source_block") or {}
     if provenance.get("legal"):
         return VERDICT_PASS, (
-            f"耗时出处**已从数据取证**：{provenance.get('n_attributed')} 行逐行声明 "
-            f"{provenance.get('source')!r}，且无一行命中「ts 差值」恒等式"
-            f"（被明令禁止的来源 {provenance.get('forbidden')} 均未被使用）"
+            f"未发现矛盾：{provenance.get('n_attributed')} 行逐行声明 "
+            f"{provenance.get('source')!r}，且未命中 ts 差值恒等式 / 钟粒度点阵 / "
+            f"ts 钟仿射（被明令禁止的来源 {provenance.get('forbidden')} 均未被使用）。"
+            "★ 这是「未发现矛盾」，不是「已证明」—— 见 cannot_prove。"
         )
     if not provenance.get("applicable"):
         # ★ 一次开口都没有 ⇒ 没有耗时可归因 ⇒ 无适用对象。
@@ -313,12 +340,28 @@ def _judge_latency_source(block: dict) -> tuple[str, str]:
     if provenance.get("ts_derived_ids"):
         reasons.append(
             f"★ {len(provenance['ts_derived_ids'])} 行的耗时**恰好等于某段 ts 差值**"
-            f"（{provenance['ts_derived_ids']}）⇒ 它是墙钟派生的，不是链路打点"
+            f"（{provenance['ts_derived_ids'][:4]}…）⇒ 它是墙钟派生的，不是链路打点"
         )
-    if provenance.get("n_unattributed"):
+    if provenance.get("offset_suspect_ids"):
         reasons.append(
-            f"{provenance['n_unattributed']} 行缺耗时或**缺出处证据**"
-            f"（{provenance.get('unattributed_ids')}）"
+            f"★ {len(provenance['offset_suspect_ids'])} 行的耗时与 ts **逐对等差**"
+            f"（命中 {provenance.get('offset_matched_pairs')} 对）⇒ 它是 ts 钟的仿射像"
+            "（差值相等即证明存在常数偏移，无论偏移多大）"
+        )
+    if provenance.get("lattice_suspect_ids"):
+        reasons.append(
+            f"★ 全部耗时共享 {provenance.get('lattice_gcd_ms')} ms 公共粒度"
+            "（帧钟点阵特征：1 Hz ⇒ 1000、10 fps ⇒ 100）"
+        )
+    if provenance.get("unattributed_ids"):
+        reasons.append(
+            f"{provenance.get('n_unattributed')} 行缺耗时或**缺出处证据**"
+            f"（{provenance.get('unattributed_ids')[:4]}…）"
+        )
+    if provenance.get("unparsable_ts_ids"):
+        reasons.append(
+            f"★ {len(provenance['unparsable_ts_ids'])} 行的 ts **解析不了** ⇒ "
+            "代数检验会空转恒真，故直接判红（fail-closed）"
         )
     if not reasons:
         reasons.append(f"出处为 {provenance.get('source')!r}，不是决策链路的轮次打点")
@@ -402,20 +445,52 @@ def _judge_sample_floor(block: dict) -> tuple[str, str]:
 
 
 def _judge_spurious_timebase(block: dict) -> tuple[str, str]:
-    """T_SPURIOUS_TIMEBASE：每秒误触发必须有**真实的时间基准**.
+    """T_SPURIOUS_TIMEBASE：每秒误触发必须**同时**有真值与时间基准.
 
-    ``ts`` 是本模块里唯一合法的时间基准（它只是**速率的分母**，不参与任何耗时）。
-    没有基准 ⇒ 判「无法测量」：一个 0 的速率会被读成「一次都没乱插」，
-    而真相往往是「这段会话的时间跨度不可知」。
+    ★★ 真机核验查出的 **D1（fail-open）**：初版只查时间基准，于是**零真值**的
+    输入报 ``0.0 次/秒`` 并让本条判 **pass** —— 「0 次乱插话」与「不知道有几次」
+    在输出上完全同形。实测（真机 09-21，204 轮）：``n_expected_speak = 0``
+    而卡片印着 ``0.0 次/秒`` 且本条 PASS。
+
+    ★ 讽刺得很具体：本条存在的理由正是「不得把未测读成 0」，而它自己放行了
+    那个 0。故现在**两个前提都查**：
+
+    1. **时间基准**（``session_seconds``）—— ts 可算；
+    2. ★ **真值存在**（``n_expected_quiet + n_expected_speak > 0``）——
+       「误触发」是真值相关量：没有「该不该开口」的标注，就没有「误」可言。
     """
     metrics = block.get("metrics") or {}
     seconds = metrics.get("session_seconds")
+    n_truth = (metrics.get("n_expected_quiet") or 0) + (metrics.get("n_expected_speak") or 0)
+    n_errors = metrics.get("n_empty_output") or 0
+
+    if n_errors:
+        # ★ 对抗复核 D2：判了要开口却**零输出**（``empty_output``）的行是
+        #   「没测到」，不是「判定沉默」。它们会抬高 quiet 侧计数、把一次失效输出
+        #   洗成一次正确的安静，而 quiet 正是误触发率的分母侧。故**有失效输出即判红**
+        #   （不是「无法测量」：那是**本该有而不有**，与缺打点同类）。
+        return VERDICT_FAIL, (
+            f"★ {n_errors} 行是**失效输出**（判了要开口却零输出，``empty_output``）"
+            "⇒ 判红：「没测到」不是「判定沉默」，混入会把失效输出洗成正确的安静，"
+            "而安静轮次正是误触发率的分母侧。"
+        )
+    if not n_truth:
+        return VERDICT_UNMEASURABLE, (
+            "★ **没有真值**（n_expected_quiet + n_expected_speak = 0）⇒ 判「无法测量」。"
+            "「误触发」是真值相关量：没有「该不该开口」的标注，就没有「误」可言。"
+            "★ 这与「测到 0 次误触发」**含义相反** —— 真机的诚实读数是"
+            "「这段会话没有真值 sidecar」，不是「它一次都没乱插」。"
+        )
     if not seconds:
         return VERDICT_UNMEASURABLE, (
-            "会话时间跨度不可用（ts 缺失或只有单点）⇒ 每秒误触发算不出来，判「无法测量」；"
-            "0.0 会被读成「一次都没乱插」"
+            "有真值但时间跨度不可用（ts 缺失或只有单点）⇒ 每秒误触发算不出来，"
+            "判「无法测量」；0.0 会被读成「一次都没乱插」"
         )
-    return VERDICT_PASS, (f"时间基准 {seconds}s（ts 的**唯一**合法用途：速率分母，不参与任何耗时）")
+    return VERDICT_PASS, (
+        f"时间基准 {seconds}s 与真值（面向 {metrics.get('n_expected_speak')} / "
+        f"非面向 {metrics.get('n_expected_quiet')}）齐备 —— "
+        "ts 的**唯一**合法用途是速率分母，不参与任何耗时"
+    )
 
 
 def _judge_premature_labeled(block: dict) -> tuple[str, str]:

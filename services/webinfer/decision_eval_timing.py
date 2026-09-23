@@ -331,34 +331,59 @@ def latency_provenance(source: str = LATENCY_SOURCE_CHAIN_STAMP) -> dict:
 
 
 def latency_audit(rows: list[dict]) -> dict:
-    """★★ **从数据取证**：这份耗时到底出自哪里（本票 ★ 负控的真正防线）.
+    """★★ 耗时**自洽性检查** + 诚实的能力边界（本票 ★ 负控的防线，但**不是**证明）.
 
-    为什么需要它（一次真实的失败，写下来以免后人重犯）
+    ⚠️⚠️ **先读这条：本函数不能证明耗时出自哪个钟。**
     --------------------------------------------------
-    初版只让调用方声明 ``latency_source=...``，于是对抗性复核当场推翻：
-    把 ``latency_ms`` **真的**换成由事件 ``ts`` 差值算出来的数，调用方什么都
-    不用改，卡片照样报 ``source=decision_chain_round_stamp / legal=True /
-    T_LATENCY_SOURCE=pass`` —— **一个「其实用了墙钟」的实现静默出数且判绿**。
-    这正是本票正文点名的失效模式，而当时的实现恰好复现了它。
+    这是**第三次**同一形态的修正，前两次都在同一处守卫上，故把结论写死在这里：
 
-    取证的三条独立证据（**任何一条不成立即不可信**）：
+    1. 初版让调用方声明 ``latency_source=...``。复核推翻：耗时**真的**由 ts 差值
+       算出、声明不动 ⇒ 卡片判绿。
+    2. 改成「从数据取证」：逐行 ``latency_source`` **加**「耗时恰好等于某个
+       ts 差值」的代数检验。复核**再次**推翻，且给了三种绕过（都已由主控独立复现）：
 
-    1. **逐行出处字段。** 每行必须带 ``latency_source`` 且其值为
-       :data:`LATENCY_SOURCE_CHAIN_STAMP`。读侧
-       （:mod:`.decision_eval_timing_sources`）从事件流放这个字段，
-       于是「这一行的耗时从哪来」是**数据**而不是一句声明。
-    2. ★ **与 ``ts`` 差值的无关性检验。** 若耗时其实由 ``ts`` 推出，那么按构造
-       它**必然恰好等于某个 ts 差值**。故这里检查该恒等式 —— 一旦命中即判定
-       该行耗时是 ts 派生的。这不是统计检验（样本太小），而是**代数关系**：
-       ts 差值算出来的数必然命中，而真实的链路耗时不会。
-    3. **缺失必须暴露。** 任何开口行缺 ``latency_ms`` 或缺出处字段 ⇒ 记入
-       ``unattributed``，由判据判红。
+       * **帧钟点阵** —— 10 fps 帧 ⇒ 耗时全是 100 ms 的整数倍，200–500 ms 落在
+         onset 阈值带内 ⇒ **没有任何一个值等于 ts 差值**，同时阈值也抓不到；
+       * **ts 差值 + 任意常数偏移** —— 扫 offset 0..1999，**1999/2000 全盲**
+         （含 offset=1）。原负控之所以"有效"，靠的是 offset 恰好为 0 这个巧合；
+       * **非 ISO ts** —— 两个解析器都返回 ``None`` ⇒ 差值集合为空 ⇒
+         代数检验**空转恒真**通过。
+
+    ★ **原理性结论**：`latency_source` 是**写入侧自己写死的常量**。
+    在**同一个进程**里，一个自报的标签无法证明另一个钟的来历 ——
+    它只能证伪**特定**的伪造形态，不能证明出处。故：
+
+    * 本函数的名字与产出**如实标注为「自洽性检查」**，``evidence_kind`` 为
+      ``"consistency_checked"``（不是 ``"audited_from_rows"``）；
+    * ``legal`` 的含义被**重新定义**为「未发现矛盾」，**不是**「已证明出自链上打点」。
+      判据文本与卡片渲染都据此措辞，不再声称「已从数据取证」。
+
+    ★ **真要做到「证明」需要什么**（写在这里供后续工单，本票不实现）：
+    写入侧必须产出**可跨源交叉核对**的证据 —— 例如轮次 start/end 双打点、
+    里带单调时钟窗与墙钟两份读数（两钟的比值/差值可被独立检验），
+    或由服务端在**另一个进程**签名。**单进程自报的字段不足以**。
+
+    本函数**能**真正做到的（三条，均只证伪、不证明）：
+
+    1. **逐行出处字段必须在场**且为 :data:`LATENCY_SOURCE_CHAIN_STAMP`；
+    2. ★ **代数检验**：命中「恰好等于某个 ts 差值」即判该行为墙钟派生；
+    3. ★ **钟粒度点阵检验**（新增，专治复核报的第 1 种绕过）：真实链路耗时是
+       单调钟的毫秒差，**没有公共粒度**；而由帧钟推出的耗时必然全是帧间隔的
+       整数倍（1 Hz ⇒ 1000 的倍数；10 fps ⇒ 100 的倍数）。故当**全部**样本的
+       最大公约数 ≥ 10 且样本数足够时，判为「疑似帧钟点阵」。
+       ⚠️ 这是**启发式**，有假阳性空间（真实耗时也可能碰巧同粒度）——
+       故它只**判红**（fail-closed 方向安全），且``plateau_reason`` 把判据写出来
+       供人复核，不静默。
+    4. **缺失必须暴露**：任何开口行缺 ``latency_ms`` 或缺出处字段 ⇒ ``unattributed``。
 
     Returns
     -------
-        ``{source, legal, evidence_kind, per_source, n_attributed,
-        n_unattributed, unattributed_ids, ts_derived_ids, why}``。
-        ``legal`` 只在**三条证据全部通过**时为 ``True``。
+        ``{source, legal, evidence_kind, capability, per_source, n_attributed,
+        n_unattributed, unattributed_ids, ts_derived_ids, lattice_suspect_ids,
+        why, cannot_prove}``。
+
+        ``legal`` = 「未发现矛盾」（**不是**「已证明」）。
+        ``cannot_prove`` 恒定非空 —— 它是这条守卫**能力边界**的机器可读声明。
     """
     speaking = [row for row in rows if spoke(row)]
     per_source: dict[str, int] = {}
@@ -367,6 +392,11 @@ def latency_audit(rows: list[dict]) -> dict:
 
     # ts 差值的候选集合：若某行耗时「恰好等于」某个 ts 差值，它就不是链上读数。
     spans = _session_ts_spans_ms(rows)
+
+    # ★★ 第 3 种绕过的堵法：ts **解析不了**时差值集合为空 ⇒ 代数检验空转恒真。
+    #   故显式统计「有几行的 ts 解不出来」，>0 即判红（fail-closed）而不是空转。
+    #   实测：非 ISO 的 ts（epoch 毫秒串）下原实现 legal=True 且 session_seconds=0。
+    unparsable_ts = [str(row.get("id") or "?") for row in rows if not _ts_parses(row.get("ts"))]
 
     for row in speaking:
         row_id = str(row.get("id") or "?")
@@ -383,11 +413,17 @@ def latency_audit(rows: list[dict]) -> dict:
         if int(latency) in spans:
             ts_derived.append(row_id)
 
+    lattice = _lattice_suspects(speaking)
+    offset = _offset_suspects(speaking, spans)
+
     sources = sorted(per_source)
     legal = (
         bool(speaking)
         and not unattributed
         and not ts_derived
+        and not lattice["ids"]
+        and not offset["ids"]
+        and not unparsable_ts
         and sources == [LATENCY_SOURCE_CHAIN_STAMP]
     )
     if not speaking:
@@ -404,20 +440,197 @@ def latency_audit(rows: list[dict]) -> dict:
         #   「无法测量」而不是判红（与 T_ONSET_MEASURED 同一条区分：
         #   「本该有而不有」是缺陷，「本就没有」是无适用对象）。
         "applicable": bool(speaking),
-        "evidence_kind": "audited_from_rows",
+        # ★ 不再叫 "audited_from_rows"（那是一次被复核推翻的过度声明）。
+        "evidence_kind": "consistency_checked",
         "per_source": per_source,
         "n_attributed": len(speaking) - len(unattributed),
         "n_unattributed": len(unattributed),
         "unattributed_ids": unattributed,
         "ts_derived_ids": ts_derived,
+        "unparsable_ts_ids": unparsable_ts,
+        "lattice_suspect_ids": lattice["ids"],
+        "lattice_gcd_ms": lattice["gcd"],
+        "lattice_checked": lattice["checked"],
+        "offset_suspect_ids": offset["ids"],
+        "offset_matched_pairs": offset["matched_pairs"],
+        "offset_checked": offset["checked"],
         "forbidden": list(FORBIDDEN_LATENCY_SOURCES),
+        # ★★ 能力边界：**恒非空**的机器可读声明。见函数 docstring ——
+        #   单进程里自报的字段无法证明钟的来历，故这里如实说出**不能**证明什么。
+        "cannot_prove": (
+            "本检查**不能**证明耗时出自链上单调钟。`latency_source` 是写入侧"
+            "自己写死的常量，下列形态**在数学上不可证伪**（均由主控实测）："
+            "① **抖动**（ts 差值 ±1 ms 交替）—— 与真实噪声同分布；"
+            "② **乘法缩放**（×1.001）—— 在毫秒尺度上与噪声重叠；"
+            "③ **确定性加性漂移**（+i）—— 残差被 ts 增长主导而单调，"
+            "与真实情形（如**机器降频导致耗时随会话缓慢上升**）不可区分；"
+            "④ 逐行**独立**随机偏移 —— 等价于纯噪声。"
+            "已能证伪的形态（曾漏网，现判红）：帧钟点阵、ts 差值+常数偏移、"
+            "非 ISO 的 ts 字符串。"
+            "合法值只表示「**未发现矛盾**」。要真正证明，需写入侧产出跨源可交叉核对的"
+            "证据（单调钟窗 + 墙钟两份读数，或另一进程签名）。"
+        ),
         "why": (
-            "耗时出处**从数据取证**而不是由调用方声明：逐行 latency_source 字段 + "
-            "「耗时恰好等于某段 ts 差值」的代数检验（ts 派生的数必然命中该恒等式，"
-            "真实链路耗时不会，因为它来自单调时钟而非墙钟差值）。"
-            "任何开口行缺耗时或缺出处 ⇒ legal=False（判红）。"
+            "自洽性检查（**不是**取证）：逐行 latency_source 字段 + "
+            "「耗时恰好等于某段 ts 差值」的代数检验 + 钟粒度点阵检验。"
+            "任何开口行缺耗时/缺出处/命中前两项之一 ⇒ legal=False（判红）。"
+            "★ legal=True 的含义是「未发现矛盾」，不是「已证明」。"
         ),
     }
+
+
+#: 钟粒度点阵检验的最小样本数。低于它不算 gcd —— 2、3 个数的 gcd 极易碰巧很大。
+_LATTICE_MIN_SAMPLES = 6
+
+#: 判「疑似帧钟点阵」的 gcd 下限（毫秒）。
+#: 真实链路耗时是单调钟毫秒差，没有公共粒度；而帧钟派生的耗时必然全是帧间隔的
+#: 整数倍（1 Hz ⇒ 1000、10 fps ⇒ 100）。取 10 是为了在「10 fps 点阵」处仍能命中，
+#: 同时不误伤正常毫秒读数。
+_LATTICE_GCD_FLOOR_MS = 10
+
+#: 常数偏移检验的最小样本数。偏移检验靠「同一常数贯穿全部样本」，
+#: 样本太少时容易碰巧成立，故设下限与点阵一致。
+_OFFSET_MIN_SAMPLES = 6
+
+
+def _offset_suspects(speaking: list[dict], spans: set[int]) -> dict:
+    """★ ts 钟仿射检验：耗时序列是否**整体**是「ts 差值 + 常数」.
+
+    专治对抗复核查出的第 2 种绕过：**ts 差值 + 任意常数偏移**。
+    复核实测 offset 0..1999 中 **1999/2000** 对原实现全盲（含 offset=1）——
+    原检验要求**恰好相等**，而 ``+1`` 就不再相等了。
+
+    ★ 修法是**把代数族一般化，而不是逐个特例去堵**：
+
+    ★★ 关键的一步推导 —— 常数偏移在**差分**里会自己消掉。
+    若 ``latency_i = (ts_i − ts_ref) + c``（即耗时是 ts 钟的仿射像），则对任意
+    两行 ``i, j`` 都有
+
+        ``latency_i − latency_j == ts_i − ts_j``
+
+    ``c`` 不见了。⇒ 于是**不需要**去猜那个常数：直接比对「耗时的两两差」
+    与「ts 的两两差」是否**逐对相等**即可。整个偏移族（任意整数 ``c``）
+    一次性覆盖，且 ``c`` 有多大都不影响检验能力。
+
+    ⚠️ 这同时解释了为什么初版只抓到 offset=0：它是在检验 ``c == 0``
+    这一个特例，而不是检验「存在某个 ``c``」。
+
+    ⚠️ 仍是**只证伪不证明**：对手若用**逐行不同**的偏移（等价于纯噪声），
+    则它与真实噪声在数学上不可区分 —— 那时没有任何代数检验能工作。
+    这正是 ``cannot_prove`` 存在的原因。
+
+    Returns
+    -------
+        ``{ids, matched_pairs, checked}``：命中时 ``ids`` 为全部开口行 id。
+    """
+    samples: list[tuple[str, int, float]] = []
+    for row in speaking:
+        latency = row.get("latency_ms")
+        if isinstance(latency, bool) or not isinstance(latency, (int, float)):
+            continue
+        stamp = _ts_epoch_ms(row.get("ts"))
+        if stamp is None:
+            continue
+        if int(latency) > 0:
+            samples.append((str(row.get("id") or "?"), int(latency), stamp))
+
+    if len(samples) < _OFFSET_MIN_SAMPLES:
+        return {"ids": [], "matched_pairs": 0, "checked": False}
+    if not spans:
+        # 没有 ts 差值可比 ⇒ 本检验无适用对象（「解析不了」由另一个检查判红）。
+        return {"ids": [], "matched_pairs": 0, "checked": False}
+
+    # ★★ 关于「加性漂移」（``+i``）—— 一条**被自己实测推翻**的启发式，记在这里
+    #   以免后人重走：
+    #
+    #   我曾在这里加「残差是否严格单调 ⇒ 判漂移」。它抓到 ``+i``，但**同时误伤了
+    #   真实数据**：真实链路耗时与 ts 无关，而残差 ``(lat_i − lat_0) − (ts_i − ts_0)``
+    #   被 **ts 的增长主导**（ts 步长远大于耗时波动）⇒ 残差**必然**单调。
+    #   实测：13 个真实噪声样本被判成「漂移 down」，命中 13/13。
+    #
+    #   ⇒ **撤回**。一个误伤真数据的守卫比漏网更坏：它会让门禁在健康数据上判红，
+    #   进而诱使人拆掉整个守卫（连已修好的三条一起拆）。
+    #   代价是 ``+i`` 这类**确定性漂移**仍可漏网 —— 但它已被写进 ``cannot_prove``，
+    #   且在数学上与「耗时随会话缓慢变慢」的真实情形不可区分（例如**机器降频**：
+    #   真实耗时会随会话缓慢上升）。故它不是可证伪的形态。
+    ref_id, ref_latency, ref_stamp = samples[0]
+    del ref_id
+    matched = 0
+    for _row_id, latency, stamp in samples[1:]:
+        if latency - ref_latency != round(stamp - ref_stamp):
+            return {"ids": [], "matched_pairs": matched, "checked": True}
+        matched += 1
+
+    return {
+        "ids": [row_id for row_id, _lat, _stamp in samples],
+        "matched_pairs": matched,
+        "checked": True,
+    }
+
+
+def _ts_epoch_ms(value: object) -> float | None:
+    """``ts`` → epoch 毫秒（解析不了即 ``None``，**不猜**）."""
+    from datetime import datetime
+
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    return parsed.timestamp() * 1000.0
+
+
+def _lattice_suspects(speaking: list[dict]) -> dict:
+    """★ 钟粒度点阵检验：全部耗时是否共享一个 ≥10 ms 的公共粒度.
+
+    专治对抗复核查出的第 1 种绕过：**帧钟点阵**。帧 1 Hz ⇒ 耗时全是 1000 的倍数，
+    10 fps ⇒ 全是 100 的倍数 —— 而**没有一个**等于 ts 差值，故代数检验抓不到，
+    且这些值（200–500 ms）正好落在 onset 阈值带内，阈值也抓不到。
+
+    判据：全部样本的最大公约数 ≥ :data:`_LATTICE_GCD_FLOOR_MS`，
+    且样本数 ≥ :data:`_LATTICE_MIN_SAMPLES`。
+
+    ⚠️ **这是启发式，不是证明**（故只判红，方向安全）：
+    真实链路耗时理论上也可能碰巧全是 10 的倍数（概率随样本数迅速下降：
+    n 个随机毫秒读数全是 10 的倍数约 ``10^-n``）。``gcd`` 与样本数一并返回，
+    供人复核这次判定是不是假阳性。
+    """
+    values = [
+        int(row["latency_ms"])
+        for row in speaking
+        if isinstance(row.get("latency_ms"), (int, float))
+        and not isinstance(row.get("latency_ms"), bool)
+        and int(row["latency_ms"]) > 0
+    ]
+    if len(values) < _LATTICE_MIN_SAMPLES:
+        return {"ids": [], "gcd": None, "checked": False}
+
+    from functools import reduce
+    from math import gcd
+
+    common = reduce(gcd, values)
+    if common >= _LATTICE_GCD_FLOOR_MS:
+        return {
+            "ids": [str(row.get("id") or "?") for row in speaking],
+            "gcd": common,
+            "checked": True,
+        }
+    return {"ids": [], "gcd": common, "checked": True}
+
+
+def _ts_parses(value: object) -> bool:
+    """Return whether this ``ts`` parses as a timestamp.
+
+    ★ 存在的理由见 :func:`latency_audit` 的第 3 条能力边界：解析不了 ⇒ 差值集合为空
+    ⇒ 代数检验**空转恒真**。故「解析不了」必须是一条**判红**的理由，
+    而不是静默跳过。实测：非 ISO 的 ts 下原实现 `legal=True`。
+    """
+    from datetime import datetime
+
+    try:
+        datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return True
 
 
 def _session_ts_spans_ms(rows: list[dict]) -> set[int]:
@@ -426,6 +639,11 @@ def _session_ts_spans_ms(rows: list[dict]) -> set[int]:
     ★ 代数检验的另一半：一个由 ``ts`` 推出来的耗时**必然**等于某个 ts 差值。
     故把所有会话内的 ts 两两差值收成集合，供 :func:`latency_audit` 命中判定。
     样本是 O(n²)，而一次评测的轮次数是几十到几百 —— 可接受。
+
+    ⚠️ **不可解析的 ts 会让这个集合为空，从而让代数检验空转通过** ——
+    那是对抗复核报的第 3 种绕过（非 ISO 的 ts 字符串，例如 epoch 毫秒）。
+    故此处**不再静默返回空集**：调用方 :func:`latency_audit` 会显式检查
+    「开口行里有多少 ts 解析不了」，>0 即判红（见 ``unparsable_ts_ids``）。
     """
     from datetime import datetime
 
@@ -633,19 +851,44 @@ def timing_metrics(
     seconds = span["seconds_total"]
 
     expected_speak = [row for row in rows if row.get("expected") == EXPECTED_SPEAK]
+    n_expected_quiet = sum(1 for row in rows if row.get("expected") == EXPECTED_QUIET)
     missed = [row for row in expected_speak if not spoke(row)]
+
+    # ★★ 误触发是**真值相关**的量：没有真值就没有「误」可言。
+    #   ★ 这是真机核验查出的 D1（fail-open，且正好落在本判据专为它而设的
+    #   「不得把未测读成 0」那条纪律上）：初版只看时间基准，于是**零真值**的
+    #   输入报 ``spurious_triggers_per_second = 0.0`` 并让
+    #   ``T_SPURIOUS_TIMEBASE`` 判 **pass** —— 「0 次乱插话」与「不知道有几次」
+    #   在输出上完全同形。真机 09-21 正是这个形状：``n_expected_speak = 0``
+    #   而卡片印着 ``0.0 次/秒``。
+    #   ⇒ 真值分母为 0 时三个速率一律 ``None``（未测），与「测到 0」分开。
+    truth_present = (n_expected_quiet + len(expected_speak)) > 0
 
     return {
         # --- 样本规模（**分母必须显式**，本仓硬约束）---
         "n_rounds": len(rows),
         "n_speaking": len(speaking),
         "n_quiet": len(rows) - len(speaking),
+        # ★ 失效输出单独计数（对抗复核 D2）：判了要开口却零输出（``empty_output``）
+        #   的行**不是**「判定沉默」，是「没测到」。原先它们被静默算进 ``n_quiet``，
+        #   于是「没测到」在安静轮次里消失 —— 而 quiet 正是误触发率的分母侧。
+        #   本仓最贵的教训就是这一条：**「没测」不得被读成「测到了」**。
+        #
+        #   ★ 用 ``output_state``（读侧从 ``raw_text_len`` 算出，真机上可得）
+        #   而不是 ``ok``（benchmark 行的概念，真机事件流里**没有**这个形态：
+        #   写入侧只在达成决策时才写事件 ⇒ ``ok`` 恒真 ⇒ 拿它判会是一条死代码）。
+        "n_empty_output": sum(
+            1 for row in rows if str(row.get("output_state") or "") == "empty_output"
+        ),
         # --- onset 延迟 ---
         "onset_latency_ms": _onset_stats(series),
         # --- 每秒误触发次数（用户体感量）---
         "n_spurious": len(spurious),
         "spurious_round_ids": [str(row.get("id") or "?") for row in spurious],
         "session_seconds": seconds,
+        # ★ 速率的**两个**前提都必须成立：有时间基准 **且**有真值。
+        "spurious_rate_measurable": bool(seconds) and truth_present,
+        "n_expected_quiet": n_expected_quiet,
         # --- premature rate ---
         "n_premature": len(premature),
         "premature_scope": premature_scope_block,
@@ -659,10 +902,10 @@ def timing_metrics(
         #   （doc/research/eval-upstream-methodology-2026-09-20.md §8.2②）把它列为
         #   「用户实际体感数」的形态，而 0.002 次/秒 不是人读得出来的量。
         "spurious_triggers_per_second": (
-            None if not seconds else round(len(spurious) / seconds, 6)
+            None if not (seconds and truth_present) else round(len(spurious) / seconds, 6)
         ),
         "spurious_triggers_per_minute": (
-            None if not seconds else round(len(spurious) * 60.0 / seconds, 4)
+            None if not (seconds and truth_present) else round(len(spurious) * 60.0 / seconds, 4)
         ),
         # --- 该说没说（**只报不判**：那是定向轴 D2/D4 的职责，此处不作第二道门）---
         "n_expected_speak": len(expected_speak),

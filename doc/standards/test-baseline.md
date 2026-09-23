@@ -195,6 +195,153 @@ T_LATENCY_SOURCE = pass      >>> CARD VERDICT = pass
 | ★ 复核证伪复现 | **已闭合**：声明不动、耗时由 ts 差值伪造 ⇒ `legal=False`、19 行被点名、**卡片判红** |
 | 行尾核验 | `--numstat` 与 `--ignore-cr-at-eol` **一致**（无整文件行尾改写） |
 
+**★ 真机数据对照（追加于 2026-09-23T16:0x–16:1x 本地时间；**真机数据 / 离线运行**）**
+
+> 上文全部证据都跑在**冻结夹具**上（其 docstring 逐条声明「作者写的回放输入，不是真机测量」）。
+> 本行为把时序轴第一次指向**真机事件流**：`logs/events/webui-2026-09-21.jsonl`（204 轮，
+> 真机真人会话；`logs/` 在 `.gitignore` 下，故这份输入**不入库、对后人不可复现**）。
+> 结论：**真机数据目前无法支撑时序轴三项中的任何一项**，且该失败是**如实读数**。
+
+> ⚠️ **读数入口的既有边界（不是本次发现的缺陷，但它决定了本次怎么跑）**：
+> 唯一读入口 `build_rows` **强制要求真值 sidecar**，且事件与标签按 `(session_id, ts)`
+> 逐条配对、对不上即抛错。真机事件流**没有真值**（真值只能来自 authoring）。
+> 故本次用**桩 sidecar**（内存内，只放事件的 `(session_id, ts)` 身份键、`case_id` 为空）
+> 过掉配对这一关，其余全程走官方 `build_rows` → `timing_block` → `build_card_from_rows`。
+> 桩**不提供任何真值**：`n_with_truth: 0`、每行 `expected=None` —— 不发明真值。
+> **所以本次读到的误触发次数是「0 次真值、故 0 次误触发」，不是「0 次乱插话」。**
+
+本次实际执行的脚本（`cd services/webinfer` 后运行；完整可复现，**不写盘、不改任何文件**）：
+
+```bash
+# 真机 09-21 → 时序轴读数（桩 sidecar 只提供身份键，零真值）
+python - <<'PY'
+import sys; sys.path.insert(0, '.')
+import decision_eval_timing_sources as ts, decision_events as de
+from decision_eval_timing_card import build_card_from_rows
+
+EV = "logs/events/webui-2026-09-21.jsonl"
+ordered = de.order_rounds(list(de.load_events(ts._resolve(EV)).rounds))
+keys = []                                   # 事件自身的身份 (session_id, ts)
+for r in ordered:
+    if (r.session_id, r.ts) not in keys:
+        keys.append((r.session_id, r.ts))
+
+# ★ 只替换「真值来源」这一步：桩里 case_id 一律为空 ⇒ 每行 expected 仍为 None
+ts.load_truth = lambda path=None: {
+    "labels": [{"session_id": s, "ts": t} for s, t in keys],
+    "meta": {"kind": "keys-only-no-truth"},
+    "path": "<in-memory: 身份键, ZERO truth labels>"}
+
+lr = ts.build_rows(EV)                      # 其余全程走官方读入口
+card = build_card_from_rows(lr["rows"], source={"label": "真机 09-21"}, reading=lr["reading"])
+for c in card["criteria"]:
+    print(f"[{c['verdict']}] {c['criterion_id']}")
+print("total:", card["verdict"], "| n_expected_speak:", card["metrics"]["n_expected_speak"],
+      "| spurious/s:", card["metrics"]["spurious_triggers_per_second"],
+      "| premature%:", card["metrics"]["premature_rate_pct"])
+PY
+```
+
+> ★ **为什么侧门是必要的，以及它为什么**不**削弱结论**：`build_rows` 的配对校验是
+> 「事件 ↔ 真值」的**完整性**校验，它挡的是**错位**（真值贴错行），不是「真值缺失」。
+> 真机输入走不了它，是**入口设计**的结果（该模块定位为「冻结事件流 × 真值标签」），
+> 不是本次发现的缺陷。桩只放身份键 ⇒ 配对通过，而**真值依旧为零** ⇒
+> 读出的每一个数都在「没有真值」的前提下成立，本次所有关于「不可测」的结论均由此而来。
+
+| 项（真机 09-21，204 轮 = 用户 151 + 主动 53，开口 136） | 命令 | 结果 | 真机/离线 | 测量时间 |
+|---|---|---|---|---|
+| 真机事件解析（读侧） | `cd services/webinfer && python -m decision_events --events-dir ../../logs/events` | 204 轮解析成功；`skipped_other_events=230`、`malformed=0`；`latency_ms` = 0×116 / 缺失×87 / 非零×**1**（=16 ms） | **真机** | 2026-09-23T16:0x |
+| 时序轴 × 真机 09-21（204 轮） | 桩 sidecar + `build_rows` → `build_card_from_rows`（脚本见下方说明） | **总判定 FAIL**；`T_LATENCY_SOURCE` **fail**、`T_ONSET_MEASURED` **fail**、`T_PREMATURE_MEASURED` **无法测量**、`T_SAMPLE_FLOOR` **无法测量**、`T_SPURIOUS_TIMEBASE` pass、`T_ONSET_MEDIAN`/`T_ONSET_P90` pass | **离线运行**（读真机文件） | 2026-09-23T16:0x |
+| 时序轴 × 真机 09-22（4 轮 / 1 次开口） | 同上 | **总判定 FAIL**；`T_ONSET_MEASURED` **pass**（该轮 781 ms 带打点）、`T_LATENCY_SOURCE` **fail**、`T_SAMPLE_FLOOR` **无法测量** | **离线运行**（读真机文件） | 2026-09-23T16:1x |
+
+**三个量在真机数据上的实际读数（★「0」与「没测」严格区分）**：
+
+| 量 | 真机读数 | 分母（写清） | 判定 |
+|---|---|---|---|
+| onset 延迟 中位 / p90 | **不可测**。写 `median: 16.0` / `p90: 16.0` 是**全 204 轮中仅 1 个非零样本**（`s1@15:43:09.692Z`，16 ms）；`n=1 < MIN_SPEAKING_ROUNDS=10` ⇒ 该数值**不得**当分位数读 | 开口 136 次中，**135 次缺轮次打点**（其中 `latency_ms` 缺失×**60**、`==0`×**75**）；`n=1`、`enough_samples=False` | **不可测** |
+| 每秒误触发次数 | **不可测（真值缺失）**。字段值是 `0.0` 次/秒 = **0 次误触发 / 2386.089 s** —— 而 `n_expected_speak = 0`：**一次真值都没有**，故 `n_spurious` 恒为 0。这不是「0 次乱插话」，是「**没有真值可以判哪次是乱插话**」 | 时间基准 2386.089 s **成立**（= 2 个会话跨度之和：`(unattributed)` 1191.749 + `s1` 1194.34；`sessions_without_span` 空）；但**真值分母 = 0** | **不可测（真值）** |
+| premature rate | **不可测**。`premature_rate_pct = None`（不是 `0.0`）；`n_labeled = 0`、`n_unlabeled = 101`（另 35 次主动轮不适用） | 分母 **0**（有标注的开口） | **不可测** |
+
+> ★ `user_still_speaking_at_decision` 字段在真机 204 轮里**出现 0 次** —— 与
+> `T_PREMATURE_MEASURED` 判据正文的声明一致。**该字段只在真值 sidecar 侧存在，
+> 写入侧从未写过**；这是接线缺口，不是「测到 0 次抢话」。
+> ★ 同理 `latency_source` 字段在真机 204 轮里**出现 0 次**（#158 刚给写入侧加上）。
+> ⇒ 时序轴在**当前真机事件流**上必然 `T_LATENCY_SOURCE=fail`：不是实现坏了，
+> 而是**逐行出处证据尚未在任何一份已落盘的真机事件里存在**。
+
+**★ 真机数据上对「删掉打点不得静默出数」的测试（本票 ★ 负控的**真机**形态）**：
+
+真机流恰好天然满足该负控的前提（打点 0/缺失，而 `ts` 全程在场且跨度 2386.089 s），
+故这是对 ★ AC 最强的一次检验。三个变形各跑一遍：
+
+| 变形（都基于真机 204 轮） | 结果 | 判读 |
+|---|---|---|
+| **① 真机原样**（打点 0/缺失，`ts` 在场） | `onset n=1`、`n_missing_stamp=135`、`median=16.0`；`session_seconds=2386.089`（`ts` 确实在场）；`T_ONSET_MEASURED` = **fail（判红）** | ★ **未退回用帧/`ts` 兜底出数**。若实现拿 `ts` 差值兜底，中位数会是 10⁵–10⁶ ms 量级的墙钟差值；实际仍是那 1 个真样本（16 ms），其余 135 次**显式计入缺口**。判红而非「无法测量」⇒ 接线缺陷没被说成「不适用」 ✓ |
+| **② 真机 + 耗时真的由 `ts` 差值算出**、逐行声明**保持链上打点不动** | `legal=False`、`source=decision_chain_round_stamp`（声明本身「合法」）、`ts_derived_ids` = **136** 行被代数检验点名；`onset median = 596170.5 ms`（**看着完全正常**）；`T_LATENCY_SOURCE` = **fail** | ★ 代数检验在真机数据上**有效**：只查声明的实现会判绿，取证实现点名 136/136 ✓ |
+| **③ 真机 + 逐行出处抹掉**（耗时仍在） | `T_LATENCY_SOURCE` = **fail** | 「没写出处」与「写了链上打点」可区分 ✓ |
+
+**★ 本次查出的缺陷（3 处，**只报告不修**，交主控裁决）**：
+
+| # | 缺陷 | 最小复现 | 影响 |
+|---|---|---|---|
+| D1 | ★ **`T_SPURIOUS_TIMEBASE` 只查时间基准、完全不查真值是否存在** ⇒ 在**零真值**的输入上判 **PASS**。真机卡片里它报 `PASS（时间基准 2386.089s）`，而同一张卡的 `n_expected_speak = 0`。`no-timebase` 负控只覆盖了「`ts` 全被抹掉」（此时 `session_seconds=0`），**从未覆盖「真值缺失」** —— 故该判据在这条路径上实际近乎恒真 | 2 行输入（1 会话、2 次开口、`latency_ms=0`、`expected=None`）⇒ `T_SPURIOUS_TIMEBASE = pass` 而 `n_expected_speak = 0` | 一条**专门用来守「不得把未测读成 0」**的判据，自己在真机输入上放行了 `spurious_triggers_per_second = 0.0`。与模块 docstring 决定 3「没测不是测到 0」直接冲突 |
+| D2 | ★ **`T_ONSET_MEDIAN` / `T_ONSET_P90` 无样本下限**，样本不足时报「测量」而非「不适用」。阈值的「宽松」是相对 **~600 ms** 链路耗时而言的；真机上 116 行 `latency_ms == 0`（模块自己按缺失处理），而 `16 ms` 这类值会**远低于**任何真实链路耗时 ⇒ 判据几乎不可能判红，却输出一个定量结论 | `tiny-sample` 负控（2 次开口）实测 `T_ONSET_MEDIAN = pass (446.0)`、`T_ONSET_P90 = pass (498.8)` —— **这两个 id 不在该负控的 `must_not_pass` 里**，故负控自检照样报 killed；`T_SAMPLE_FLOOR` 只约束 `T_SAMPLE_FLOOR` 自己 | 卡片在真机 09-21 上并排打印 `T_SAMPLE_FLOOR=无法测量（样本 1 < 10）` 与 `T_ONSET_MEDIAN=pass（16.0 <= 898）`。**语义上自相矛盾**：前者说样本不足、后者拿同一样本报了「达标」。门禁 #159 若读 `T_ONSET_MEDIAN=pass` 即被误导 |
+| D3 | **`reading.is_frozen_fixture` 是硬编码常量 `True`**（`decision_eval_timing_sources.py:268`），不是对输入的判定。真机 09-21 也返回 `True`，于是渲染层照抄夹具告警：「⚠️ 这是**冻结夹具**（决策为作者写的回放输入）」—— 对真机输入**说反了** | `build_rows("logs/events/webui-2026-09-21.jsonl", …)` ⇒ `reading["is_frozen_fixture"] is True` | 该字段的注释写着「★『这份输入是夹具还是真机』**必须可判** —— 评测结论可信度的前提」，而实现使它在**任何**输入上都不可判。夹具告警因此在真机上变成一句**反向**声明 |
+
+**本次未做的（如实记）**：
+
+- **没有跑真机全栈**：本次是**离线**运行（只读已落盘的真机事件文件），未启动 6 服务；
+  时序轴本身不需要模型或服务，但「真机」在本台账的纪律里特指服务在跑，
+  故本行一律标 **真机数据 / 离线运行**。
+- **ruff（CI 同款全量）**：`python scripts/run_ci_ruff.py` ⇒ **14/14 PASS**（2026-09-23T16:1x）。
+  本次只改 `doc/standards/test-baseline.md`（非 Python），ruff 结果不受影响，记录以备核。
+- **未跑 pytest**：本次不改代码，故不发测试；**D1/D2/D3 三处缺陷均未修、也未加测试**
+  （按任务约束「只报告不修」）。
+- **未做**：真值 sidecar（真值只能由 authoring 产生，本次不发明）；跨会话（09-22 仅 1 次开口）
+  无统计意义，已注明。
+
+**★★ 上表 D1/D2/D3 已全部修复（2026-09-23T17:0x，**追加行**；不追改上表）**
+
+| # | 修法（根因，不是症状） | 验证（用**原复现输入**重跑） |
+|---|---|---|
+| D1 | 速率判据改为**同时**要求「时间基准」与「**真值存在**」（`n_expected_quiet + n_expected_speak > 0`） | 原 2 行输入：`spurious/s` **`0.0` → `None`**；`T_SPURIOUS_TIMEBASE` **pass → unmeasurable**。新增负控 `no-truth` 判红 |
+| D2 | 任何读 `onset_latency_ms` 的**带阈值**判据，样本不足时必须判「无法测量」——与 `T_SAMPLE_FLOOR` **同一口径**（两条判据不得在同一事实上给出相反判定） | `tiny-sample`（2 次开口）：`T_ONSET_MEDIAN`/`T_ONSET_P90` **pass → unmeasurable**；该负控的 `must_not_pass` 已补上这两个 id（原先漏了，故自检照报 killed） |
+| D3 | `is_frozen_fixture` 改为**判出来**：读真值 sidecar 的 `labels_are_authored`（最接近原始出处）；判不出时说 `unknown`（`None`），**不冒充**任何一边 | 真机形状 ⇒ `input_kind=unknown`（修前报 `True`＝夹具）；本仓夹具 ⇒ `fixture`；渲染层新增「输入性质未判定」分支 |
+
+**★★★ 第三轮对抗复核（同一处守卫第三次被推翻）—— 已修，并**下调声称****
+
+复核以**帧钟点阵**伪造输入实测：`legal=True` / `ts_derived_ids=0` / **卡片总判 `pass`**
+（主控独立复现一致）。根因是**原理性**的：`latency_source` 是**写入侧自己写死的常量**，
+单进程无法证明另一个钟的来历 —— 上一轮把它改名成「取证」，**那本身就是过度声明**。
+
+| 绕过（复核报，主控复现） | 修前 | 修后 |
+|---|---|---|
+| ① **帧钟点阵**（10 fps ⇒ 100 ms 整数倍；无一等于 ts 差值，且落在阈值带内 ⇒ 阈值也抓不到） | `legal=True`、卡片 **pass** | **判红**（`_lattice_suspects`：全样本 gcd ≥ 10 且 n ≥ 6） |
+| ② **ts 差值 + 常数偏移**（复核扫 0..1999：**1999/2000 全盲**，含 +1） | 几乎全盲 | **判红**（`_offset_suspects`：**常数在差分里自行消掉** ⇒ 比对「耗时逐对差」与「ts 逐对差」，一次覆盖整族，对偏移大小不敏感） |
+| ③ **非 ISO `ts`**（epoch 毫秒串）⇒ 差值集合为空、代数检验**空转恒真** | `legal=True`，`session_seconds=0` | **判红**（`unparsable_ts_ids` ⇒ fail-closed，不空转） |
+
+**★ 下调声称（与修 bug 同等重要）**：`evidence_kind` 由 `audited_from_rows` 改为
+**`consistency_checked`**；新增**恒非空**的 `cannot_prove` 字段写明**不能证明什么**；
+判据文本改说「**未发现矛盾**」而非「已证明」。**三次推翻同一处守卫的根因都是
+「声明的能力超过了实现的能力」** ⇒ 这次把边界写进机器可读的产物。
+
+**★ 一条被自己实测撤回的启发式（留痕，防后人重走）**：曾加「残差严格单调 ⇒ 判撞漂移」，
+它抓到 `+i` 但**误伤真实数据**（残差被 ts 增长主导 ⇒ **必然**单调；13/13 真实样本被判撞车）。
+**撤回** —— 误伤真数据的守卫比漏网更坏（会诱使人拆掉整个守卫）。`+i` 类漂移因此列进
+`cannot_prove`：它与「机器降频导致耗时随会话缓慢上升」在数学上不可区分。
+
+**★ 反假阳性对照（与三条攻击同等重要）**：4 个随机种子的真实噪声耗时（与 `ts` 无关）
+全部 `legal=True`；204 轮真实规模不误伤。
+
+**★ 另一处自检出的实现缺陷**：读侧（`decision_events`）**不产** `ok` 字段 ⇒
+用 `ok=False` 判「失效输出」会是一条**死代码**（`n_errors` 恒 0）。
+改为读读侧**已在真机可得的** `output_state == "empty_output"` ⇒ 真机 09-21 实测
+**9 行失效输出**被正确计数（此前被静默算进「安静」，而安静正是误触发率的分母侧）。
+
+**验证（2026-09-23T17:0x）**：webinfer **823 passed**；负控自检 **16 个变异体**
+全部按声明判红/不判绿（新增 5 个专治上述绕过，含 4 条新回归测试与反假阳性对照）；
+`python scripts/run_ci_ruff.py` ⇒ **14/14 PASS**。
+
 ### 2026-09-23（★ 定向轴记分卡：把「该不该开口判断得对不对」变成一条命令；工单 #157）
 
 > **这是父 spec #154 的第 2 片纵切**，也是欠账里最核心的那个数字。

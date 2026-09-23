@@ -534,3 +534,211 @@ def test_synthetic_fixture_needs_no_directed_axis_import():
     )
     assert result.returncode == 0, result.stderr
     assert "ok" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# 10. ★ D3 回归：夹具 / 真机必须**判出来**，不是一个常量
+# ---------------------------------------------------------------------------
+
+
+def test_input_kind_is_judged_not_hardcoded():
+    """★★ D3 回归：输入性质必须从输入**判出来**.
+
+    ★ 真机核验查出：`reading.is_frozen_fixture` 原先是硬编码 ``True``，
+    于是真机 09-21 事件流也返回 ``True``，渲染层照抄夹具告警
+    「⚠️ 这是冻结夹具（决策为作者写的回放输入）」—— **对真机说反了**。
+    一条写着「必须可判」的注释配一个常量，得到的正是一个不可判的字段，
+    而它守的是「读者要不要把这些数字当真」这个前提。
+    """
+    from decision_eval_timing_sources import is_frozen_fixture_reading
+
+    # 真机形状：sidecar 未声明「作者写的」，也没有写入侧字段 ⇒ **不判成夹具**
+    real_like = is_frozen_fixture_reading({}, [{"id": "x", "latency_ms": 100}])
+    assert real_like["is_frozen_fixture"] is None, (
+        "判不出来就必须说 unknown —— 冒充夹具会给真机读数打上错的告警，"
+        "冒充真机会让未声明的夹具被当成真机"
+    )
+    assert real_like["input_kind"] == "unknown"
+
+    # 夹具形状：sidecar 自己声明了「作者写的回放输入」⇒ 判成夹具
+    fixture_like = is_frozen_fixture_reading(
+        {"labels_are_authored": "★ 本夹具的决策是作者写的回放输入"}, []
+    )
+    assert fixture_like["is_frozen_fixture"] is True
+    assert fixture_like["input_kind"] == "fixture"
+
+    # 带写入侧字段且未声明作者 ⇒ 真机产物
+    write_side = is_frozen_fixture_reading(
+        {}, [{"id": "x", "latency_source": "decision_chain_round_stamp"}]
+    )
+    assert write_side["is_frozen_fixture"] is False
+    assert write_side["input_kind"] == "real"
+
+
+def test_real_fixture_is_judged_as_a_fixture():
+    """★ 本仓**真实的**冻结夹具必须被判成 fixture（防止修复把判据写反）."""
+    loaded = build_rows(TIMING_EVENTS, TIMING_TRUTH)
+    assert loaded["reading"]["input_kind"] == "fixture"
+    assert loaded["reading"]["is_frozen_fixture"] is True
+
+
+# ---------------------------------------------------------------------------
+# 11. ★★ 对抗复核报的三条绕过（主控已独立复现，全部必须判红）
+# ---------------------------------------------------------------------------
+
+
+def _affine_rows(offset: int, *, session_key: str = "s") -> list[dict]:
+    """构造「耗时 = 到会话首行的 ts 差值 + offset」的行，逐行声明**不动**."""
+    from datetime import datetime
+
+    base = synthetic_healthy_rows()
+    first = datetime.fromisoformat(str(base[0]["ts"]).replace("Z", "+00:00"))
+    rows: list[dict] = []
+    for row in base:
+        if not T.spoke(row):
+            rows.append(dict(row))
+            continue
+        stamp = datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00"))
+        delta = round((stamp - first).total_seconds() * 1000) + offset
+        rows.append({**row, "session_id": session_key, "latency_ms": max(delta, 1)})
+    return rows
+
+
+def test_frame_lattice_latency_is_caught():
+    """★★ 绕过①：**帧钟点阵** —— 耗时全是 100 ms 的整数倍，声明不动.
+
+    ★ 对抗复核发现、主控独立复现：初版只比对「恰好等于某个 ts 差值」，
+    而点阵值**没有一个**等于 ts 差值 ⇒ 判绿；且 200–500 ms 落在 onset 阈值带内，
+    **阈值也抓不到** ⇒ 卡片总判 **pass**（一个「其实用了帧钟」的实现全绿）。
+
+    ★ 之所以单列这条：`frame-ts-latency-source` 负控看似覆盖帧钟，但它**同时**
+    把逐行来源写成 ``frame_capture_ts_ms``，于是被来源名单抓住 ——
+    那测的是「声明被改了会不会被发现」，**不是**「耗时是否真的来自帧钟」。
+    """
+    lattice = [200, 300, 400, 500]
+    rows: list[dict] = []
+    index = 0
+    for row in synthetic_healthy_rows():
+        if not T.spoke(row):
+            rows.append(dict(row))
+            continue
+        rows.append({**row, "latency_ms": lattice[index % len(lattice)]})
+        index += 1
+
+    provenance = T.timing_block(rows)["latency_source_block"]
+    assert provenance["legal"] is False, "帧钟点阵未被抓到 ⇒ 卡片会全绿（复核报的 blocker）"
+    assert provenance["lattice_suspect_ids"], "点阵命中必须被点名"
+    assert provenance["lattice_gcd_ms"] >= T._LATTICE_GCD_FLOOR_MS
+
+
+def test_frame_lattice_bypass_does_not_reach_a_green_card():
+    """★ 上一条的**端到端**断言：卡片总判定必须是 fail（复核报告的是 pass）."""
+    from decision_eval_timing_card import build_card_from_rows
+
+    lattice = [200, 300, 400, 500]
+    rows: list[dict] = []
+    index = 0
+    for row in synthetic_healthy_rows():
+        if not T.spoke(row):
+            rows.append(dict(row))
+            continue
+        rows.append({**row, "latency_ms": lattice[index % len(lattice)]})
+        index += 1
+    card = build_card_from_rows(rows)
+    verdicts = {c["criterion_id"]: c["verdict"] for c in card["criteria"]}
+    assert verdicts["T_LATENCY_SOURCE"] == "fail"
+    assert card["verdict"] == "fail", "复核报的正是「卡片总判 pass」"
+
+
+def test_ts_affine_constant_offset_is_caught():
+    """★★ 绕过②：ts 差值 **+ 任意常数偏移** —— 仿射检验必须对偏移大小不敏感.
+
+    ★ 复核实测：初版「恰好相等」检验对 offset 0..1999 中 **1999/2000 全盲**
+    （含 offset=1）—— 它当初"有效"靠的是 offset 恰好为 0 这个巧合。
+
+    ★ 修法是把代数族一般化：**常数偏移在差分里消掉**
+    （``latency_i − latency_j == ts_i − ts_j``），故一次性覆盖任意常数。
+    本测试对每个 offset 都断言判红，于是「只堵 offset=1」的补丁会被抓住。
+    """
+    for offset in (1, 2, 997, 1000, 12345):
+        provenance = T.timing_block(_affine_rows(offset))["latency_source_block"]
+        assert provenance["legal"] is False, f"offset={offset} 未被抓到（复核报 1999/2000 盲）"
+
+
+def test_ts_affine_does_not_need_to_guess_the_offset():
+    """★ 仿射检验的**证据**是「逐对等差」，不是「猜中了那个常数」."""
+    provenance = T.timing_block(_affine_rows(7))["latency_source_block"]
+    assert provenance["offset_suspect_ids"], "未点名 ⇒ 证据没留下"
+    assert provenance["offset_matched_pairs"] > 0, "命中对数必须为正（否则证据是空的）"
+
+
+def test_non_iso_ts_is_caught_not_vacuous():
+    """★★ 绕过③：``ts`` 非 ISO（epoch 毫秒串）⇒ 必须判红，**不得空转通过**.
+
+    ★ 复核指出：两个解析器都返回 ``None`` ⇒ 差值集合为空 ⇒ 代数检验**恒真通过**，
+    且 ``session_seconds`` 静默退化为 0。修法：解析不了的 ts 直接判红（fail-closed）。
+    """
+    rows = [{**row, "ts": "1758523200000"} for row in synthetic_healthy_rows()]
+    provenance = T.timing_block(rows)["latency_source_block"]
+    assert provenance["legal"] is False, "非 ISO ts 下代数检验空转 ⇒ 恒真通过（复核报的绕过）"
+    assert provenance["unparsable_ts_ids"], "解析不了的 ts 必须被点名"
+
+
+def test_real_chain_latency_is_not_falsely_accused():
+    """★★ **反向对照**：真实链路耗时（与 ts 无关的独立噪声）**不得**被误伤.
+
+    ★ 这条与上面三条同等重要：一个**误伤真数据**的守卫同样致命 ——
+    它会让门禁在健康数据上判红，进而诱使人拆掉守卫。
+
+    用 204 轮（真实规模）的独立噪声耗时构造：真实链路耗时是单调钟的毫秒差，
+    既不该命中点阵（gcd 应为 1），也不该命中仿射（差值不等）。
+    """
+    import random
+    from datetime import datetime, timedelta
+
+    # S311（伪随机不适合加密）在**测试夹具**里不适用：这里要的正是可复现的
+    # 伪随机噪声，且种子固定 ⇒ 断言是确定的。加密强度在这里毫无意义。
+    rng = random.Random(7)  # noqa: S311
+    base = synthetic_healthy_rows()
+    rows: list[dict] = []
+    index = 0
+    for row in base:
+        if not T.spoke(row):
+            rows.append(dict(row))
+            continue
+        rows.append(
+            {
+                **row,
+                "ts": (datetime(2026, 9, 22, 5, 0, 0) + timedelta(seconds=index * 7.3)).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%f"
+                )[:-3]
+                + "Z",
+                "latency_ms": max(250 + int(rng.gauss(0, 120)), 30),
+            }
+        )
+        index += 1
+
+    provenance = T.timing_block(rows)["latency_source_block"]
+    assert provenance["legal"] is True, (
+        "真实噪声耗时被误判为墙钟派生 ⇒ 守卫会误伤真数据；"
+        f"lattice_gcd={provenance['lattice_gcd_ms']} "
+        f"lattice={len(provenance['lattice_suspect_ids'])} "
+        f"offset={len(provenance['offset_suspect_ids'])}"
+    )
+
+
+def test_provenance_declares_what_it_cannot_prove():
+    """★ 能力边界必须是**机器可读**的：``cannot_prove`` 恒非空.
+
+    ★ 三次复核都推翻同一处守卫，根因是**声明的能力超过了实现的能力**：
+    初版叫「声明」，第二轮改名「取证」，两次都被推翻。故现在把边界写进产物 ——
+    读侧（门禁、人）不必相信我，读字段即可。
+    """
+    provenance = T.timing_block(synthetic_healthy_rows())["latency_source_block"]
+    assert provenance["cannot_prove"], "能力边界必须落进产物"
+    assert provenance["evidence_kind"] == "consistency_checked", (
+        "不得再声称 audited/取证 —— 那是一次已被推翻的过度声明"
+    )
+    # 三种已知绕过都必须在边界声明里点名（否则读者不知道要防什么）。
+    for family in ("点阵", "偏移", "非 ISO"):
+        assert family in provenance["cannot_prove"], f"边界声明没点名 {family}"

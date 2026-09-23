@@ -1,4 +1,10 @@
-# ruff: noqa: RUF001, RUF002
+# ruff: noqa: RUF001, RUF002, RUF003
+# (RUF001/002/003 = ambiguous fullwidth punctuation in strings AND comments. This
+# module's prose is Chinese. RUF003 was missing here while all six sibling
+# `decision_eval_timing*` modules had it — an inconsistency that only showed up
+# when a **comment** first carried a fullwidth colon. Keep this line identical
+# across the family; a lone module drifting is how `scripts/run_ci_ruff.py`
+# caught it.)
 """时序轴的**渲染与 diff**（工单 #158）.
 
 为什么单独一个模块
@@ -57,6 +63,11 @@ def render_card(card: dict) -> str:
             "  ⚠️ 这是**冻结夹具**（决策为作者写的回放输入），"
             "证明的是「时序轴能算出并判红」，**不是**生产模型的实际时机质量。"
         )
+    elif reading.get("is_frozen_fixture") is None:
+        # ★ D3 修复的可见面 —— 判不出来就说判不出来，**不冒充**任何一边。
+        #   冒充真机会让一个未声明的夹具被当成真机读数；
+        #   冒充夹具会给真机读数打上错的告警。
+        out.append(f"  ⚠️ 输入性质**未判定**（{reading.get('input_kind_why')}）")
     out.append("")
 
     metrics = card.get("metrics") or {}

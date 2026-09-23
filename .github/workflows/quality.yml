@@ -283,8 +283,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install pytest
-        run: pip install pytest
+      # 同一个理由也适用于 ruff：`scripts/tests/test_ci_ruff_runner.py` 会真的
+      # 调用 ruff（它钉的是「ruff 对不存在的路径退出 0」这一**实测行为**，
+      # 以及本运行器的退出码契约）。不装 ruff 时那些测试会以
+      # ModuleNotFoundError 的形式失败，而报错信息看起来像「ruff 改了行为」
+      # —— 一个指错方向的告警。实测发生过一次（run 35835923523）。
+      # ★ 版本与 ruff job 同钉 0.15.22：本仓行为测试依赖具体的 ruff 行为，
+      #   浮动版本会让「实测钉住的行为」在无人改动时失效。
+      - name: Install pytest and pinned ruff
+        run: pip install pytest ruff==0.15.22
       - name: Scripts tests (offline, no services)
         run: python -m pytest scripts/tests/ -q
 
