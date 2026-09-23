@@ -21,7 +21,10 @@ Frontend static contracts (index.html):
     format the backend treats identically;
   * 开画面 button + source select start disabled (only usable in live mode);
   * startLiveVideo bails when !liveModeActive or already active;
-  * source change while capturing is rejected with a hint (single-select);
+  * source change while capturing is rejected with a hint (single-select),
+    and the handler never starts or stops a capture implicitly — guarded
+    against the *real handler body* since #172 (the old assertion ended in
+    `or True`, so it could never fail);
   * stopLiveCameraCapture clears the interval + stops tracks + nulls stream;
   * stopLiveVideoCapture only stops the screen capture when the live panel
     owns it (liveVideoOwned) — never kills a capture adopted from elsewhere.
@@ -487,16 +490,153 @@ def test_start_live_video_bails_when_not_active_or_already_capturing():
     assert "if (!liveModeActive || liveVideoActive) return;" in body
 
 
+def _arrow_handler_body(source: str, marker: str) -> str:
+    """Return the brace-matched body of the arrow handler registered by ``marker``.
+
+    Scoping an assertion to the *actual* handler body -- rather than to a
+    fixed-width text window -- is what lets the assertion fail.  A window both
+    overruns into the next ``addEventListener`` registration and shifts with
+    every comment edit, so "the call is absent" could be true only because the
+    window ended too early.
+
+    Braces inside string literals, ``//`` line comments and ``/* */`` block
+    comments are skipped so they cannot unbalance the count. Getting this wrong
+    is not cosmetic: a stray ``/* } */`` before the guarded call would end the
+    match early, truncate the body past that call, and let the guard pass
+    vacuously -- the very defect class #172 exists to remove.
+
+    The ``marker`` is this helper's only locator, so a missing marker is reported
+    by name (``webui-design-standards.md`` §9.14(f) 纪律 2: a locator that fails
+    must say which one). A bare ``str.index`` would raise ``ValueError: substring
+    not found`` and read as though the contract under test had broken.
+    """
+    start = source.find(marker)
+    assert start != -1, (
+        f"handler registration not found in the front-end corpus: {marker!r} -- "
+        "the handler was renamed or moved, so this test is no longer looking at it"
+    )
+
+    open_idx = source.index("{", start)
+    depth = 1
+    i = open_idx + 1
+    while i < len(source) and depth:
+        ch = source[i]
+        if ch == "/" and source.startswith("//", i):
+            newline = source.find("\n", i)
+            if newline == -1:
+                break
+            i = newline
+            continue
+        if ch == "/" and source.startswith("/*", i):
+            close = source.find("*/", i + 2)
+            if close == -1:
+                break
+            i = close + 2
+            continue
+        if ch in "'\"`":
+            quote = ch
+            i += 1
+            while i < len(source) and source[i] != quote:
+                i += 2 if source[i] == "\\" else 1
+            i += 1
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        i += 1
+    assert depth == 0, f"unbalanced braces in the handler registered by {marker!r}"
+    return source[open_idx + 1 : i - 1]
+
+
+# Trailing "(", so these match *calls* and not the function's own definition,
+# its export entry, or a log string naming it. Both entries are the same shape.
+_SOURCE_CHANGE_FORBIDDEN_CALLS = ("startLiveVideo(", "stopLiveVideoCapture(")
+
+
+def _implicit_capture_calls(handler: str) -> list[str]:
+    """Capture-state calls a source-change handler makes implicitly.
+
+    Empty list == the handler only surfaces a hint and never touches capture
+    state, which is the single-select contract.
+    """
+    return [call for call in _SOURCE_CHANGE_FORBIDDEN_CALLS if call in handler]
+
+
+def _source_change_handler() -> str:
+    """The ``liveVideoSourceEl`` change-handler body from the front-end corpus."""
+    return _arrow_handler_body(_index_html(), "liveVideoSourceEl.addEventListener('change'")
+
+
 def test_live_video_source_change_rejected_while_capturing():
     """Single-select: switching source while capturing is refused with a hint."""
-    html = _index_html()
-    idx = html.index("liveVideoSourceEl.addEventListener('change'")
-    snippet = html[idx : idx + 500]
-    assert "liveVideoActive" in snippet
-    assert "请先关闭当前画面再切换来源" in snippet
-    assert "stopLiveVideoCapture" not in snippet.split("请先关闭当前画面再切换来源")[0] or True
-    # The change handler never stops an active capture implicitly.
-    assert "startLiveVideo(" not in snippet
+    handler = _source_change_handler()
+    assert "liveVideoActive" in handler
+    assert "请先关闭当前画面再切换来源" in handler
+    # ★ #172: this used to end in `or True`, making the whole line a no-op --
+    # the "never stops an active capture implicitly" contract was unguarded.
+    # It is now asserted against the real handler body, so it can fail.
+    assert _implicit_capture_calls(handler) == []
+
+
+def test_source_change_handler_guard_is_not_vacuous():
+    """★ #172 negative control: the guard above must be able to FAIL.
+
+    The pre-#172 line was ``assert ... or True``, which passes for *any*
+    implementation. Feeding the checker an implementation that DOES stop the
+    capture must produce a non-empty violation list; if it does not, the
+    assertion is still a no-op and this control fails instead.
+
+    The baseline is the real handler, so this control cannot drift away from the
+    assertion it protects; the mutation is applied to the extracted text rather
+    than to ``live_ui.js``, so it survives unrelated edits to the surrounding
+    source (a literal-text mutation would redden as soon as the hint line was
+    reformatted).
+    """
+    handler = _source_change_handler()
+    assert _implicit_capture_calls(handler) == [], "baseline must be clean"
+
+    assert _implicit_capture_calls("stopLiveVideoCapture();\n" + handler) == [
+        "stopLiveVideoCapture("
+    ]
+    assert _implicit_capture_calls("startLiveVideo();\n" + handler) == ["startLiveVideo("]
+    # A bare mention is not a call, so it must NOT be reported -- otherwise the
+    # guard would fire on the export list or a log string.
+    assert _implicit_capture_calls("// stopLiveVideoCapture is exported below\n" + handler) == []
+
+
+def test_handler_extraction_is_not_fooled_by_comment_braces():
+    """★ #172 control: comment braces must not truncate the matched handler.
+
+    The guard reads a brace-matched region, so anything that ends that match
+    early would hide the rest of the handler from it -- and, being a *shorter*
+    region, would silently PASS. Reviewed after the first fix (which handled
+    only ``//``): a ``/* } */`` before the guarded call reopened exactly the
+    vacuity #172 exists to remove, and the prepend-only control above could not
+    see it because it never exercised the matcher. Both comment forms are pinned
+    here, together with the requirement that a genuine violation still surfaces.
+    """
+    forbidden = "stopLiveVideoCapture();"
+    cases = {
+        "line comment brace": "{ // }\n " + forbidden + " ok(); }",
+        "block comment brace": "{ /* } */ " + forbidden + " ok(); }",
+        "block comment multiline": "{ /* }\n} */\n " + forbidden + " }",
+        "string brace": "{ g('}'); " + forbidden + " }",
+        "template literal brace": "{ g(`}`); " + forbidden + " }",
+    }
+    for label, body in cases.items():
+        src = f"liveVideoSourceEl.addEventListener('change', () => {body});"
+        extracted = _arrow_handler_body(src, "liveVideoSourceEl.addEventListener('change'")
+        assert forbidden in extracted, (
+            f"{label}: the guarded call fell outside the matched region -- "
+            f"the extractor truncated the handler, so the guard would pass vacuously. "
+            f"extracted={extracted!r}"
+        )
+        assert _implicit_capture_calls(extracted) == ["stopLiveVideoCapture("], label
+
+    # Nesting must still be tracked (the cases above are all depth-1).
+    nested = "liveVideoSourceEl.addEventListener('change', () => { if (a) { " + forbidden + " } });"
+    assert forbidden in _arrow_handler_body(nested, "liveVideoSourceEl.addEventListener('change'")
 
 
 def test_stop_live_camera_clears_interval_and_tracks():
