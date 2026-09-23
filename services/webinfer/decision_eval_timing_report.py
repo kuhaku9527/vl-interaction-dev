@@ -19,11 +19,6 @@ Run tests: cd services/webinfer && python -m pytest tests/test_decision_eval_tim
 
 from __future__ import annotations
 
-from decision_eval_timing import (
-    LATENCY_SOURCE_CHAIN_STAMP,
-    timing_criteria_hint,
-)
-
 # --- 渲染 --------------------------------------------------------------------
 
 
@@ -228,17 +223,10 @@ def diff_reports(before: dict, after: dict) -> str:
     return "\n\n".join(blocks)
 
 
-def timing_caveats(card: dict) -> list[str]:
-    """转发 :func:`decision_eval_timing.timing_criteria_hint`（供卡片装配用）."""
-    return timing_criteria_hint(card)
-
-
 __all__ = [
-    "LATENCY_SOURCE_CHAIN_STAMP",
     "diff_cards",
     "diff_reports",
     "render_both_axes",
     "render_card",
     "render_report",
-    "timing_caveats",
 ]

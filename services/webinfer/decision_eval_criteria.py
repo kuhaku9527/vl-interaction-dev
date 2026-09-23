@@ -61,6 +61,26 @@ VERDICT_UNMEASURABLE = "unmeasurable"
 
 VERDICTS: tuple[str, ...] = (VERDICT_PASS, VERDICT_FAIL, VERDICT_UNMEASURABLE)
 
+
+def combine_verdicts(verdicts: list[str]) -> str:
+    """多条判定的**合成规则**（两条轴共用这一份实现）.
+
+    有 ``FAIL`` 即 ``FAIL``；否则有 ``UNMEASURABLE`` 即 ``UNMEASURABLE``；
+    否则 ``PASS``。
+
+    ★ 为什么放在这里而不是各轴各写一份：``UNMEASURABLE`` **不得**折算成绿
+    （#162 已把这条纪律钉进运行器），而三份平行实现正是让这条纪律悄悄失效的
+    地方 —— 改了一份、漏了另两份，症状是某一轴开始在「没测」时报绿。
+    对抗性复核在 #158 里查出过**三处**同样的三行分支（本模块、
+    ``decision_eval_card._overall_verdict``、时序轴的那一份）。
+    """
+    if VERDICT_FAIL in verdicts:
+        return VERDICT_FAIL
+    if VERDICT_UNMEASURABLE in verdicts:
+        return VERDICT_UNMEASURABLE
+    return VERDICT_PASS
+
+
 # --- 判据出处：**冻结的基线快照**（不是「活产物」）---------------------------
 #
 # ★ 这里的设计是由一次真实的坑逼出来的，写下来以免后人重犯：

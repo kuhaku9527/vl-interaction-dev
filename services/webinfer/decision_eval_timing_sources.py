@@ -125,6 +125,30 @@ def _truth_key(session_id: str | None, ts: str) -> tuple[str, str]:
     return (str(session_id or ""), str(ts or ""))
 
 
+def _latency_source_of(payload: dict) -> str | None:
+    """逐行耗时**出处**：从事件/资产自带的事实读出，不给默认值.
+
+    ★ 返回 ``None`` 表示**该行没有出处证据**（不可归因），由
+    :func:`decision_eval_timing.latency_audit` 记为 ``unattributed`` 并判红。
+
+    ★ 为什么不给默认值：给出 ``LATENCY_SOURCE_CHAIN_STAMP`` 会让每一行都
+    「看起来」出自链上打点 —— 而那正是一次对抗性复核查出的失败模式
+    （出处由调用方声明而非从数据取证，于是一个用 ts 差值算耗时的实现判绿）。
+    没有证据就是没有证据。
+
+    取法（按可靠性顺序）：
+      1. 事件 ``extra.latency_source``（写入侧显式标注，最可靠）；
+      2. 事件的 ``latency_ms`` **存在**且事件 schema 声明其为轮次打点时的
+         ``extra.latency_source`` 缺失情形 —— ⚠️ 这一条**刻意不猜**：
+         缺字段即 ``None``。因为 #156 的写入侧还没有写这个字段，
+         而「没写」与「写了链上打点」必须可区分。
+    """
+    value = payload.get("latency_source")
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
 def build_rows(
     events_path: str | Path = DEFAULT_TIMING_EVENTS,
     truth_path: str | Path = DEFAULT_TIMING_TRUTH,
@@ -187,6 +211,12 @@ def build_rows(
             "round_kind": payload["round_kind"],
             "decision": payload["decision"],
             "latency_ms": payload["latency_ms"],
+            # ★★ 每一行的**耗时出处**是数据的一部分，不是调用方的一句话。
+            #   读侧在这里从事件流（或资产的逐行字段）把它取出来，于是
+            #   「这一行的耗时从哪来」可被 :func:`decision_eval_timing.latency_audit`
+            #   **取证**。缺这个字段的行会被记为不可归因并由判据判红 ——
+            #   这正是对抗性复核推翻初版声明式守卫之后补上的那一环。
+            "latency_source": _latency_source_of(payload),
             # ★ 事件流里没有真值 ⇒ ``None``。**不默认成 speak**。
             "expected": None,
             "case_id": label.get("case_id"),

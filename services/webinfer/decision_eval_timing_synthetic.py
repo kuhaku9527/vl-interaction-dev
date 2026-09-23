@@ -26,7 +26,13 @@ Run tests: cd services/webinfer && python -m pytest tests/test_decision_eval_tim
 
 from __future__ import annotations
 
-from decision_eval_timing import EXPECTED_QUIET, EXPECTED_SPEAK, FIELD_STILL_SPEAKING, spoke
+from decision_eval_timing import (
+    EXPECTED_QUIET,
+    EXPECTED_SPEAK,
+    FIELD_STILL_SPEAKING,
+    LATENCY_SOURCE_CHAIN_STAMP,
+    spoke,
+)
 from decision_events import ROUND_KIND_PROACTIVE, ROUND_KIND_USER
 
 #: 合成输入的会话标识（一条会话，跨度 400 秒）。
@@ -142,6 +148,10 @@ def synthetic_healthy_rows() -> list[dict]:
             "ok": True,
             "latency_ms": latency,
         }
+        if latency is not None:
+            # ★ 出处随行带上（与写入侧 ``live_llm._record_live_decision`` 同形）。
+            #   缺它 ⇒ :func:`decision_eval_timing.latency_audit` 判该行不可归因。
+            row["latency_source"] = LATENCY_SOURCE_CHAIN_STAMP
         if speaking is not None:
             row[FIELD_STILL_SPEAKING] = speaking
         rows.append(row)

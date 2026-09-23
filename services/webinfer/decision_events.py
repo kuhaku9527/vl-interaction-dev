@@ -155,6 +155,11 @@ class Round:
     delegation_question_len: int | None
     interaction_mode: str
     source: str
+    #: ★ #158：该行耗时**出自哪里**（``extra.latency_source``）.
+    #: ``None`` ⇒ 事件没带出处证据 ⇒ 时序轴判「不可归因」（**不给默认值**）。
+    #: 有了它，「耗时是不是真的来自决策链路的轮次打点」才是**从数据可查**的，
+    #: 而不是靠调用方的一句声明（那正是对抗性复核查出的失败模式）。
+    latency_source: str | None = None
 
     @property
     def id(self) -> str:
@@ -201,6 +206,8 @@ class Round:
             "ts": self.ts,
             "decision": self.decision,
             "latency_ms": self.latency_ms,
+            # ★ #158：耗时出处随行输出 —— 时序轴据此**取证**而不是靠声明。
+            "latency_source": self.latency_source,
             "frames_n": self.frames_n,
             "raw_text_len": self.raw_text_len,
             "response_chars": self.response_chars,
@@ -241,6 +248,10 @@ def _round_from_event(event: dict[str, Any], source: str) -> Round | None:
     session_id = event.get("session_id")
     session_id = str(session_id) if isinstance(session_id, str) and session_id else UNATTRIBUTED
     round_kind = str(extra.get("round_kind") or ROUND_KIND_USER)
+    # ★ #158：耗时出处。**缺字段即 ``None``，不给默认值** —— 默认值会让每一行
+    #   都「看起来」出自链上打点，而「没写这个字段」与「写了链上打点」必须可区分。
+    raw_source = extra.get("latency_source")
+    latency_source = raw_source if isinstance(raw_source, str) and raw_source else None
     # 只有 event 的顶层字段承载 ts / latency_ms（ADR-0014 schema）。
     return Round(
         session_id=session_id,
@@ -256,6 +267,7 @@ def _round_from_event(event: dict[str, Any], source: str) -> Round | None:
         delegation_question_len=_as_int(extra.get("delegation_question_len")),
         interaction_mode=str(extra.get("interaction_mode") or ""),
         source=source,
+        latency_source=latency_source,
     )
 
 

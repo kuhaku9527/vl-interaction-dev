@@ -108,6 +108,9 @@ from decision_eval_criteria import (
     VERDICT_UNMEASURABLE as VERDICT_UNMEASURABLE,
 )
 from decision_eval_criteria import (
+    combine_verdicts as combine_verdicts,
+)
+from decision_eval_criteria import (
     structural_checks as structural_checks,
 )
 from decision_eval_report import (
@@ -263,13 +266,13 @@ def structural_verdicts(block: dict) -> list[dict]:
 
 
 def _overall_verdict(index: list[dict], structural: list[dict]) -> str:
-    """总判定：有 FAIL 即 FAIL；无 FAIL 但有「无法测量」即不可判绿."""
-    verdicts = [item["verdict"] for item in (*index, *structural)]
-    if VERDICT_FAIL in verdicts:
-        return VERDICT_FAIL
-    if VERDICT_UNMEASURABLE in verdicts:
-        return VERDICT_UNMEASURABLE
-    return VERDICT_PASS
+    """总判定（转发到**唯一一份**合成规则：:func:`decision_eval_criteria.combine_verdicts`).
+
+    ★ 此前这里是三处平行实现之一（另两处：时序轴、时序卡片）。三份同样的
+    三行分支正是让「无法测量不得折算成绿」这条纪律悄悄失效的地方 ——
+    #158 的对抗性复核逐条列出过。现在两条轴共用一份。
+    """
+    return combine_verdicts([item["verdict"] for item in (*index, *structural)])
 
 
 def criteria_registry() -> list[dict]:

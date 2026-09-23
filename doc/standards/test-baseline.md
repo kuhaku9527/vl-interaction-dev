@@ -21,6 +21,180 @@
 
 ## §1 当日新增（倒序，最新在上）
 
+### 2026-09-23（★ 时序轴记分卡：把「就算判断对了，是不是说得是时候」变成一条命令；工单 #158）
+
+> **父 spec #154 的第 4 片纵切**（第 2 片 = #157 定向轴，已交付）。
+> **前置**：#156（决策事件读侧 + 轮次打点）已交付 ⇒ 本票有数据源可依。
+>
+> **一句话结论**：时序轴**已能算出并判红**，但在**真机**上它会正确地报出
+> 「premature **不可测**」—— 因为写入侧**从未记录**「决策那一刻用户是否仍在说话」。
+> 这是**如实读数**，不是缺陷：把它读成 0.0 的抢话率会让一个从没测过的量看起来完全健康。
+>
+> ★ **两轴正交、不合成**：定向轴（#157）问「该不该说」，时序轴问「说的时机对不对」。
+> 父 spec §三明确否决单一 accuracy（两类错误代价不对称）。本票把这条禁令变成
+> **可判红的扫描**（`accuracy` / `f1` / `combined_score` …），使「合成」**不可表示**，
+> 而不是「可以被检测」。
+
+**装置**（七个模块，按「一个模块一个变化原因」拆分 —— `coding-standards.md` §7）：
+
+| 模块 | 职责 | 行数 |
+|---|---|---|
+| `decision_eval_timing.py` | 怎么算：onset / 每秒误触发 / premature + **出处取证** + 禁合成扫描 | 875 ⚠️ |
+| `decision_eval_timing_criteria.py` | 怎么判：8 条判据 + 阈值出处与冻结快照 | 780 ⚠️ |
+| `decision_eval_timing_negatives.py` | 负控与可证伪性自检（10 个故意做错的输入） | 434 |
+| `decision_eval_timing_sources.py` | 从哪读：事件流 × 真值 sidecar → 逐轮行 | 280 |
+| `decision_eval_timing_synthetic.py` | 离线夹具（三条不变式由生产代码路径断言） | 186 |
+| `decision_eval_timing_report.py` | 怎么印 / 怎么 diff / 两轴并排 | 232 |
+| `decision_eval_timing_card.py` | **组装成卡 + CLI**（公开入口，再导出下层符号） | 505 |
+
+> `timing` / `criteria` 在 §7 的 600 行「smell」之上（但**均已低于 1000 行「problem」线**）。
+> 大头是**判据、负控与出处的说明性文本**（每条都带「为什么这么定」与实测教训），
+> 这些文字是交付物的一部分（供后人复核判据是否仍有效），压缩等于删证据。
+
+**命令**：`cd services/webinfer && python -m decision_eval_timing_card`　
+**退出码**：`0`（冻结夹具判定 PASS；**「无法测量」映射为 2，永不返回 0**）
+
+| 判据 | 读什么 | 阈值 | 本票读数 | 判定 |
+|---|---|---|---|---|
+| `T_LATENCY_SOURCE` | 耗时出处 | 无（出处判据） | `decision_chain_round_stamp` | pass |
+| `T_ONSET_MEASURED` | 每次开口是否带轮次打点 | 无 | 21/21 带打点 | pass |
+| `T_NO_COMBINED_ACCURACY` | 合并分数键扫描 | 无 | 未出现 | pass |
+| `T_SPURIOUS_TIMEBASE` | 速率的时间基准 | 无 | 494.3 s | pass |
+| `T_PREMATURE_MEASURED` | premature 标注完整性 | 无 | 19/19 有标注（夹具） | pass |
+| `T_SAMPLE_FLOOR` | 开口样本量 | ≥10 | 21 | pass |
+| `T_ONSET_MEDIAN` | onset 中位数 | ≤898 ms | **573 ms** | pass |
+| `T_ONSET_P90` | onset p90 | ≤1120 ms | **731 ms** | pass |
+
+**三个量（冻结夹具，34 轮 / 2 会话 / 30 用户轮 + 4 主动轮）**：
+
+| 量 | 读数 | 分母 |
+|---|---|---|
+| onset 延迟 | 中位 **573 ms**，p90 **731 ms**（区间 330–880） | 21 次开口，缺打点 0 |
+| 每秒误触发 | **0.002 次/秒**（= 0.121 次/分钟） | 1 次误触发 / 494.3 s |
+| premature rate | **31.6%** | 6 次抢话 / 19 次有标注的开口 |
+
+> ★ **这份夹具是「作者写的回放输入」，不是真机读数** —— 卡片与资产里都逐条声明了
+> 这一点。它证明的是「时序轴能从冻结输入算出并判红」，**不是**生产模型的实际时机质量。
+
+**★ 阈值出处（每个数都能从冻结快照复算，`--verify-bounds` 逐项比对）**：
+
+| 阈值 | 值 | 派生式 | 限定 |
+|---|---|---|---|
+| `onset_median_ms` | 898 | `ceil(median + pstdev)` = ceil(664 + 233.89) | 样本仅 **4** 例 ⇒ 只是**宽松上界** |
+| `onset_p90_ms` | 1120 | `ceil(max × 1.25 / 10) × 10` = ceil(891×1.25/10)×10 | 同上；p90 **不能**用 `ceil(median+pstdev)`（那个量对 p90 不是上界） |
+
+来源快照：`logs/events/webui-2026-09-22.jsonl` 的 4 个非零 `latency_ms`（282/547/781/891）。
+★ **不从活文件派生** —— 否则一次退化 + 一次重跑就能把线一起挪走（#157 已付费学过）。
+
+> ⚠️ **「可复算」与「可核验」是两件事，不得混说**（复核纠正过初版措辞）：
+> 阈值能从那四个数字**逐项重算**（`--verify-bounds`），但那个来源文件**不可核验** ——
+> 它没有 sha256 绑定，且 `logs/` 在 `.gitignore` 下、对作者之外的人不存在。
+> 把后者说成前者是「看起来严谨」的典型形态。
+
+**★ 负控（10 个故意做错的输入 / 9 killed + 1 恒等干净）**：
+
+| 负控 | 输入错在哪 | 期望 | 实测 |
+|---|---|---|---|
+| **`dropped-round-stamp`** | ★ **删掉轮次打点**（`ts` 保留） | `T_ONSET_MEASURED` **判红** | **fail** ✓ |
+| **`event-ts-diff-latency-source`** | ★★ 耗时**真的**由 `ts` 差值算出，而**声明一个字都不改** | `T_LATENCY_SOURCE` 判红 | fail ✓ |
+| `frame-ts-latency-source` | 耗时**真的**由帧钟算出（1 Hz 整数倍），逐行标注帧钟 | `T_LATENCY_SOURCE` 判红 | fail ✓ |
+| `missing-origin-field` | 耗时在，但逐行出处字段被抹掉 | `T_LATENCY_SOURCE` 判红 | fail ✓ |
+| `combined-accuracy` | 往块里塞 `accuracy` | `T_NO_COMBINED_ACCURACY` 判红 | fail ✓ |
+| `dropped-premature-labels` | 删掉全部 premature 标注 | `T_PREMATURE_MEASURED` 不得判绿 | 无法测量 ✓ |
+| `tiny-sample` | 只留 2 次开口 | `T_SAMPLE_FLOOR` 不得判绿 | 无法测量 ✓ |
+| `no-timebase` | 抹掉全部 `ts` | `T_SPURIOUS_TIMEBASE` 不得判绿 | 无法测量 ✓ |
+| `always-silent` | 永远沉默的桩 | 计量判据**一条都不得判绿** | 全非绿 ✓ |
+| `identity` | 什么都不改 | **一条都不判红** | 空 ✓ |
+
+> ★ `always-silent` **没有** `must_fail`：它的产物是「没有开口样本」⇒ 各量全部不可测。
+> 声明它必须判红会让自检**假失败**，进而诱使人放宽判据 —— 那比漏检更危险。
+> 真正该断言的是「它一条都没判绿」。
+
+**★★ 对抗性复核推翻并修掉的一处真洞（本票最值钱的产出）**
+
+初版的 ★ 负控**是一个声明，不是一道防线**：耗时出处读的是调用方传进来的字符串
+（`latency_source=...`），与数据无关。复核把 `latency_ms` **真的**换成由事件 `ts`
+差值算出来的数、**声明一个字都不改**，卡片照样报
+
+```
+onset median = 480.0 ms（看着完全正常的链路耗时）
+provenance.source = decision_chain_round_stamp   legal = True
+T_LATENCY_SOURCE = pass      >>> CARD VERDICT = pass
+```
+
+—— **正是本票正文点名的「静默出数」，而当时的实现恰好复现了它。**
+
+修法：出处改为**从数据取证**（`latency_audit`），三条独立证据：
+
+1. **逐行 `latency_source` 字段**（写入侧 #158 新增，`live_llm` 只在真记到耗时时才写）；
+2. ★ **代数检验**：若耗时由 `ts` 推出，它**必然恰好等于某个 ts 差值** ——
+   命中即判该行不可信。这不是统计检验（样本太小），是**恒等式**；
+3. 缺耗时/缺出处 ⇒ 记 `unattributed` 并判红。
+
+同一个 forged 输入现在：`legal=False`、19 行被点名 `ts_derived_ids`、
+`T_LATENCY_SOURCE=fail`、**卡片判红**。两条回归测试钉住它
+（`test_latency_provenance_is_audited_from_data_not_declared` +
+对照测试证明伪造值**看起来完全正常**，故只有代数检验能抓住）。
+
+> ★ **为什么这一点值得单列**：本票的主题就是「造一把不骗人的尺子」。
+> 一把**由被测量者自己声明出处**的尺子，与被测量者直接写分数没有区别。
+> 上一轮（#157）同一位复核专家也推翻过一个刚加的守卫 —— 这是同一个形态第二次出现。
+
+**★ 三条核心纪律（每条都由判据承载，不是文档承诺）**：
+
+1. **耗时只来自决策链路自身的轮次打点**（`latency_ms`，源自 #156 的
+   `live_mode._turn_started_at`），且出处**从数据取证**。帧的 `ts_ms` 是**采集端墙钟**、
+   事件 `ts` 是**发射端墙钟** —— 用它们会把网络与编码抖动误归因成「模型反应慢」。
+   ★ 同一个 `ts` 字段在「速率分母」上**合法**、在「耗时」上**非法**：用途写死在函数名里。
+2. **删掉打点判红**（不是「无法测量」）—— 判「无法测量」会把接线缺陷说成「这项不适用」。
+   ★ 与之配对：**一次开口都没有**判「无法测量」（无适用对象，不是缺陷）。
+   两条合起来才有分辨力：只有前者会漏掉真缺陷，只有后者会误报。
+3. **两轴不合成** —— 合并分数键扫描可判红。
+
+**★ /code-review 两轴各查出真缺陷（本票的第二组收获）**
+
+**Spec 轴（★ 上面那处真洞）**：★ 负控是声明而非防线；另查出 `--asset` 分支调用了
+**不存在的函数**（`load_timing_asset`），CI 抓不到是因为 import 在分支里、而 `main()`
+当时没有测试 —— **一个存在但从不执行的代码路径，与没有它无法区分**。
+
+**Standards 轴**：
+
+- **`criteria` 1004 行**越过 §7「problem」线 ⇒ 拆出 `decision_eval_timing_negatives.py`；
+- **分叉守卫是空的**：只扫 `%`，而两条带阈值的判据都把阈值写成 **ms** ⇒
+  正则永不命中、`context_numbers` 从未被赋值。改成**单位无关**后，
+  守卫**立刻**抓出两处真实未声明数字（「4 例」与分位数名里的「90」）⇒ 已逐个显式声明；
+- **四处重复实现**（复核逐条列出）：`decision_of` / `_pct` 声称「与定向轴同一实现」
+  实为平行实现；`VERDICT_*` 词汇重抄；总判定规则**三份**；`timing_caveats` 是
+  **从未被调用**的纯转发 ⇒ 全部改为 `import` 唯一一份（`combine_verdicts` 落到
+  `decision_eval_criteria`），`timing_caveats` 删除；
+- **不实措辞**：`BASELINE_EVENTS` 注释写「权威绑定靠 sha256」而**全仓没有该 sha256**，
+  且 `logs/` 不入库 ⇒ 改为如实区分「**阈值可复算，来源文件不可核验**」。
+
+**拆模块（评审 + §7 触发）**：`criteria` 初版 1004 行越过「problem」线 ⇒
+负控与自检拆到 `decision_eval_timing_negatives.py`，使「判据定义」与「可证伪性自检」
+各自只有一个变化原因。
+
+**★ 写入侧接线（#158 新增，跨服务）**：
+
+| 落点 | 内容 |
+|---|---|
+| `live_llm._record_live_decision` | 事件 `extra.latency_source` —— **只在真记到耗时时才写**（没有耗时却声明出处＝制造证据） |
+| `decision_events.Round` | 逐行读回 `latency_source`（缺即 `None`，不给默认值） |
+| `services/webui/tests/test_latency_source_contract.py` | ★ 钉住**跨服务的常量一致性**：写侧与读侧各有一份字符串（两服务不能互相 import），分叉是静默且单向的 —— 写侧一直打标、读侧把每一轮判成「不可归因」，症状看着像「埋点坏了」 |
+
+**验证结果（2026-09-23）**：
+
+| 项 | 结果 |
+|---|---|
+| webinfer 全量 | **810 passed**（#157 时 804 → 本票新增 6 个模块的测试；全票从 722 起算 +88） |
+| webui 全量 | **937 passed, 1 skipped**（含新增跨服务契约 5 条） |
+| memory-store 全量 | 75 passed, 8 skipped（无回归） |
+| ruff check + format --check | **All checks passed** / 92 files already formatted（按 CI 的 `--extend-ignore` 口径） |
+| 卡片自检 | **PASS**：轴层 / 判据层 / 卡片层三层全绿；10 个负控 9 killed + 1 恒等干净 |
+| 阈值核验 | **2/2 一致**（从冻结快照复算） |
+| ★ 复核证伪复现 | **已闭合**：声明不动、耗时由 ts 差值伪造 ⇒ `legal=False`、19 行被点名、**卡片判红** |
+| 行尾核验 | `--numstat` 与 `--ignore-cr-at-eol` **一致**（无整文件行尾改写） |
+
 ### 2026-09-23（★ 定向轴记分卡：把「该不该开口判断得对不对」变成一条命令；工单 #157）
 
 > **这是父 spec #154 的第 2 片纵切**，也是欠账里最核心的那个数字。

@@ -18,6 +18,7 @@ Run: cd services/webinfer && python -m pytest tests/test_decision_eval_timing_cr
 from __future__ import annotations
 
 import decision_eval_timing_criteria as C
+import decision_eval_timing_negatives as N
 import pytest
 from decision_eval_timing import timing_block
 from decision_eval_timing_synthetic import (
@@ -58,7 +59,7 @@ def test_every_criterion_has_a_negative_control():
     没有负控的判据**可能是恒真的** —— 而恒真判据正是本票要消灭的东西。
     """
     all_ids = {c.criterion_id for c in C.TIMING_CRITERIA}
-    covered = {cid for m in C.MUTATIONS for cid in m.covers}
+    covered = {cid for m in N.MUTATIONS for cid in m.covers}
     assert all_ids - covered == set(), (
         f"以下判据没有任何负控声明它必须判红 / 不得判绿：{sorted(all_ids - covered)}"
     )
@@ -66,7 +67,7 @@ def test_every_criterion_has_a_negative_control():
 
 def test_no_decorative_negative_control():
     """负控必须声明它期待什么；一条不期待任何东西的负控是装饰."""
-    for mutation in C.MUTATIONS:
+    for mutation in N.MUTATIONS:
         if mutation.is_identity:
             continue
         assert mutation.covers, f"负控 {mutation.mutation_id} 是装饰性的（covers 为空）"
@@ -74,7 +75,7 @@ def test_no_decorative_negative_control():
 
 def test_exactly_one_identity_control():
     """★ 恰好一个恒等对照：没有它，「负控会让判据变红」就没有对照."""
-    identities = [m for m in C.MUTATIONS if m.is_identity]
+    identities = [m for m in N.MUTATIONS if m.is_identity]
     assert len(identities) == 1
 
 
@@ -154,7 +155,7 @@ def test_chain_stamp_source_passes():
 def test_always_silent_never_gets_a_green_timing_score():
     """★ 「永远沉默」的桩：一条计量判据都不得判绿.
 
-    ★ 它**没有** must_fail（见 :data:`C.MUTATIONS` 的注释）：产物是「没有开口
+    ★ 它**没有** must_fail（见 :data:`decision_eval_timing_negatives.MUTATIONS` 的注释）：产物是「没有开口
     样本」⇒ 三个量全部不可测。声明它必须判红会让自检假失败，进而诱使人放宽判据。
     要断言的正是「不可测 ≠ 完美」。
     """
@@ -345,4 +346,4 @@ def test_axis_separation_is_visible_in_the_criteria_text():
 
 def test_self_check_passes():
     """判据层的负控自检整体通过."""
-    assert C.self_check() == 0
+    assert N.self_check() == 0

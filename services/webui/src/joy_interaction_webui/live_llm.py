@@ -98,6 +98,23 @@ def emit_event(*args: Any, **kwargs: Any) -> None:
         logger.warning("live_decision event emit failed", exc_info=True)
 
 
+#: Field name carrying **where a round's latency came from** (#158).
+#:
+#: It lives in ``extra`` so the ADR-0014 top-level schema does not change (the
+#: #156 precedent set that same boundary). The timing axis
+#: (``services/webinfer/decision_eval_timing.py``) reads it per row to decide
+#: whether an onset latency is trustworthy; that module's
+#: ``LATENCY_SOURCE_CHAIN_STAMP`` must hold the same string. Two modules cannot
+#: import each other (different services), so the value is duplicated as data
+#: and pinned by a test on each side.
+LATENCY_SOURCE_FIELD = "latency_source"
+
+#: Value meaning "this span came from the live chain's own round-start stamp".
+#: Never emit it without a ``latency_ms`` — see the call site in
+#: :func:`_record_live_decision`.
+LATENCY_SOURCE_CHAIN_STAMP = "decision_chain_round_stamp"
+
+
 def _text_fingerprint(text: str | None) -> tuple[int, str]:
     """Return ``(len, short_sha256)`` for a model output.
 
@@ -194,6 +211,19 @@ def _record_live_decision(
     }
     if frames_n is not None:
         extra["frames_n"] = frames_n
+    # ★ #158: state WHERE this round's latency came from, as data rather than as
+    #   a reader-side assumption. The timing axis must prove the onset latency is
+    #   a decision-chain span; without a per-event origin it can only take the
+    #   caller's word for it — which is exactly how a "silently fell back to the
+    #   frame wall-clock" implementation passes a green gate (measured: an
+    #   adversarial review reproduced that against the first cut).
+    #
+    #   ★ The value is emitted ONLY when there is a stamp to attribute. With
+    #   ``latency_ms`` absent the origin is unknown, and claiming
+    #   ``decision_chain_round_stamp`` would manufacture evidence — the reader
+    #   then sees "unattributed" (which is the truth) instead of a false green.
+    if latency_ms is not None:
+        extra[LATENCY_SOURCE_FIELD] = LATENCY_SOURCE_CHAIN_STAMP
     emit_event(
         "webui",
         "live_decision",

@@ -1,7 +1,14 @@
 # ruff: noqa: RUF001, RUF002, RUF003
 # (RUF001/002/003 = ambiguous fullwidth punctuation; this module's prose is
 # Chinese. Same established repo convention as decision_eval_criteria.py.)
-"""时序轴的**可证伪判据** + 配套负控（工单 #158，父 spec #154 §六/§七）.
+"""时序轴的**判据**定义（工单 #158，父 spec #154 §六/§七）.
+
+★ 「判据是什么」与「判据是否可证伪」分居两个模块
+------------------------------------------------
+负控与自检已搬到 :mod:`.decision_eval_timing_negatives`（一次实测触发的拆分：
+本模块初版 1004 行，越过 ``coding-standards.md`` §7 的 1000 行「problem」线）。
+两者是**不同的变化原因**（``code-review-checklist.md`` 的 Divergent Change 条）：
+判据变了只该动本模块，负控变了只该动那边。
 
 为什么时序轴的判据不能只是「拿定向轴那套改改」
 -----------------------------------------------
@@ -12,10 +19,10 @@
 1. ★ **耗时可能来自错误的钟。** 帧上的 ``ts_ms`` 是采集端墙钟；
    拿它当「模型反应慢」的证据会把网络与编码抖动算进模型头上。
    一条只判「有没有数」的判据**抓不到这件事** —— 数一定有，只是归因是错的。
-   故 :data:`T_LATENCY_SOURCE` 直接判**出处**。
+   故 ``T_LATENCY_SOURCE`` 直接判**出处**。
 2. ★ **删掉打点后可能静默退回出数。** 这是本票 ★ 负控的字面要求：
    「删掉轮次打点 → 时序轴**判红**（而不是退回用帧时间戳、静默出数）」。
-   故 :data:`T_ONSET_MEASURED` 在缺打点时判**红**（不是「无法测量」）——
+   故 ``T_ONSET_MEASURED`` 在缺打点时判**红**（不是「无法测量」）——
    因为**本该有打点**。缺打点是接线的缺陷，不是「这一项不适用」。
 
 ★ 三种状态，与定向轴同一套词汇
@@ -37,7 +44,7 @@
 把一条拍脑袋的阈值伪装成「派生」正是本票要消灭的那类谎。
 
 Run tests: cd services/webinfer && python -m pytest tests/test_decision_eval_timing_criteria.py -q
-Self-check: python -m decision_eval_timing_criteria --self-check
+Self-check: python -m decision_eval_timing_negatives --self-check
 """
 
 from __future__ import annotations
@@ -49,26 +56,40 @@ import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
 
+# --- 判定状态：**与定向轴同一份定义**（import，不重抄）-----------------------
+#
+# ★ 对抗性复核查出：初版在这里重抄了 ``VERDICT_PASS/FAIL/UNMEASURABLE`` 与
+#   ``VERDICTS``。两轴并排读的前提正是「PASS 在两轴里是同一个东西」——
+#   重抄让这个前提变成一句没有守护的假设，而两份字符串迟早分叉。
+from decision_eval_criteria import (
+    VERDICT_FAIL,
+    VERDICT_PASS,
+    VERDICT_UNMEASURABLE,
+    VERDICTS,
+    combine_verdicts,
+)
 from decision_eval_timing import (
     FORBIDDEN_COMBINED_KEYS,
     LATENCY_SOURCE_CHAIN_STAMP,
     MIN_SPEAKING_ROUNDS,
     forbidden_combined_keys,
-    timing_block,
 )
-
-# --- 判定状态（与定向轴同一套词汇，便于两轴并排读）---------------------------
-
-VERDICT_PASS = "pass"
-VERDICT_FAIL = "fail"
-#: ★ 「测不了」既不是通过也不是失败（#162 已把这条纪律钉进运行器）。
-VERDICT_UNMEASURABLE = "unmeasurable"
-
-VERDICTS: tuple[str, ...] = (VERDICT_PASS, VERDICT_FAIL, VERDICT_UNMEASURABLE)
 
 # --- 阈值出处：冻结快照（不是活产物）-----------------------------------------
 
-#: 阈值来源的那一次读数的**事件文件**（人读用；权威绑定靠 sha256）。
+#: 阈值来源的那一次读数的**事件文件**（人读用）。
+#:
+#: ⚠️ **它不是可核验的绑定**（对抗性复核查出并纠正的措辞）：初版这里写着
+#: 「权威绑定靠 sha256」，而**本模块与快照里都没有任何 sha256**，
+#: 且 ``logs/`` 在 ``.gitignore`` 下（``**/logs/``）⇒ 这个路径对作者之外的人
+#: **不可复现**。所以本快照的权威性**不来自**这个文件，而来自：
+#:
+#: 1. :data:`TIMING_BASELINE_SNAPSHOT.latency_ms` **原样抄下的那四个数**；
+#: 2. :func:`derive_bounds` 能从那些数**重算**出声明阈值（``--verify-bounds`` 逐项比对）；
+#: 3. :data:`TIMING_BASELINE_SNAPSHOT.limitation` 如实说明样本量只有 4 例。
+#:
+#: 换句话说：**阈值可复算，来源文件不可核验**。这两件事必须分开说清 ——
+#: 把后者说成前者是「看起来严谨」的典型形态，也正是本票要消灭的那类谎。
 BASELINE_EVENTS = "logs/events/webui-2026-09-22.jsonl"
 
 #: ★ 冻结基线快照：**唯一**可从其中派生时序阈值的来源.
@@ -127,7 +148,7 @@ class TimingCriterion:
         criterion_id: 稳定 id（负控与结果文件都用它引用）。
         statement_template: 人读的一句话，**必须含 ``{threshold}`` 占位符**
             —— 阈值由渲染时插值，不写死在模板里（#157 的教训：数字写两遍必然分叉）。
-        context_percent: 模板里**合法出现**的其它数字。
+        context_numbers: 模板里**合法出现**的其它数字。
         metric: 读 ``metrics`` 里的哪个键；``None`` ⇒ 本判据读的是块结构而不是指标。
         direction: ``"upper"``（越小越好）/ ``"lower"``（越大越好）/
             ``None``（无阈值，只判测量是否成立）。
@@ -144,7 +165,7 @@ class TimingCriterion:
     threshold: float | None
     source: str
     kind: str = "metric"
-    context_percent: tuple[float, ...] = ()
+    context_numbers: tuple[float, ...] = ()
     #: 结构性判据的判定函数：块 → ``(verdict, reason)``。无阈值判据必须提供它。
     judge: Callable[[dict], tuple[str, str]] | None = None
     #: ★ 嵌套指标块（onset）里要读的**具体统计量**。
@@ -265,15 +286,44 @@ def _judge_latency_source(block: dict) -> tuple[str, str]:
     这是本票正文「★ 耗时**必须**来自**决策链路自身的打点**」的可执行形态。
     用帧时间戳或 ``ts`` 差值 ⇒ **判红**（不是「无法测量」：那两种来源会产出
     一个看起来正常的数字，只是归因是错的 —— 而错误的归因比缺失更坏）。
+
+    ★★ **判据读的是取证结果，不是声明。**
+    初版读 ``latency_source_block.legal``，而那个块当时完全由调用方的一句
+    ``latency_source=...`` 决定 —— 对抗性复核当场推翻：把 ``latency_ms`` 真的
+    换成由事件 ``ts`` 差值算出来的数，调用方什么都不用改，判据照样判绿。
+    现在该块由 :func:`decision_eval_timing.latency_audit` 从**逐行数据**构造
+    （逐行出处字段 + 「耗时恰好等于某段 ts 差值」的代数检验），故「用墙钟算耗时」
+    的实现**无法**再蒙混过去。
     """
     provenance = block.get("latency_source_block") or {}
     if provenance.get("legal"):
         return VERDICT_PASS, (
-            f"耗时出自 {provenance.get('origin')}；"
-            f"被明令禁止的来源 {provenance.get('forbidden')} 均未被使用"
+            f"耗时出处**已从数据取证**：{provenance.get('n_attributed')} 行逐行声明 "
+            f"{provenance.get('source')!r}，且无一行命中「ts 差值」恒等式"
+            f"（被明令禁止的来源 {provenance.get('forbidden')} 均未被使用）"
         )
+    if not provenance.get("applicable"):
+        # ★ 一次开口都没有 ⇒ 没有耗时可归因 ⇒ 无适用对象。
+        #   判红会给「永远沉默的桩」一个指错方向的指控（与 T_ONSET_MEASURED 同一条区分）。
+        return VERDICT_UNMEASURABLE, (
+            "本次输入没有任何开口轮 ⇒ 没有耗时可归因，判「无法测量」"
+            "（这与「有开口但出处不可信」不同：后者判红）"
+        )
+    reasons: list[str] = []
+    if provenance.get("ts_derived_ids"):
+        reasons.append(
+            f"★ {len(provenance['ts_derived_ids'])} 行的耗时**恰好等于某段 ts 差值**"
+            f"（{provenance['ts_derived_ids']}）⇒ 它是墙钟派生的，不是链路打点"
+        )
+    if provenance.get("n_unattributed"):
+        reasons.append(
+            f"{provenance['n_unattributed']} 行缺耗时或**缺出处证据**"
+            f"（{provenance.get('unattributed_ids')}）"
+        )
+    if not reasons:
+        reasons.append(f"出处为 {provenance.get('source')!r}，不是决策链路的轮次打点")
     return VERDICT_FAIL, (
-        f"★ 耗时出处是 {provenance.get('source')!r}，不是决策链路的轮次打点 ⇒ 判红。"
+        "★ 耗时出处不可信 ⇒ 判红：" + "；".join(reasons) + "。"
         "帧的 ts_ms 是采集端墙钟、事件 ts 是发射端墙钟，用它们会把链路外的抖动"
         "误归因成「模型反应慢」—— 本票正文点名的错误归因。"
     )
@@ -324,7 +374,9 @@ def _judge_no_combined_accuracy(block: dict) -> tuple[str, str]:
     ★ 一条留在文档里的禁令不是防线 —— 这里把它变成**可判红**的扫描，
     于是「合成」这件事**不可表示**，而不是「可以被检测」。
     """
-    found = forbidden_combined_keys({k: v for k, v in block.items() if k != "forbidden"})
+    found = forbidden_combined_keys(
+        {k: v for k, v in block.items() if k != "forbidden_combined_keys"}
+    )
     if found:
         return VERDICT_FAIL, (
             f"★ 块里出现禁止的合并分数键 {found} ⇒ 判红：父 spec 明确否决单一 accuracy"
@@ -494,6 +546,8 @@ TIMING_CRITERIA: tuple[TimingCriterion, ...] = (
         threshold=TIMING_BOUNDS["onset_median_ms"],
         source=f"{BOUND_DERIVATION}（保守上界，非基线水平）",
         statistic="median",
+        # 「4 例」是来源快照的样本量，属语境数字，显式声明（见 statements_match_bounds）。
+        context_numbers=(4.0,),
     ),
     TimingCriterion(
         criterion_id="T_ONSET_P90",
@@ -503,6 +557,8 @@ TIMING_CRITERIA: tuple[TimingCriterion, ...] = (
         threshold=TIMING_BOUNDS["onset_p90_ms"],
         source=f"{BOUND_DERIVATION}（保守上界，非基线水平）",
         statistic="p90",
+        # 「p90」这个词本身含 90 —— 它是**分位数名字**，不是阈值，故显式声明。
+        context_numbers=(90.0,),
     ),
 )
 
@@ -568,15 +624,32 @@ def verify_bounds(snapshot: dict | None = None) -> tuple[bool, list[dict]]:
 
 # --- statements 与 threshold 的分叉守卫（#157 的教训，此处一并带上）---------
 
-_PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+#: ★ **单位无关**的数字扫描。
+#:
+#: 初版只扫 ``%``，而时序轴的两个阈值-bearing 判据都把阈值写成 **ms**
+#: （``onset 延迟中位数不得超过 898 ms``）⇒ 正则永不命中、``extra`` 恒空，
+#: **守卫对它所守的两条判据完全是空的**，``context_numbers`` 也从未被赋值。
+#: 那与「没有守卫」无法区分，却让读者以为有 —— 对抗性复核逐条查出。
+#:
+#: 现在扫**任何数字**（含小数），单位无关。于是「句子里写了一个与阈值不同的
+#: 数」在任何单位下都抓得到。
+_NUMBER_RE = re.compile(r"(\d+(?:\.\d+)?)")
 
 
 def statement_percentages(criterion: TimingCriterion) -> set[float]:
-    """抽出 ``statement`` 里所有百分数（**不含**由占位符插值进来的那一个）."""
+    """抽出 ``statement`` 里除阈值之外的**全部数字**（单位无关）.
+
+    ★ 名字保留了 ``percentages`` 是历史原因（#157 的定向轴只有百分数）；
+    实际语义已是「语句里出现的其它数字」。改名会牵动 #157 的测试，
+    故这里以 docstring 说明为准 —— 但它扫的是**单位无关**的数字集合。
+    """
     if criterion.threshold is None:
-        return {float(m) for m in _PERCENT_RE.findall(criterion.statement_template)}
-    rendered = criterion.statement.replace(f"{criterion.threshold:.0f}%", "\x00T\x00", 1)
-    return {float(m) for m in _PERCENT_RE.findall(rendered)}
+        return {float(m) for m in _NUMBER_RE.findall(criterion.statement_template)}
+    rendered = criterion.statement
+    marker = "\x00T\x00"
+    # 只替换一次：模板只允许一个阈值位。
+    rendered = rendered.replace(f"{criterion.threshold:.0f}", marker, 1)
+    return {float(m) for m in _NUMBER_RE.findall(rendered)}
 
 
 def statements_match_bounds() -> list[str]:
@@ -588,7 +661,10 @@ def statements_match_bounds() -> list[str]:
     （``threshold`` 是 63，「63」确实出现在句子里）。**子串匹配永远可以被
     「正确数字恰好出现在别处」骗过。** 故这里的规矩是同一条：
     带阈值的判据**必须**含 ``{threshold}`` 占位符（阈值一个数渲两次，分叉
-    **不可表示**）；句子里其它百分数必须逐个声明进 ``context_percent``。
+    **不可表示**）；句子里其它数字必须逐个声明进 ``context_numbers``。
+
+    ★ 并且扫的是**单位无关**的数字（见 :data:`_NUMBER_RE`）——
+    只扫 ``%`` 会让一个把阈值写成 ``ms`` 的判据集合**完全不受守卫约束**。
     """
     problems: list[str] = []
     for criterion in TIMING_CRITERIA:
@@ -600,10 +676,10 @@ def statements_match_bounds() -> list[str]:
                 "⇒ 阈值会被写死在文本里，与 threshold 分叉"
             )
             continue
-        extra = statement_percentages(criterion) - set(criterion.context_percent)
+        extra = statement_percentages(criterion) - set(criterion.context_numbers)
         if extra:
             problems.append(
-                f"{criterion.criterion_id}: statement 里出现未声明的百分数 {sorted(extra)}"
+                f"{criterion.criterion_id}: statement 里出现未声明的数字 {sorted(extra)}"
                 f"（threshold={criterion.threshold}）—— 作者会照抄这句话，"
                 "两处数字分叉就是缺陷"
             )
@@ -634,326 +710,21 @@ def criteria_verdicts(block: dict) -> list[dict]:
 def overall_verdict(results: list[dict]) -> str:
     """总判定：有 FAIL 即 FAIL；无 FAIL 但有无从测量即「无法测量」；否则通过.
 
-    ★ 与定向轴 :func:`decision_eval_card._overall_verdict` 同一规则 ——
-    「无法测量」**不得**折算成绿。本票的时序轴在当前真机上会落在这个状态
-    （premature 未接线），那正是它该有的样子：**如实说测不了**。
+    ★ 规则**只有一份**（:func:`decision_eval_criteria.combine_verdicts`）：
+    「无法测量」**不得**折算成绿，而三份平行实现正是让这条纪律悄悄失效的地方。
+    本票的时序轴在当前真机上会落在这个状态（premature 未接线），
+    那正是它该有的样子：**如实说测不了**。
     """
-    verdicts = [item["verdict"] for item in results]
-    if VERDICT_FAIL in verdicts:
-        return VERDICT_FAIL
-    if VERDICT_UNMEASURABLE in verdicts:
-        return VERDICT_UNMEASURABLE
-    return VERDICT_PASS
-
-
-# --- 负控（故意做错的输入） --------------------------------------------------
-
-#: 负控的作用对象是**整份时序块**.
-BlockMutator = Callable[[dict], dict]
-
-
-def _never_speaks(block: dict) -> dict:
-    """把块换成「永远沉默」的桩的读数.
-
-    ★ 声明它必须让哪条判据不能判绿：**一条也不该判绿**地证明「沉默很乖」是不可能的。
-    在时序轴上，「永远沉默」的产物是：无开口样本 ⇒ 三个量全部不可测。
-    故它不是「表现完美」，而是**没东西可测** —— 声明 ``must_fail`` 为空
-    是**错的**，正确声明是 ``must_not_pass`` 全部三条计量判据。
-    """
-    from decision_eval_timing_synthetic import synthetic_silent_rows
-
-    return timing_block(synthetic_silent_rows())
-
-
-def _unstamped(block: dict) -> dict:
-    """★ **删掉轮次打点** —— 本票 ★ 负控的字面形态.
-
-    ``ts`` 一律保留（这正是关键：若实现用 ts 差值兜底，这里就会重新出数）。
-    """
-    from decision_eval_timing_synthetic import synthetic_unstamped_rows
-
-    return timing_block(synthetic_unstamped_rows())
-
-
-def _frame_ts_source(block: dict) -> dict:
-    """把耗时出处改成**帧的采集端时间戳** —— 本票点名禁止的那一种.
-
-    ★ 它对应一个真实的改动：有人发现 ``latency_ms`` 常缺，于是「顺手」改用帧上的
-    ``ts_ms`` 相减。数字会立刻变得很好看（帧每 1Hz 都在），而它与「模型花了多久」
-    没有关系。
-    """
-    from decision_eval_timing import LATENCY_SOURCE_FRAME_TS, latency_provenance
-    from decision_eval_timing_synthetic import synthetic_healthy_rows
-
-    mutated = timing_block(synthetic_healthy_rows(), latency_source=LATENCY_SOURCE_FRAME_TS)
-    mutated["latency_source_block"] = latency_provenance(LATENCY_SOURCE_FRAME_TS)
-    return mutated
-
-
-def _event_ts_diff_source(block: dict) -> dict:
-    """把耗时出处改成**事件 ts 差值** —— 另一种被禁止的来源."""
-    from decision_eval_timing import LATENCY_SOURCE_EVENT_TS_DIFF, latency_provenance
-    from decision_eval_timing_synthetic import synthetic_healthy_rows
-
-    mutated = timing_block(synthetic_healthy_rows(), latency_source=LATENCY_SOURCE_EVENT_TS_DIFF)
-    mutated["latency_source_block"] = latency_provenance(LATENCY_SOURCE_EVENT_TS_DIFF)
-    return mutated
-
-
-def _add_combined_accuracy(block: dict) -> dict:
-    """往块里塞一个 ``accuracy`` 字段（模拟「顺手合成一下」）."""
-    return {**block, "accuracy": 0.83}
-
-
-def _drop_premature_labels(block: dict) -> dict:
-    """删掉全部 premature 标注 —— 必须判「无法测量」，**不得**判绿."""
-    from decision_eval_timing import FIELD_STILL_SPEAKING
-    from decision_eval_timing_synthetic import synthetic_healthy_rows
-
-    rows = [
-        {k: v for k, v in row.items() if k != FIELD_STILL_SPEAKING}
-        for row in synthetic_healthy_rows()
-    ]
-    return timing_block(rows)
-
-
-def _tiny_sample(block: dict) -> dict:
-    """只留 2 次开口 —— 分位数在此样本量下不可作结论."""
-    from decision_eval_timing_synthetic import synthetic_healthy_rows
-
-    return timing_block(synthetic_healthy_rows()[:3])
-
-
-def _no_timebase(block: dict) -> dict:
-    """把所有 ``ts`` 抹成空串 —— 速率失去时间基准."""
-    from decision_eval_timing_synthetic import synthetic_healthy_rows
-
-    rows = [{**row, "ts": ""} for row in synthetic_healthy_rows()]
-    return timing_block(rows)
-
-
-@dataclass(frozen=True)
-class Mutation:
-    """一份**故意做错**的输入，及其「必须让哪些判据不能判绿」的声明.
-
-    Attributes
-    ----------
-        must_fail: 必须判 :data:`VERDICT_FAIL` 的判据 id。
-        must_not_pass: 必须**不判 PASS**（FAIL 或「无法测量」皆可）的判据 id。
-            用于「分母退化 / 未接线」这一类：正确行为是判「无法测量」，
-            但它同样**绝不能判绿**。
-        is_identity: 恒等对照。它**不得**让任何判据变红，作用是把
-            「基线本身就不干净」从其它负控里分离出来。恰好一个。
-    """
-
-    mutation_id: str
-    description: str
-    apply: BlockMutator
-    must_fail: tuple[str, ...] = ()
-    must_not_pass: tuple[str, ...] = ()
-    is_identity: bool = False
-
-    @property
-    def covers(self) -> tuple[str, ...]:
-        """本负控触及的全部判据 id（用于覆盖完整性检查）."""
-        return tuple(dict.fromkeys((*self.must_fail, *self.must_not_pass)))
-
-
-def _identity(block: dict) -> dict:
-    """恒等变换 —— 它必须让**任何判定都不变**."""
-    return block
-
-
-#: ★ 负控集合。父 spec §七要求「每条新判据必须配套一份故意做错的输入，
-#: 并证明它会判红」；:func:`self_check` 会强制「每条判据至少被一个负控覆盖」，
-#: 且拒绝 ``covers`` 为空的负控。
-#:
-#: ⚠️ **一条实测结论，写在这里以免后人重犯**：
-#: ``always-silent`` 在时序轴上**没有** ``must_fail`` —— 它的产物是「没有开口样本」，
-#: 故三个量全部「无法测量」。声明它必须让某条判据判红会让自检**假失败**，
-#: 进而诱使人去放宽判据；那比漏检更危险。真正该断言的是**它一条都没判绿**。
-MUTATIONS: tuple[Mutation, ...] = (
-    Mutation(
-        mutation_id="identity",
-        description="恒等变换（什么都不改）—— 证明「判红」不是来自基线输入本身。",
-        apply=_identity,
-        is_identity=True,
-    ),
-    Mutation(
-        mutation_id="dropped-round-stamp",
-        description=(
-            "★ 本票 ★ 负控的字面形态：**删掉轮次打点**（latency_ms 全为 None），"
-            "而 ts 一律保留。期望：T_ONSET_MEASURED 判**红**（不是「无法测量」），"
-            "且 onset 不得退回用 ts 差值重新出数。"
-        ),
-        apply=_unstamped,
-        must_fail=("T_ONSET_MEASURED",),
-        must_not_pass=("T_ONSET_MEDIAN", "T_ONSET_P90", "T_SAMPLE_FLOOR"),
-    ),
-    Mutation(
-        mutation_id="frame-ts-latency-source",
-        description=(
-            "★ 把耗时出处换成**帧的采集端时间戳**（本票点名禁止）。"
-            "数字会变得更好看，但归因是错的 —— 必须判红。"
-        ),
-        apply=_frame_ts_source,
-        must_fail=("T_LATENCY_SOURCE",),
-    ),
-    Mutation(
-        mutation_id="event-ts-diff-latency-source",
-        description="把耗时出处换成**事件 ts 差值** —— 另一种被禁止的来源。",
-        apply=_event_ts_diff_source,
-        must_fail=("T_LATENCY_SOURCE",),
-    ),
-    Mutation(
-        mutation_id="combined-accuracy",
-        description=(
-            "★ 往块里塞一个 accuracy 字段（「顺手合成两轴」）—— 父 spec §三明确否决，必须判红。"
-        ),
-        apply=_add_combined_accuracy,
-        must_fail=("T_NO_COMBINED_ACCURACY",),
-    ),
-    Mutation(
-        mutation_id="dropped-premature-labels",
-        description=(
-            "删掉全部 premature 标注（模拟**未接线的真机链路**）—— "
-            "必须判「无法测量」，**不得**判绿。"
-        ),
-        apply=_drop_premature_labels,
-        must_not_pass=("T_PREMATURE_MEASURED",),
-    ),
-    Mutation(
-        mutation_id="tiny-sample",
-        description="只留 2 次开口 —— onset 分位数不可作结论。",
-        apply=_tiny_sample,
-        must_not_pass=("T_SAMPLE_FLOOR",),
-    ),
-    Mutation(
-        mutation_id="no-timebase",
-        description="抹掉全部 ts —— 每秒误触发失去时间基准，必须不可判绿。",
-        apply=_no_timebase,
-        must_not_pass=("T_SPURIOUS_TIMEBASE",),
-    ),
-    Mutation(
-        mutation_id="always-silent",
-        description=(
-            "★ 「永远沉默」的桩。在时序轴上它的产物是**没有开口样本** ⇒ 三个量全部"
-            "「无法测量」。★ 它**没有** must_fail（见上方注释）：声明它必须判红会让"
-            "自检假失败；要断言的是它**一条都没判绿**。"
-        ),
-        apply=_never_speaks,
-        must_not_pass=("T_ONSET_MEDIAN", "T_ONSET_P90", "T_PREMATURE_MEASURED"),
-    ),
-)
-
-
-def _verdict_map(block: dict) -> dict[str, str]:
-    """一次算完全部时序判据的判定."""
-    return {item["criterion_id"]: item["verdict"] for item in criteria_verdicts(block)}
-
-
-def self_check() -> int:
-    """★ 可证伪性自检：证明每条时序判据**真的会判红**（而不是恒真）.
-
-    做五件事，并把两侧读数都打出来：
-
-    1. **文本与阈值的分叉守卫**（:func:`statements_match_bounds`）；
-    2. **无负控的判据 ⇒ 失败**（禁止恒真判据、禁止装饰性负控）；
-    3. **恒等变换必须让任何判定都不变**；
-    4. 每个负控必须让它 ``must_fail`` 里的判据**判 FAIL**、
-       ``must_not_pass`` 里的**不判 PASS**；
-    5. ★ **被负控覆盖的判据集合必须等于全部判据集合** —— 守「新增判据即必须配负控」。
-
-    ★ 另外单独断言本票 ★ 负控的**方向**：``dropped-round-stamp`` 必须让
-    ``T_ONSET_MEASURED`` 判 **FAIL**，而不是「无法测量」。
-    判「无法测量」会让「打点被删掉」看起来像「这项不适用」—— 那正是 fail-open。
-    """
-    from decision_eval_timing_synthetic import synthetic_healthy_rows
-
-    baseline = timing_block(synthetic_healthy_rows())
-    baseline_verdicts = _verdict_map(baseline)
-    problems: list[str] = []
-    problems.extend(statements_match_bounds())
-    problems.extend(statements_mention_axis_separation())
-
-    all_ids = {c.criterion_id for c in TIMING_CRITERIA}
-    covered = {cid for mutation in MUTATIONS for cid in mutation.covers}
-    for criterion_id in sorted(all_ids - covered):
-        problems.append(f"{criterion_id} 没有任何负控声明它必须判红 / 不得判绿 ⇒ 它可能是恒真的")
-
-    for mutation in MUTATIONS:
-        if not mutation.covers and not mutation.is_identity:
-            problems.append(
-                f"负控 {mutation.mutation_id} 既没有 must_fail 也没有 must_not_pass，"
-                "又不是显式标注的恒等对照 ⇒ 装饰性负控"
-            )
-    identities = [m for m in MUTATIONS if m.is_identity]
-    if len(identities) != 1:
-        problems.append(
-            f"恒等对照负控有 {len(identities)} 个（应为恰好 1 个）—— "
-            "没有它，「负控会让判据变红」这句话就没有对照"
-        )
-
-    identity_verdicts = _verdict_map(_identity(baseline))
-    if identity_verdicts != baseline_verdicts:
-        problems.append("恒等变换改变了判定 ⇒ 后面的「变红」可能来自基线输入本身")
-
-    print("=== 时序轴判据的负控自检 (#158) ===")
-    print(f"  基线（合成输入）: {_fmt_verdicts(baseline_verdicts)}")
-    for mutation in MUTATIONS:
-        mutated = mutation.apply(baseline)
-        verdicts = _verdict_map(mutated)
-        fired = sorted(k for k, v in verdicts.items() if v == VERDICT_FAIL)
-        not_green = sorted(k for k, v in verdicts.items() if v != VERDICT_PASS)
-        if mutation.is_identity:
-            print(f"  {mutation.mutation_id:28s} 判红={fired}（应为空）")
-            if fired:
-                problems.append(
-                    f"恒等对照负控让 {fired} 判红了 ⇒ 基线输入本身就不干净，"
-                    "其它负控的「变红」证明不了任何事"
-                )
-            continue
-        print(f"  {mutation.mutation_id:28s} 判红={fired} 非绿={not_green}")
-        missing = [cid for cid in mutation.must_fail if verdicts.get(cid) != VERDICT_FAIL]
-        if missing:
-            problems.append(f"负控 {mutation.mutation_id} 没能让 {missing} 判红")
-        still_green = [cid for cid in mutation.must_not_pass if verdicts.get(cid) == VERDICT_PASS]
-        if still_green:
-            problems.append(
-                f"负控 {mutation.mutation_id} 让 {still_green} **判绿了** —— "
-                "分母退化 / 未接线这类情形不得判绿"
-            )
-
-    # ★ 本票 ★ 负控的方向：必须是 FAIL，不能是 UNMEASURABLE。
-    drop_verdict = _verdict_map(_unstamped(baseline)).get("T_ONSET_MEASURED")
-    if drop_verdict != VERDICT_FAIL:
-        problems.append(
-            f"★ 删掉轮次打点后 T_ONSET_MEASURED 的实际判定是 {drop_verdict!r}，"
-            "而本票要求它**判红**。判「无法测量」会把接线缺陷说成「这项不适用」"
-            "（fail-open）。"
-        )
-
-    if problems:
-        print("  verdict: FAIL")
-        for problem in problems:
-            print(f"    - {problem}")
-        return 1
-    print(
-        f"  verdict: PASS（{len(all_ids)} 条判据各有负控；{len(MUTATIONS)} 个故意做错的输入"
-        "全部按声明判红或「无法测量」；删掉轮次打点确实判**红**）"
-    )
-    return 0
-
-
-def _fmt_verdicts(verdicts: dict[str, str]) -> str:
-    """把判定映射打成一行（稳定顺序，便于跨运行 diff）."""
-    return "  ".join(f"{k}={verdicts[k]}" for k in sorted(verdicts))
+    return combine_verdicts([item["verdict"] for item in results])
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI：默认跑负控自检；``--show-bounds`` 打印阈值与出处."""
-    parser = argparse.ArgumentParser(description="时序轴判据的负控自检（工单 #158）")
-    parser.add_argument("--self-check", action="store_true", help="跑负控自检（默认）")
+    """CLI：打印阈值与出处 / 核验阈值未与冻结快照分叉.
+
+    ★ 负控自检的 CLI 已随负控一同搬到 :mod:`decision_eval_timing_negatives`
+    —— 本入口只负责「阈值这件事」，自检入口在那里（两个变化原因，两个入口）。
+    """
+    parser = argparse.ArgumentParser(description="时序轴阈值与出处（工单 #158）")
     parser.add_argument("--show-bounds", action="store_true", help="打印阈值与出处")
     parser.add_argument("--verify-bounds", action="store_true", help="从冻结快照重算阈值并比对")
     args = parser.parse_args(argv)
@@ -972,7 +743,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
 
-    return self_check()
+    # ★ 无参数时**不再**回落到负控自检（它已搬到 negatives 模块）：那会让
+    #   「跑错了模块」看起来像「自检通过了」。缺参数 ⇒ 打印阈值并返回 0。
+    for row in explain_bounds():
+        print(f"  {row['bound']:24s} declared={row['declared']}  source={row['source']}")
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI glue
@@ -982,7 +757,6 @@ if __name__ == "__main__":  # pragma: no cover - CLI glue
 __all__ = [
     "BASELINE_EVENTS",
     "BOUND_DERIVATION",
-    "MUTATIONS",
     "TIMING_BASELINE_SNAPSHOT",
     "TIMING_BOUNDS",
     "TIMING_CRITERIA",
@@ -990,14 +764,12 @@ __all__ = [
     "VERDICT_FAIL",
     "VERDICT_PASS",
     "VERDICT_UNMEASURABLE",
-    "Mutation",
     "TimingCriterion",
     "criteria_verdicts",
     "derive_bounds",
     "explain_bounds",
     "main",
     "overall_verdict",
-    "self_check",
     "statement_percentages",
     "statements_match_bounds",
     "verify_bounds",

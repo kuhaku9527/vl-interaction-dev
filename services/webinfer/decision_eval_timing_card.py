@@ -38,6 +38,10 @@ import argparse
 import json
 from pathlib import Path
 
+from decision_eval_criteria import (
+    combine_verdicts as combine_verdicts,
+)
+
 # ★ 本模块是**公开入口**（`python -m decision_eval_timing_card`、门禁与测试都从它取），
 #   故有意识地**再导出**下层符号，使调用方只依赖一个名字。`X as X` 形式显式声明
 #   「这是 re-export 而非本地使用」，ruff 的 F401 也认得它。
@@ -55,9 +59,6 @@ from decision_eval_timing import (
 )
 from decision_eval_timing import (
     timing_block as timing_block,
-)
-from decision_eval_timing_criteria import (
-    MUTATIONS as MUTATIONS,
 )
 from decision_eval_timing_criteria import (
     TIMING_BOUNDS as TIMING_BOUNDS,
@@ -84,10 +85,13 @@ from decision_eval_timing_criteria import (
     overall_verdict as overall_verdict,
 )
 from decision_eval_timing_criteria import (
-    self_check as criteria_self_check,
-)
-from decision_eval_timing_criteria import (
     verify_bounds as verify_bounds,
+)
+from decision_eval_timing_negatives import (
+    MUTATIONS as MUTATIONS,
+)
+from decision_eval_timing_negatives import (
+    self_check as criteria_self_check,
 )
 from decision_eval_timing_report import (
     diff_reports as diff_reports,
@@ -325,12 +329,8 @@ def build_two_axes(
 
 
 def _worst_verdict(verdicts: list[str]) -> str:
-    """多 variant 的总判定：FAIL 优先，其次「无法测量」（与卡片同一条规则）."""
-    if VERDICT_FAIL in verdicts:
-        return VERDICT_FAIL
-    if VERDICT_UNMEASURABLE in verdicts:
-        return VERDICT_UNMEASURABLE
-    return VERDICT_PASS
+    """多 variant 的总判定（转发到**唯一一份**合成规则）."""
+    return combine_verdicts(verdicts)
 
 
 # --- 离线自检 ---------------------------------------------------------------

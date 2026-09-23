@@ -53,13 +53,17 @@ Self-check: python -m decision_eval_timing --self-check
 from __future__ import annotations
 
 import argparse
-import json
 
 # ★ 决策词 → 行为的**唯一定义**住在定向轴模块里；此处 import 而不是重写。
 #   「开口」若有两份定义，迟早分叉，而分叉的那一份是没被测过的。
 from decision_eval_axis import (
-    DECISION_ERROR,
     DECISIONS_SPEAKING,
+)
+from decision_eval_axis import (
+    _pct as _axis_pct,
+)
+from decision_eval_axis import (
+    decision_of as _axis_decision_of,
 )
 from decision_events import ROUND_KIND_PROACTIVE, percentile
 
@@ -146,13 +150,15 @@ def forbidden_combined_keys(block: object, _prefix: str = "") -> list[str]:
 def decision_of(row: dict) -> str:
     """该行的有效决策；``ok=False`` 的行一律记为 :data:`DECISION_ERROR`.
 
-    ★ 与定向轴**同一实现**（:func:`decision_eval_axis.decision_of` 的语义）：
-    失败行是「没测到」，**不得**被当成「不开口」—— 当成不开口会把一次失效
-    输出洗成一次正确的沉默。
+    ★ 真的与定向轴**同一实现**（import 自 :mod:`decision_eval_axis`，
+    在此仅作为本模块的公开名转发）。失败行是「没测到」，**不得**被当成
+    「不开口」—— 当成不开口会把一次失效输出洗成一次正确的沉默。
+
+    ⚠️ 对抗性复核查出过一处措辞不实：初版这里是**另一份实现**，
+    而 docstring 却写着「与定向轴同一实现」。两份实现即便今天行为相同，
+    也迟早分叉 —— 而分叉的那一份是没被测过的（正是本仓反复记的形态）。
     """
-    if not row.get("ok", True):
-        return DECISION_ERROR
-    return row.get("decision") or DECISION_ERROR
+    return _axis_decision_of(row)
 
 
 def spoke(row: dict) -> bool:
@@ -203,11 +209,12 @@ def is_premature(row: dict) -> bool | None:
 def _pct(numerator: int, denominator: int) -> float | None:
     """百分数；**分母为 0 时返回 ``None``（未测），不返回 0.0**.
 
-    与 :func:`decision_eval_axis._pct` 同一条纪律，理由见模块 docstring 决定 3。
+    ★ 转发到 :func:`decision_eval_axis._pct`（**同一实现**）而不是另写一份。
+    两轴的「没测 ≠ 测到 0」必须是同一条纪律的同一个函数 ——
+    两份实现即便今天行为相同，也迟早分叉（对抗性复核正是照这条查出
+    本模块 ``decision_of`` 曾是一份平行实现却在 docstring 里声称同一实现）。
     """
-    if denominator == 0:
-        return None
-    return round(100.0 * numerator / denominator, 1)
+    return _axis_pct(numerator, denominator)
 
 
 # --- 速率的时间基准（ts 的唯一合法用途）--------------------------------------
@@ -284,14 +291,22 @@ def _iso_seconds_between(start: str, end: str) -> float | None:
     return round((last - first).total_seconds(), 3)
 
 
-# --- 耗时出处（结构化自述）---------------------------------------------------
+# --- 耗时出处（★ 从数据取证，不是声明）------------------------------------
 
 
 def latency_provenance(source: str = LATENCY_SOURCE_CHAIN_STAMP) -> dict:
-    """★ 「这份 onset 耗时出自哪里」的**结构化自述**.
+    """★ 「这份 onset 耗时出自哪里」的**声明块**.
 
-    可被 :func:`timing_criteria_hint` 与卡片判据直接判定，故「用了帧时间戳」
-    这件事**不能被静默做掉** —— 它会当场判红。
+    ⚠️ **这不是防线，只是一份自述。** 对抗性复核实测推翻过这一点：
+    ``source`` 是**调用方给的字符串**，与数据无关 —— 一份「其实是用事件 ts
+    差值算出来的」耗时，只要调用方不主动声明，就会带着
+    ``source=decision_chain_round_stamp / legal=True`` **判绿**。
+    那正是本票正文点名的「静默出数」。
+
+    真正的防线是 :func:`latency_audit`：它**从数据本身**取证（逐行
+    ``latency_source`` 字段 + 「耗时恰好等于某段 ts 差值」的代数检验），
+    且 :func:`timing_block` 用它覆盖这里的声明。本函数因此只用于
+    「无逐行数据可查」的场合（例如负控里手工构造一个非法块）。
     """
     return {
         "source": source,
@@ -310,7 +325,131 @@ def latency_provenance(source: str = LATENCY_SOURCE_CHAIN_STAMP) -> dict:
             "事件 ts 相减同罪：它是发射端墙钟，含链路外抖动。"
         ),
         "legal": source == LATENCY_SOURCE_CHAIN_STAMP,
+        # ★ 让读者一眼看出这只是一份声明，而不是取证结果。
+        "evidence_kind": "declared",
     }
+
+
+def latency_audit(rows: list[dict]) -> dict:
+    """★★ **从数据取证**：这份耗时到底出自哪里（本票 ★ 负控的真正防线）.
+
+    为什么需要它（一次真实的失败，写下来以免后人重犯）
+    --------------------------------------------------
+    初版只让调用方声明 ``latency_source=...``，于是对抗性复核当场推翻：
+    把 ``latency_ms`` **真的**换成由事件 ``ts`` 差值算出来的数，调用方什么都
+    不用改，卡片照样报 ``source=decision_chain_round_stamp / legal=True /
+    T_LATENCY_SOURCE=pass`` —— **一个「其实用了墙钟」的实现静默出数且判绿**。
+    这正是本票正文点名的失效模式，而当时的实现恰好复现了它。
+
+    取证的三条独立证据（**任何一条不成立即不可信**）：
+
+    1. **逐行出处字段。** 每行必须带 ``latency_source`` 且其值为
+       :data:`LATENCY_SOURCE_CHAIN_STAMP`。读侧
+       （:mod:`.decision_eval_timing_sources`）从事件流放这个字段，
+       于是「这一行的耗时从哪来」是**数据**而不是一句声明。
+    2. ★ **与 ``ts`` 差值的无关性检验。** 若耗时其实由 ``ts`` 推出，那么按构造
+       它**必然恰好等于某个 ts 差值**。故这里检查该恒等式 —— 一旦命中即判定
+       该行耗时是 ts 派生的。这不是统计检验（样本太小），而是**代数关系**：
+       ts 差值算出来的数必然命中，而真实的链路耗时不会。
+    3. **缺失必须暴露。** 任何开口行缺 ``latency_ms`` 或缺出处字段 ⇒ 记入
+       ``unattributed``，由判据判红。
+
+    Returns
+    -------
+        ``{source, legal, evidence_kind, per_source, n_attributed,
+        n_unattributed, unattributed_ids, ts_derived_ids, why}``。
+        ``legal`` 只在**三条证据全部通过**时为 ``True``。
+    """
+    speaking = [row for row in rows if spoke(row)]
+    per_source: dict[str, int] = {}
+    unattributed: list[str] = []
+    ts_derived: list[str] = []
+
+    # ts 差值的候选集合：若某行耗时「恰好等于」某个 ts 差值，它就不是链上读数。
+    spans = _session_ts_spans_ms(rows)
+
+    for row in speaking:
+        row_id = str(row.get("id") or "?")
+        latency = row.get("latency_ms")
+        source = str(row.get("latency_source") or "")
+        if source:
+            per_source[source] = per_source.get(source, 0) + 1
+        if not source or isinstance(latency, bool) or not isinstance(latency, (int, float)):
+            unattributed.append(row_id)
+            continue
+        if int(latency) <= 0 or source != LATENCY_SOURCE_CHAIN_STAMP:
+            unattributed.append(row_id)
+            continue
+        if int(latency) in spans:
+            ts_derived.append(row_id)
+
+    sources = sorted(per_source)
+    legal = (
+        bool(speaking)
+        and not unattributed
+        and not ts_derived
+        and sources == [LATENCY_SOURCE_CHAIN_STAMP]
+    )
+    if not speaking:
+        source: str | None = None
+    elif len(sources) == 1:
+        source = sources[0]
+    else:
+        source = "+".join(sources) if sources else None
+
+    return {
+        "source": source,
+        "legal": legal,
+        # ★ 有无适用对象：一次开口都没有 ⇒ 没有耗时可归因 ⇒ 判据应判
+        #   「无法测量」而不是判红（与 T_ONSET_MEASURED 同一条区分：
+        #   「本该有而不有」是缺陷，「本就没有」是无适用对象）。
+        "applicable": bool(speaking),
+        "evidence_kind": "audited_from_rows",
+        "per_source": per_source,
+        "n_attributed": len(speaking) - len(unattributed),
+        "n_unattributed": len(unattributed),
+        "unattributed_ids": unattributed,
+        "ts_derived_ids": ts_derived,
+        "forbidden": list(FORBIDDEN_LATENCY_SOURCES),
+        "why": (
+            "耗时出处**从数据取证**而不是由调用方声明：逐行 latency_source 字段 + "
+            "「耗时恰好等于某段 ts 差值」的代数检验（ts 派生的数必然命中该恒等式，"
+            "真实链路耗时不会，因为它来自单调时钟而非墙钟差值）。"
+            "任何开口行缺耗时或缺出处 ⇒ legal=False（判红）。"
+        ),
+    }
+
+
+def _session_ts_spans_ms(rows: list[dict]) -> set[int]:
+    """所有「可能被误当成耗时」的 ``ts`` 差值（毫秒，取整）.
+
+    ★ 代数检验的另一半：一个由 ``ts`` 推出来的耗时**必然**等于某个 ts 差值。
+    故把所有会话内的 ts 两两差值收成集合，供 :func:`latency_audit` 命中判定。
+    样本是 O(n²)，而一次评测的轮次数是几十到几百 —— 可接受。
+    """
+    from datetime import datetime
+
+    def parse(text: object) -> datetime | None:
+        try:
+            return datetime.fromisoformat(str(text).strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    by_session: dict[str, list[datetime]] = {}
+    for row in rows:
+        stamp = parse(row.get("ts") or "")
+        if stamp is None:
+            continue
+        by_session.setdefault(str(row.get("session_id") or ""), []).append(stamp)
+
+    spans: set[int] = set()
+    for stamps in by_session.values():
+        for first in stamps:
+            for second in stamps:
+                delta_ms = round((second - first).total_seconds() * 1000.0)
+                if delta_ms > 0:
+                    spans.add(delta_ms)
+    return spans
 
 
 def timing_criteria_hint(block: dict) -> list[str]:
@@ -534,17 +673,47 @@ def timing_metrics(
     }
 
 
-def timing_block(rows: list[dict], *, latency_source: str = LATENCY_SOURCE_CHAIN_STAMP) -> dict:
-    """逐轮行 → 时序轴的一个块（读数 + 出处 + 自述缺口 + 本票 AC 的守卫读法）.
+def timing_block(rows: list[dict], *, latency_source: str | None = None) -> dict:
+    """逐轮行 → 时序轴的一个块（读数 + 出处 + 缺口 + 本票 AC 的守卫读法）.
+
+    Args:
+        rows: 逐轮行。★ 每行**必须**带 ``latency_source``（由读侧从事件流放进来），
+            否则该行耗时不可归因 —— 见 :func:`latency_audit`。
+        latency_source: ⚠️ **已废弃的声明入参，仅为负控保留**。
+            正常路径**不要**传它：出处由 :func:`latency_audit` 从数据取证。
+            传入时它只用于标记「这份块是手工构造的非法声明」，取证结果依旧优先。
 
     Returns
     -------
-        ``{axis, axis_question, metrics, latency_source_block, provenance,
-        caveats, forbidden_combined_keys}``。★ ``axis`` 恒为 ``"timing"``：
+        ``{axis, axis_question, metrics, latency_source_block, rounds, caveats,
+        forbidden_combined_keys}``。★ ``axis`` 恒为 ``"timing"``：
         它与定向轴卡片同形但**永不同块**，见模块 docstring。
+
+    Notes
+    -----
+        ★★ ``latency_source_block`` 是 :func:`latency_audit` 的**取证结果**，
+        不是调用方的一句话。初版让调用方声明，被对抗性复核当场推翻：把
+        ``latency_ms`` 真的换成 ts 差值算出来的数，调用方什么都不用改，
+        卡片照样 ``legal=True / T_LATENCY_SOURCE=pass``。
+        现在出处**必须**从逐行数据里读出来，声明只能让结果**更坏**（不能更好）。
     """
-    metrics = timing_metrics(rows, latency_source=latency_source)
-    provenance = latency_provenance(latency_source)
+    metrics = timing_metrics(rows, latency_source=latency_source or LATENCY_SOURCE_CHAIN_STAMP)
+    audit = latency_audit(rows)
+    if latency_source is not None and latency_source != LATENCY_SOURCE_CHAIN_STAMP:
+        # 手工声明的非法出处：保留声明值以便报错信息指得出「被声明成了什么」，
+        # 但**取证结果说了算** —— legal 取两者之与（声明非法即非法）。
+        audit = {
+            **audit,
+            "declared_source": latency_source,
+            "declared_legal": latency_source == LATENCY_SOURCE_CHAIN_STAMP,
+            "legal": False,
+        }
+    elif audit["evidence_kind"] == "audited_from_rows":
+        audit = {
+            **audit,
+            "declared_source": LATENCY_SOURCE_CHAIN_STAMP,
+            "declared_legal": True,
+        }
     block: dict = {
         "axis": "timing",
         "axis_question": (
@@ -552,7 +721,7 @@ def timing_block(rows: list[dict], *, latency_source: str = LATENCY_SOURCE_CHAIN
             "**不**与定向轴合成单一 accuracy"
         ),
         "metrics": metrics,
-        "latency_source_block": provenance,
+        "latency_source_block": {**latency_provenance(audit.get("source") or ""), **audit},
         "rounds": {
             "rounds_count": len(rows),
             "sessions": sorted({str(row.get("session_id") or "") for row in rows}),
@@ -657,24 +826,21 @@ def self_check() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI：默认跑离线自检；给 ``--events`` 时打印一份时序块（JSON）."""
+    """CLI：跑离线自检（本模块唯一的 CLI 职责）.
+
+    ★ 曾经这里还有一个 ``--asset`` 分支，调用
+    ``decision_eval_timing_sources.load_timing_asset`` —— **那个函数从来不存在**，
+    于是它在真跑时必然 ``ImportError``。它没被 CI 抓到，因为 import 写在分支里
+    （延迟导入），而 ``main()`` 当时没有任何测试覆盖。
+    这正是本仓反复记的形态：**一个存在但从不执行的代码路径，与没有它无法区分，
+    却让读者以为那条路能走。** 出卡入口在 :mod:`decision_eval_timing_card`，
+    故这里直接删掉而不是补一个没人用的资产读取器。
+    """
     parser = argparse.ArgumentParser(
-        description="时序轴读数（工单 #158）：onset 延迟 / 每秒误触发 / premature"
+        description="时序轴读数的离线自检（工单 #158）：onset 延迟 / 每秒误触发 / premature"
     )
     parser.add_argument("--self-check", action="store_true", help="跑离线自检（默认）")
-    parser.add_argument("--asset", default=None, help="冻结时的时序资产（JSON），打印其块")
-    parser.add_argument("--json", action="store_true", help="以 JSON 输出")
-    args = parser.parse_args(argv)
-
-    if args.asset:
-        from decision_eval_timing_sources import DEFAULT_TIMING_ASSET, load_timing_asset
-
-        loaded = load_timing_asset(args.asset or DEFAULT_TIMING_ASSET)
-        block = timing_block(loaded["rows"])
-        print(json.dumps(block, ensure_ascii=False, indent=2))
-        return 0
-
-    _ = args.json
+    parser.parse_args(argv)
     return self_check()
 
 

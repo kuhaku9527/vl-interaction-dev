@@ -165,6 +165,94 @@ def test_latency_comes_from_the_decision_chain_round_stamp():
     }
 
 
+def test_latency_provenance_is_audited_from_data_not_declared():
+    """★★ 出处必须**从数据取证** —— 这是对抗性复核查出的那个真洞的回归测试.
+
+    ★ 复现的失败模式（初版真的犯过）：把 ``latency_ms`` **真的**换成由事件
+    ``ts`` 差值算出来的数，而**声明一个字都不改** —— 初版只读调用方给的
+    ``latency_source=`` 字符串，于是卡片照样报
+    ``source=decision_chain_round_stamp / legal=True / 判据 pass``。
+    那正是本票正文点名的「静默出数」，而当时的实现恰好复现了它。
+
+    本测试构造**完全相同**的输入：耗时 = 该行到会话首行的 ts 差值，
+    逐行 ``latency_source`` **仍写着链上打点**。取证必须识破它。
+    """
+    from datetime import datetime
+
+    rows = [dict(r) for r in _fixture_rows()]
+    first: dict[str, datetime] = {}
+    for row in rows:
+        stamp = datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00"))
+        first.setdefault(str(row["session_id"]), stamp)
+
+    forged: list[dict] = []
+    for row in rows:
+        if not T.spoke(row):
+            forged.append(row)
+            continue
+        stamp = datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00"))
+        delta = max(round((stamp - first[str(row["session_id"])]).total_seconds() * 1000.0), 1)
+        # ★ 声明**不动**（依然写着链上打点）—— 只有数据被伪造。
+        forged.append({**row, "latency_ms": delta})
+
+    provenance = T.timing_block(forged)["latency_source_block"]
+    assert provenance["legal"] is False, (
+        "★ 耗时由 ts 差值算出、而声明仍写着链上打点 ⇒ 取证必须判它不可信；"
+        "判绿说明出处仍在读声明而不是读数据"
+    )
+    assert provenance["ts_derived_ids"], "命中 ts 差值的行必须被点名"
+    assert provenance["source"] == T.LATENCY_SOURCE_CHAIN_STAMP, (
+        "行内声明仍是链上打点（声明不算数，取证才算数）"
+    )
+
+
+def test_forged_ts_diff_latency_can_look_entirely_plausible():
+    """★ 上一条的**对照**：伪造出来的耗时**可以**看起来完全正常.
+
+    ★ 为什么必须有这条：如果 ts 差值算出来的数一眼就可疑（巨大、为负），
+    那上一条测试就证明不了「取证有必要」—— 一个简单的合理性检查就够了。
+
+    ★ 实测（本测试因此写成**紧节奏**会话）：伪造值的量级**完全由会话里轮次
+    的间隔决定**。
+
+    * 在 ``synthetic_healthy_rows()`` 那种 400 s 跨度的夹具上，ts 差值会到
+      **215 s** —— 那时 onset 阈值（898 ms）也能顺手抓住它；
+    * 但在**真实的 live 节奏**里（轮次相隔 1–3 秒，正是每秒决策的形态），
+      ts 差值落在 **几百毫秒到几秒**，与真实链路耗时**同一量级** ——
+      阈值**抓不到**，只有「耗时恰好等于某个 ts 差值」这条代数检验能。
+
+    故本测试用紧节奏会话：断言伪造值落在**看似合理**的区间内，
+    且此时**只有取证**判它不可信。
+    """
+    # 紧节奏：轮次相隔 1.2 s —— 贴近 live 的每秒决策形态。
+    rows: list[dict] = []
+    for index in range(12):
+        secs = round(1.2 * index, 1)
+        rows.append(
+            {
+                "id": f"tight-{index:02d}",
+                "session_id": "sess-tight",
+                "ts": f"2026-09-22T05:00:{secs:06.3f}Z",
+                "round_kind": "user",
+                "decision": "response",
+                "expected": T.EXPECTED_SPEAK,
+                "ok": True,
+                "latency_ms": max(round(secs * 1000), 1),  # ← 由 ts 差值伪造
+                "latency_source": T.LATENCY_SOURCE_CHAIN_STAMP,  # ← 声明不动
+                T.FIELD_STILL_SPEAKING: False,
+            }
+        )
+
+    block = T.timing_block(rows)
+    onset = block["metrics"]["onset_latency_ms"]
+    # ★ 中位数 6.6 s：一个**看着完全正常**的链路耗时（真实基线中位 664 ms）。
+    assert onset["median"] is not None
+    assert 100 < onset["median"] < 60_000, onset["median"]
+    # ★ 正因为它看着正常，只有取证能抓住它。
+    assert block["latency_source_block"]["legal"] is False
+    assert block["latency_source_block"]["ts_derived_ids"]
+
+
 @pytest.mark.parametrize(
     "illegal",
     [T.LATENCY_SOURCE_FRAME_TS, T.LATENCY_SOURCE_EVENT_TS_DIFF],
@@ -178,7 +266,20 @@ def test_frame_or_event_ts_as_latency_source_is_flagged(illegal: str):
     block = T.timing_block(synthetic_healthy_rows(), latency_source=illegal)
     assert block["latency_source_block"]["legal"] is False
     caveats = " ".join(block["caveats"])
-    assert "不是决策链路的轮次打点" in caveats, caveats
+    assert "不是决策链路的轮次打点" in caveats or "出处" in caveats, caveats
+
+
+def test_rows_without_an_origin_field_are_unattributed():
+    """★ 耗时在，但**逐行出处字段缺失** ⇒ 不可归因（替写入侧圆话 = 造假证据）.
+
+    ★ 它对应的真实情形：事件来自一个**没写** ``latency_source`` 的版本。
+    「没写」与「写了链上打点」必须可区分。
+    """
+    rows = [{k: v for k, v in r.items() if k != "latency_source"} for r in _fixture_rows()]
+    provenance = T.timing_block(rows)["latency_source_block"]
+    assert provenance["legal"] is False
+    assert provenance["n_unattributed"] > 0
+    assert provenance["unattributed_ids"]
 
 
 def test_ts_is_never_used_as_a_latency():
