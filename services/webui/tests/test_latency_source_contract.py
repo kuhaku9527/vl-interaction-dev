@@ -121,9 +121,7 @@ def test_writer_does_not_claim_an_origin_without_a_latency():
 def test_writer_and_reader_agree_on_the_value():
     """★ 写侧与读侧的常量必须一致（两处复制是为了跨服务，必须被钉住）."""
     source = (WEBINFER / "decision_eval_timing.py").read_text(encoding="utf-8")
-    match = re.search(
-        r'^LATENCY_SOURCE_CHAIN_STAMP\s*=\s*"([^"]+)"', source, re.MULTILINE
-    )
+    match = re.search(r'^LATENCY_SOURCE_CHAIN_STAMP\s*=\s*"([^"]+)"', source, re.MULTILINE)
     assert match, "读侧没有 LATENCY_SOURCE_CHAIN_STAMP 常量定义"
     assert match.group(1) == live_llm.LATENCY_SOURCE_CHAIN_STAMP, (
         "写侧与读侧的出处取值已分叉：写侧会一直打标，而读侧把每一轮都判成"
@@ -149,7 +147,10 @@ def test_timing_axis_imports_cleanly_in_this_interpreter():
     """
     if str(WEBINFER) not in sys.path:
         sys.path.insert(0, str(WEBINFER))
-    import decision_eval_timing as timing  # noqa: PLC0415
+    # 函数级 import 是**刻意的**：必须先把 webinfer 放进 sys.path 才 import 得到。
+    # 这里不能加抑制指令 —— 该规则（PLC0415）在本仓未启用，加了会变成
+    # RUF100 unused-directive 而让 webui 的 ruff job 判红（实测被 CI 抓到过一次）。
+    import decision_eval_timing as timing
 
     assert timing.LATENCY_SOURCE_CHAIN_STAMP == live_llm.LATENCY_SOURCE_CHAIN_STAMP
     assert timing.FIELD_STILL_SPEAKING == "user_still_speaking_at_decision"
