@@ -91,9 +91,19 @@ EXPECTED_VALID = ("skip", "fail")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_gate_fixtures import (  # noqa: E402
     BASELINE_CHECK_IDS,
+    CLOSED_JSON,
     EVAL_CHECK_IDS,
     TIMING_ARTIFACT,
+    assert_no_report,
+    report_of,
+    run_gate,
+    write_contract,
 )
+
+# ★ `write_contract` / `run_gate` / `report_of` / `assert_no_report` / `CLOSED_JSON`
+#   来自共享模块（**本文件不再自带一份**）。它们此前在本文件与
+#   `test_drift_gate_content_digest.py` 里各有一份**逐字相同**的拷贝 ——
+#   那正是上面注释说的「两份拷贝各自漂移」形态，已在 #169 复核轮收敛。
 
 # --------------------------------------------------------------------------
 # 夹具
@@ -170,67 +180,6 @@ def make_check(**overrides) -> dict:
     }
     check.update(overrides)
     return check
-
-
-def write_contract(tmp_path: Path, *checks: dict) -> Path:
-    """把 check 们写成一份临时契约，返回其路径."""
-    path = tmp_path / "contract.json"
-    path.write_text(
-        json.dumps(
-            {"version": 99, "source_of_truth": "test-missing-result", "checks": list(checks)},
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    return path
-
-
-def run_gate(contract: Path, repo_root: Path, *extra: str) -> subprocess.CompletedProcess:
-    """以子进程跑真实 CLI（真退出码 + 真 stdout），历史文件写到临时目录."""
-    return subprocess.run(
-        [
-            sys.executable,
-            str(GATE),
-            "--contract", str(contract),
-            "--repo-root", str(repo_root),
-            "--history-dir", str(repo_root / "history"),
-            *extra,
-        ],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-
-
-def report_of(proc: subprocess.CompletedProcess) -> dict:
-    """解析 ``--json`` 报告；解析失败时把 stderr/stdout 一起带进断言信息."""
-    assert proc.stdout.strip(), (
-        f"没有 stdout 可解析（rc={proc.returncode}）stderr={proc.stderr[:400]!r}"
-    )
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:  # pragma: no cover - 只在契约被写坏时触发
-        raise AssertionError(
-            f"stdout 不是 JSON（rc={proc.returncode}）: {exc}\nstdout={proc.stdout[:400]!r}"
-        ) from exc
-
-
-def assert_no_report(proc: subprocess.CompletedProcess) -> None:
-    """断言这次运行**没有**给出业务报告（meta-error 路径的正确形状）.
-
-    ★ 不能简单断言 stdout 为空：既有 meta-error 路径把 ``[META-ERROR]`` 打到
-    stdout（``drift_gate_smoke_test.py`` 第 4 例依赖这一点）。故判据是
-    「每一行都是 META-ERROR，且没有一行是 JSON」—— 既守住"不给结论"，
-    又不误伤既有输出契约。
-    """
-    for line in proc.stdout.splitlines():
-        if not line.strip():
-            continue
-        assert "META-ERROR" in line, f"meta-error 下输出了非报错内容（等于给出结论）: {line!r}"
-        assert not line.lstrip().startswith("{"), f"meta-error 下输出了 JSON 报告: {line!r}"
-    assert "META-ERROR" in proc.stdout + proc.stderr, "meta-error 路径没有任何 META-ERROR 输出"
 
 
 # --------------------------------------------------------------------------
@@ -1175,6 +1124,42 @@ def test_parse_as_does_not_override_present_when_missing(tmp_path: Path):
     assert "引用的结果文件全部缺失" in result["detail"], (
         f"缺失场景被 parse 层抢走了（应仍由 present_when_missing 处置）: {result['detail']!r}"
     )
+
+
+def test_content_cannot_forge_the_missing_predicate_parse_layer(tmp_path: Path):
+    """★★ 产物**内容**里的占位符字面量 **不得**让 ``parse_as`` 层跳过.
+
+    ★ 根因与本仓 `test_content_sniffing_trap_*`（W3）**同源**，但危害大一档：
+    W3 需要"路径字面含 `--- `"**且** pattern 宽到能匹配占位符才真变绿；而这里
+    原来的判据是 ``f"<missing:{rel}>" in output`` —— ``output`` 是
+    ``run_check_files`` 的**合并内容**，占位符与真实文件内容**是同一种文本**，
+    于是**产物只要在自己的内容里写下那串字符**，本层就会认为"文件缺失 ⇒ 跳过"。
+
+    ★ 一条路径即触发，不依赖路径字面形状，也不需要 pattern 配合。
+    修复：缺失判定改为问文件系统（`drift_gate._path_state`）。
+
+    ★ 配对断言（本测试与 `test_parse_as_does_not_override_present_when_missing`）：
+    真的缺失仍走 ``present_when_missing`` 的措辞；**文件在但内容含该字符串**必须
+    由 ``parse_as`` 层判红，绝不能被当成缺失。
+    """
+    (tmp_path / "card.json").write_text(
+        '{"a": "<missing:card.json>", "b": 1', encoding="utf-8")  # 半截 JSON + 注入
+    check = eval_check(paths=["card.json"], parse_as="json", present_when_missing="fail")
+    proc = run_gate(make_json_contract(tmp_path, check), tmp_path,
+                    "--phase", "static", "--mode", "closed", "--json")
+    result = report_of(proc)["results"][0]
+
+    assert result["passed"] is False, (
+        f"内容里的 <missing:...> 字面量让 parse_as 层跳过了（fail-open）: "
+        f"{result['detail']!r}"
+    )
+    assert "不可解析" in result["detail"], (
+        f"判红理由应是「不可解析」，实得: {result['detail']!r}"
+    )
+    assert "引用的结果文件全部缺失" not in result["detail"], (
+        f"文件明明在，却被当成缺失处置: {result['detail']!r}"
+    )
+    assert proc.returncode == 1
 
 
 @pytest.mark.parametrize(

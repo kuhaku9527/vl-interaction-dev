@@ -56,10 +56,14 @@ import drift_gate as dg  # noqa: E402
 #   这里用 `as` 保留原名，使本文件其余 ~40 处引用一字不改（只换来源，不改语义）。
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_gate_fixtures import (  # noqa: E402
+    AXIS_BY_CHECK_ID,
     BASELINE_CHECK_IDS,
+    DIGEST_MODULE_NAME,
     DIRECTED_ARTIFACT,
     EVAL_CHECK_IDS,
     TIMING_ARTIFACT,
+    declared_digest_by_axis,
+    declared_digest_of,
 )
 
 #: t6 合并进来的 CI 步骤测试用短名引用同两条路径（同一常量，不重复字面量）
@@ -169,7 +173,7 @@ def test_eval_checks_exist_and_cover_both_axes(eval_checks: list[dict]) -> None:
 
 
 def test_eval_checks_use_existing_schema_only(eval_checks: list[dict]) -> None:
-    """只许用既有 schema 字段 + #159 新增的 present_when_missing + t10 的 parse_as。
+    """只许用既有 schema 字段 + #159 的 present_when_missing + t10 的 parse_as + #169 的 content_digest。
 
     ★ 「复用，不新造」的可执行形态：出现任何 schema 外的新键（比如试图让契约
     去做数值比较的 `min`/`max`），说明有人在偷偷扩展执行器语义 —— 那会绕过
@@ -178,10 +182,18 @@ def test_eval_checks_use_existing_schema_only(eval_checks: list[dict]) -> None:
     ★ `parse_as` 是 t10 为修 W1（半截产物判绿）新增的**执行器**字段，不是契约
     私造的：它与 `present_when_missing` 同族 —— 都由 `drift_gate.py` 的
     `validate_*` 校验、缺省值都定义在执行器常量里 —— 故允许。
+
+    ★ `content_digest` 是 #169 为修 W2（**同源副本被改**：`criteria_registry`
+    伪造时门禁判绿）新增的执行器字段，与上面两个**同族同形态**：
+    由 `drift_gate.validate_content_digest` 校验形状、缺省值定义在执行器常量
+    `DEFAULT_CONTENT_DIGEST` 里。**它不是一个"契约私造的比较语义"** ——
+    它不引入任何新的判定能力（不是数值比较、不是路径拼接），只是把
+    「这份产物的内容应该是什么」写成一条可比对的**值**，比对用同一个执行器。
     """
     allowed = {
         "id", "decision_ref", "description", "phase", "paths", "pattern",
         "not_pattern", "severity", "present_when_missing", "parse_as",
+        "content_digest",
     }
     for c in eval_checks:
         extra = set(c) - allowed
@@ -619,9 +631,35 @@ def _mirror(tmp_path: Path, directed: str | None, timing: str | None) -> Path:
     return root
 
 
-def _write_eval_contract(tmp_path: Path) -> Path:
+def _write_eval_contract(tmp_path: Path, *, with_digest: bool = False) -> Path:
+    """把真契约的 4 条 eval check 写成临时契约（读真文件，不手抄）。
+
+    ★ **默认去掉 `content_digest`**（`with_digest=False`），这是一处**刻意的
+    变量隔离**，不是放松守卫 —— 理由必须写清楚，否则下一位读者会以为本节的
+    测试变弱了：
+
+    本节（R1–R5）测的是「**正则层**有没有真的读某个字段」。而 #169 加的
+    `content_digest` 是**排在正则之前**的一层：任一叶子被改动都会让它先判红，
+    且它**倾向于**同时点亮该轴的两条 check（它们读同一份产物）。
+    于是断言「`blocked == ["eval-directed-axis-structural-guards"]`」的那类
+    用例会被摘要层**掩盖**——它们会以"错的红"通过或失败，而**不再证明**
+    "正则真的读了该字段"。
+
+    ⇒ 隔离方式：这些用例在**去了摘要字段**的契约副本上跑，让被测变量只剩正则层；
+    摘要层自身的行为由独立文件 `test_drift_gate_content_digest.py` 与本节末尾的
+    `test_digest_layer_reds_the_gate_on_a_forged_registry` 覆盖。
+    ★ 去掉字段**就是**「#169 之前的状态」（该字段缺省 `null` = 不做摘要校验），
+    故这些用例的判定路径与 #169 之前**逐字相同**，历史读数仍可比。
+    ★ `test_mirror_without_the_digest_field_keeps_the_pattern_layer_honest` 反过来证明：
+    去掉摘要字段后健康态仍判绿 ⇒ 该镜像没有引入别的差异。
+    （★ 上面两个符号名是**实测存在**的用例名；本文件曾把它们写成另外两个不存在的
+     名字 —— 那种"注释引用一个查无此人的测试"正是本仓禁止的失效引用形态。）
+    """
     doc = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    doc["checks"] = _eval_checks_from_contract()
+    checks = _eval_checks_from_contract()
+    if not with_digest:
+        checks = [{k: v for k, v in c.items() if k != "content_digest"} for c in checks]
+    doc["checks"] = checks
     p = tmp_path / "eval-contract.json"
     p.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     return p
@@ -1440,36 +1478,38 @@ def test_step_does_not_swallow_the_known_red() -> None:
 #     全量叶子绑定 + 门禁表达不了的结构不变量。
 #   ★ 不新建 job、不新建执行器。
 #
-# ★ `sort_keys=True` 同时消掉 t7 V4 的键序误伤：值逐字不变、只重排/换缩进时
+# ★ `sort_keys=True` 同时消掉 t7 V4 的键序误伤：值逐字不变、只重排/换缩进时，
 #   摘要**必须相同**（由 test_canonical_digest_is_layout_insensitive 钉住）。
+#
+# ★ #169 起：摘要的**实现**与**期望值**都不在本文件里了。
+#   - 实现 ⇒ `scripts/eval_card_digest.py`（执行器 `drift_gate.py` 也 import 它；
+#     两处各写一份 `json.dumps(..., sort_keys=True, separators=...)` 会各自漂移）；
+#   - 期望值 ⇒ **`config/drift-contract.json` 的 `content_digest` 字段**。
+#     本文件原先自带一份 `CANONICAL_DIGESTS` 字面量，与契约里的新字段构成
+#     「同一事实两份副本、只靠一条测试对齐」—— 那正是 `eval_gate_fixtures.py`
+#     当初被抽出来要消灭的形态（本仓已为此付过费），故**删掉**本地常量，
+#     改为每次从契约读（`declared_digest_by_axis()`，单一来源在共享模块里）。
+#   ★ 这不是"放松"：下列测试证明的**性质一条都没少**（排版不敏感 / 全量叶子覆盖 /
+#     真值改动必变 / 非空 / 唯一性 / verdict 合法集合），只是"期望值从哪来"换了出处。
 
-#: 机器相关绝对路径所在的键。排除它们，摘要才可跨机成立 —— R7 记录了时序卡内嵌
-#: 本机 fixture 绝对路径，逐字节绑定只在同机成立，故这里显式排除并写明。
-VOLATILE_PATH_KEYS = ("events", "truth", "artifact", "source_file", "fixture")
-
-#: 入库的 canonical 摘要。**只在读数变化是有意的**时候刷新（刷新脚本在 scratch：
-#: .cache/t8-repro/refresh_digest.py）。刷新即代表「我知道这次读数变了」。
-CANONICAL_DIGESTS = {
-    "directed": "81c79bcdece27cd1a69534c81297562170bb900ee5f5c77807051d026104609a",
-    "timing": "a41759a2ccb310924f035075faa4493ae32c515256a662f137807454e0fe8879",
-}
-
-
-def _strip_volatile(node):
-    if isinstance(node, dict):
-        return {k: _strip_volatile(v) for k, v in node.items()
-                if k not in VOLATILE_PATH_KEYS}
-    if isinstance(node, list):
-        return [_strip_volatile(v) for v in node]
-    return node
+#: `_strip_volatile` 与 `canonical_digest` 的实现**唯一**来源（见上面那段说明）。
+#: 本文件只 import，不重实现 —— `test_executor_and_tests_share_one_digest_implementation`
+#: 会断言它与 `drift_gate.py` 用的是**同一个模块对象**。
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import eval_card_digest as ecd  # noqa: E402
 
 
 def portable_digest(text: str) -> str:
-    """canonical 摘要：`sort_keys=True`，与排版无关，且排除机器相关路径叶子。"""
-    data = _strip_volatile(json.loads(text))
-    canonical = json.dumps(data, sort_keys=True, ensure_ascii=False,
-                           separators=(",", ":")) + "\n"
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    """canonical 摘要 —— 直接转调**唯一实现**（`scripts/eval_card_digest.py`）。
+
+    ★ 本函数曾经是本文件里的一份**独立实现**。保留这个名字是为了让下面所有
+    测试（以及它们证明的性质）一字不改，但**算法不再在这里**：它只有一份。
+    """
+    return ecd.canonical_digest(text)
+
+
+#: 机器相关绝对路径所在的键（R7）—— 从唯一实现处转出，不再本地重写一份元组。
+VOLATILE_PATH_KEYS = ecd.VOLATILE_PATH_KEYS
 
 
 def count_leaves(node) -> int:
@@ -1487,17 +1527,28 @@ def test_canonical_digest_matches_committed(key: str) -> None:
 
     ★ 这是「类别修复」而非「补字面」：它不关心改的是哪个键，因此不存在
     「这轮补 overall、下轮漏 by_subset」的形态。
+
+    ★ #169：期望值（`want`）现在**从契约读**（`content_digest` 字段），
+    不再是本文件里的一份字面量副本 —— 契约同时是执行器的判据来源，
+    故「门禁判红的那个数」与「本测试期望的那个数」在**构造上**不可能分叉。
     """
     rel = DIRECTED_ARTIFACT if key == "directed" else TIMING_ARTIFACT
     text = (REPO_ROOT / rel).read_text(encoding="utf-8")
-    want = CANONICAL_DIGESTS[key]
+    want = declared_digest_by_axis()[key]
     assert want, f"{key} 的 canonical 摘要为空 —— 空摘要等于没绑定"
     got = portable_digest(text)
     assert got == want, (
-        f"{rel} 的内容摘要变了\n  期望={want}\n  实得={got}\n"
-        "若这是**有意的**读数变化，请重跑卡片并更新本文件里的摘要；"
+        f"{rel} 的内容摘要变了\n  期望(契约)={want}\n  实得={got}\n"
+        "若这是**有意的**读数变化，请重跑卡片并更新**契约**里的 content_digest；"
         "若你只是重排/换缩进，那说明摘要还不够不敏感 —— 请报出来，不要放宽它。"
     )
+    # ★ 契约与两份产物必须**互相**绑定：只改契约里的数字（而不是产物）也必须判红，
+    #   否则「改契约就能让摘要层变绿」—— 那等于把这条守卫的插头拔掉。
+    for cid, axis in AXIS_BY_CHECK_ID.items():
+        if axis == key:
+            assert declared_digest_of(cid) == got, (
+                f"{cid} 声明了 {declared_digest_of(cid)}，但 {rel} 实际是 {got}"
+            )
 
 
 @pytest.mark.parametrize("key", ["directed", "timing"])
@@ -1602,6 +1653,467 @@ def test_real_value_change_does_change_the_digest(key: str) -> None:
     mutated = text.replace(str(n), str(n + 1), 1)
     assert mutated != text
     assert portable_digest(mutated) != base, "真改数值却没让摘要变 ⇒ 摘要无意义"
+
+
+# ==========================================================================
+# #169：摘要的**单一来源**（实现一份、期望值一份），以及它守的那一类缺陷（W2）
+# ==========================================================================
+#
+# ★ 本票给了执行器一个 `content_digest` 字段（per-check，可选）。于是"摘要"这件事
+#   突然有**三个**可能各写一份的地方：执行器、契约测试、执行器行为测试。
+#   本仓为此付过费（`eval_gate_fixtures.py` 就是被抽出来的），故这里把三条都钉住：
+#     (1) **算法**只有一份 ⇒ `scripts/eval_card_digest.py`，两侧 import 同一对象；
+#     (2) **期望值**只有一份 ⇒ `config/drift-contract.json` 的 `content_digest`；
+#     (3) 它对**真实执行器**确实发力（不是只在 pytest 里成立的装饰）。
+
+
+def test_executor_and_tests_share_one_digest_implementation() -> None:
+    """★★ 执行器与测试必须用**同一个模块对象**算摘要，不得各写一份。
+
+    ★ 这堵的是"收敛后又各自长出副本"：只要有人在 `drift_gate.py` 里重新内联
+    `json.dumps(..., sort_keys=True, separators=(",", ":"))`，它就不再是
+    `eval_card_digest` 里的那个函数对象，本断言立刻失败。
+
+    ★ 为什么这条是**安全**要求而非洁癖：执行器与测试对**同一份产物**下断言。
+    两份实现一旦漂移（例如一边忘了排除机器相关路径键），就会出现
+    「测试说产物对、门禁说产物错」或反过来的局面 —— 而两边**都**会报绿/报红得很自信。
+    """
+    import eval_card_digest as shared
+
+    assert ecd is shared, (
+        "本文件的 eval_card_digest 不是共享模块里的那个对象 —— 又长出副本了"
+    )
+    assert dg.canonical_digest is shared.canonical_digest, (
+        "执行器 drift_gate.canonical_digest 不是 eval_card_digest 里的那个函数 —— "
+        "两侧各有一份摘要实现，它们会各自漂移"
+    )
+    assert dg.is_legal_digest is shared.is_legal_digest, (
+        "「合法摘要长什么样」的判定也必须只有一份（否则契约校验与测试会分叉）"
+    )
+    # 执行器与测试导入的必须是**同一个文件**（不是同名但不同路径的两个模块）。
+    assert Path(dg.__file__).resolve().parent == Path(shared.__file__).resolve().parent
+    assert Path(shared.__file__).name == f"{DIGEST_MODULE_NAME}.py"
+
+
+def test_expected_digest_comes_from_the_contract_not_a_local_copy() -> None:
+    """★★ 期望值**只**许来自契约：本文件里不得再出现一份摘要字面量。
+
+    ★ 本票之前，`test_eval_gate_contract.py` 自带一个 `CANONICAL_DIGESTS` 字典，
+    与（当时还不存在的）契约字段构成"同一事实两份副本、只靠一条测试对齐"。
+    契约现在也持有该值并被**执行器**消费 ⇒ 两份副本必须收敛成一份（契约），
+    否则「门禁判红的那个数」与「测试期望的那个数」可以各自被改动而互不察觉。
+
+    ★ 用**源码扫描**而不是断言某个常量不存在：后者可以被绕过（换个名字即可），
+    而"这里不再出现 64 位 hex 字面量"是这一收敛的**可执行形态**。
+
+    ★★ **扫描范围是 `scripts/tests/` 下全部 `.py`**（不只是本文件）：
+    本测试原先只扫 `Path(__file__)`，于是把字面量放进同目录的
+    `eval_gate_fixtures.py` 或另一个测试文件就完全逃过扫描（评审 #169 实测指出）
+    —— 那正是"单一来源"的**声明比实现宽**这一形态。清单与路径的单一来源是
+    `eval_gate_fixtures.py`，摘要的单一来源是**契约**，两者都不许被第二份副本旁路。
+    """
+    offenders: list[tuple[str, list[str]]] = []
+    for path in sorted(Path(__file__).resolve().parent.glob("*.py")):
+        found = re.findall(r"\b[0-9a-f]{64}\b", path.read_text(encoding="utf-8"))
+        if found:
+            offenders.append((path.name, found))
+    assert not offenders, (
+        f"以下测试文件里出现了摘要字面量 {offenders} —— 期望值必须只有一个来源"
+        "（契约的 content_digest 字段）。请改用 eval_gate_fixtures.declared_digest_of() "
+        "/ declared_digest_by_axis() 从契约读。"
+    )
+
+
+@pytest.mark.parametrize("axis", ["directed", "timing"])
+def test_declared_digest_is_grounded_in_the_real_artifact(axis: str) -> None:
+    """★ 契约里的摘要必须**就是**入库产物今天的摘要（两侧互相钉死）。
+
+    ★ 分工：`test_canonical_digest_matches_committed` 断言"产物没被改"，
+    这一条断言"契约没被改" —— 缺任一条，只改一侧就能让摘要层变绿
+    （把契约里的数字换成产物的新摘要，等于把守卫的插头拔掉）。
+    """
+    rel = DIRECTED_ARTIFACT if axis == "directed" else TIMING_ARTIFACT
+    text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+    declared = declared_digest_by_axis()[axis]
+    assert portable_digest(text) == declared, (
+        f"{rel} 的摘要({portable_digest(text)}) 与契约声明的({declared})不一致"
+    )
+
+
+@pytest.mark.parametrize("axis", ["directed", "timing"])
+def test_card_scripts_reproduce_the_declared_digest(axis: str, tmp_path: Path) -> None:
+    """★★ 重跑卡片 ⇒ 产物摘要必须**仍等于**契约声明的值（确定性的本地代理）。
+
+    ★ 这是"跨机确定性"的**本地代理**，边界必须写清（不得读成跨机已证）：
+    本测试在**同一台机器、同一个检出**上把卡片重新生成到 `tmp_path`，再比内容摘要。
+    它证明的是「产物可由脚本确定性重放」；而**跨机**是否也一致，取决于
+    `VOLATILE_PATH_KEYS` 的排除列表是否够用 —— 那只有 CI（另一台机器、另一个
+    绝对路径）跑 `drift-gate` 时的真实读数能证明。**本票不声称跨机已验证。**
+    （父 spec §6.3 R7 记录了内嵌绝对路径导致逐字节比对仅同机成立。）
+
+    ★ 退出码：定向轴**如实判红 rc=1**（D4 未达标，见父 spec §3.5），故不能断言 rc=0 ——
+    那是设计意图，不是失败。判据是"产物被写出来了"，且摘要对得上。
+    """
+    script = (
+        REPO_ROOT / "services" / "webinfer"
+        / ("decision_eval_card.py" if axis == "directed" else "decision_eval_timing_card.py")
+    )
+    out = tmp_path / "card.json"
+    proc = subprocess.run(
+        [sys.executable, str(script), "--json", "--out", str(out)],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, encoding="utf-8",
+    )
+    assert out.exists(), (
+        f"{script.name} 没有写出产物（rc={proc.returncode}）:\n"
+        f"{(proc.stdout or '')[-500:]}{(proc.stderr or '')[-500:]}"
+    )
+    assert proc.returncode in (0, 1), (
+        f"{script.name} 的退出码 {proc.returncode} 不是读数（0=全绿/1=有判据判红）:\n"
+        f"{(proc.stderr or '')[-500:]}"
+    )
+    regenerated = portable_digest(out.read_text(encoding="utf-8"))
+    declared = declared_digest_by_axis()[axis]
+    assert regenerated == declared, (
+        f"重跑 {script.name} 得到的摘要 {regenerated} ≠ 契约声明的 {declared} —— "
+        "卡片不再确定性地产出被冻结的那份读数"
+    )
+
+
+# --------------------------------------------------------------------------
+# ★ W2 的**核心 AC**：伪造 criteria_registry ⇒ **门禁**（不只是 pytest）判红
+# --------------------------------------------------------------------------
+
+
+def _forge_registry(text: str, variant: str) -> str:
+    """把某 variant 的 `criteria_registry` **整份**换成一条伪造条目.
+
+    ★ 这是 #169 工单里的**最小反例**，逐字复现：
+    产物**仍是合法 JSON**（故 `parse_as` 抓不到），`criteria` 那一份**没动**
+    （故契约已绑的字面全都还在、正则全部命中）⇒ 改前门禁 **rc=0**。
+    """
+    doc = json.loads(text)
+    doc["cards"][variant]["criteria_registry"] = [
+        {"criterion_id": "D5-cost-index", "threshold": 999.0}
+    ]
+    return json.dumps(doc, ensure_ascii=False, indent=2) + "\n"
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ["P_live4_prod_prompt", "P2_live4_prod_prompt_profile"],
+)
+def test_digest_layer_reds_the_gate_on_a_forged_registry(
+    tmp_path: Path, direct_text: str, timing_text: str, variant: str
+) -> None:
+    """★★ **核心 AC**：伪造 `criteria_registry` ⇒ 门禁 rc=1，且点名该轴的 check。
+
+    ★ 这是本票存在的理由（父 spec §6.5 W2 / §7 第 7 条）。改前实测（两个 variant
+    各测一次）：**rc=0** —— 因为「内容改了但仍是合法 JSON」这一整类，门禁上
+    **一道守卫都没有**（`present_when_missing` 管缺失、`parse_as` 管解析失败，
+    两者都不管"解析成功但字段被改"）。
+    ★ 后果为何是**必须**由门禁自己守：CI 的 `drift-gate` job **刻意独立跑**
+    （本仓不加 `needs`，见父 spec §1 被否方案）。故"pytest 没跑或挂了"时，
+    原来那唯一一道守卫（pytest 侧的 canonical 摘要）**不在场**。
+
+    ★ 断言的是**门禁自己的退出码**（子进程真跑），不是库函数返回值。
+    """
+    contract = _write_eval_contract(tmp_path, with_digest=True)  # ← 带摘要的真契约副本
+    mutated = _forge_registry(direct_text, variant)
+    assert mutated != direct_text
+    # 前置条件（否则本测试可能在测别的东西）：
+    # ① 仍是合法 JSON；② 契约已绑的 `criteria` 那一份**逐字未动**。
+    assert json.loads(mutated), "伪造后不再是合法 JSON —— 那测的是 parse_as 层"
+    assert json.loads(mutated)["cards"][variant]["criteria"] == \
+        json.loads(direct_text)["cards"][variant]["criteria"], (
+        "伪造动到了 criteria 那一份 —— 那测的是正则层，不是同源副本"
+    )
+    rc, blocked = _gate(contract, _mirror(tmp_path, mutated, timing_text))
+    assert rc == 1, (
+        f"伪造 {variant} 的 criteria_registry 后门禁判绿（rc={rc}）—— W2 未被堵住"
+    )
+    assert blocked == [
+        "eval-directed-axis-frozen-reading",
+        "eval-directed-axis-structural-guards",
+    ], blocked
+
+
+def test_forged_registry_was_green_before_the_digest_field(
+    tmp_path: Path, direct_text: str, timing_text: str
+) -> None:
+    """★★ W2 的**改前读数**固化成回归保护：没有该字段时，同一输入判**绿**。
+
+    ★ 「改前 rc=0」是本票的**实测**起点（工单由主理人复现，本次也由执行者复现）。
+    把它写成测试而不是只写在结论里，是因为**结论会随票据关闭而消失**，
+    而这条对照是"新字段真的在起作用"的**唯一**证据 —— 少了它，
+    上面那条 rc=1 有可能只是碰巧（夹具写错、路径不对、别的层先红了）。
+
+    ★ 「改前」是**模拟**而非 checkout（共享工作树禁 `stash`/`reset`/`checkout`）：
+    做法是把当前契约副本里 4 条 eval-* 的 `content_digest` **删掉**后跑**同一个**
+    当前执行器。这精确复现"没有该字段时"的判定路径（缺省 `None` ⇒ 不做摘要校验），
+    与父 spec §6.5 W1 记录 `parse_as` 改前读数用的是同一手法。
+    """
+    contract = _write_eval_contract(tmp_path, with_digest=False)
+    mutated = _forge_registry(direct_text, "P_live4_prod_prompt")
+    rc, blocked = _gate(contract, _mirror(tmp_path, mutated, timing_text))
+    assert rc == 0, (
+        f"去掉 content_digest 后同一伪造输入竟然判红了（rc={rc}, {blocked}）—— "
+        "那么上面那条测试就不能归因到新字段，请复核"
+    )
+    assert blocked == [], blocked
+
+
+def test_mirror_without_the_digest_field_keeps_the_pattern_layer_honest(
+    tmp_path: Path, direct_text: str, timing_text: str
+) -> None:
+    """★ 反假阳性对照：**去掉摘要字段**的健康镜像必须仍判绿。
+
+    ★ 上一条把"去掉字段"当作"改前"的代理。这条证明该代理**本身**没有引入别的
+    差异：健康产物 + 无摘要契约 ⇒ rc=0、无 BLOCK。两条合起来才说明
+    「rc 从 0 变 1」的归因是干净的（变量只有摘要字段与那处伪造）。
+    """
+    contract = _write_eval_contract(tmp_path, with_digest=False)
+    rc, blocked = _gate(contract, _mirror(tmp_path, direct_text, timing_text))
+    assert rc == 0, f"健康镜像（无摘要字段）判红（rc={rc}, {blocked}）"
+    assert blocked == [], blocked
+
+
+def test_layout_only_rewrite_does_not_red_the_gate(
+    tmp_path: Path, direct_text: str, timing_text: str
+) -> None:
+    """★★ **反误伤**：只重排 / 重缩进 / 换行尾（值逐字不变）⇒ 门禁必须仍 rc=0。
+
+    ★ 这条与上面的伪造用例配对，缺一不可：一个"内容一变就判红"的守卫若对
+    **合法重写**也判红，就会把每次格式化/换工具链判死，人会因此把它拆掉 ——
+    于是真正的洞（同源副本被改）回来。父 spec §3.3.2 记录的 t7 V4 正是这个误伤形态。
+
+    ★ 用**带摘要字段的真契约副本**跑（这正是要防误伤的那条路径）。
+
+    ★ 作用域（实测边界，**不把话说大**）：本用例覆盖「键序 + 缩进 + 行尾」三轴，
+    它们都由摘要层保证（`sort_keys` / `separators` / `json.loads`）。
+    ★ **另有一条本层管不到的**：把 `": "`（冒号+空格）压成 `":"` 的**紧凑**渲染
+    会让门禁判红 —— 但那**不是摘要层做的**（实测：同一输入在**去掉摘要字段**，
+    即 #169 之前的配置下**同样 rc=1**，红的是正则层的 `pattern=… 未匹配`，
+    因为契约 pattern 里的 `"criterion_id": "…"` 是 `re.escape` 后的**字面空格**）。
+    那是**既有的、与 #169 无关的**正则锚定形态，已由
+    `test_compact_colon_only_rendering_is_a_pre_existing_regex_limit` 如实登记。
+    """
+    contract = _write_eval_contract(tmp_path, with_digest=True)
+    for label, render in (
+        ("sort_keys+indent=4",
+         lambda t: json.dumps(json.loads(t), sort_keys=True, indent=4,
+                              ensure_ascii=False) + "\n"),
+        ("sort_keys+indent=2",
+         lambda t: json.dumps(json.loads(t), sort_keys=True, indent=2,
+                              ensure_ascii=False) + "\n"),
+        ("CRLF 行尾",
+         lambda t: json.dumps(json.loads(t), sort_keys=True, indent=2,
+                              ensure_ascii=False).replace("\n", "\r\n") + "\r\n"),
+    ):
+        rendered = render(direct_text)
+        assert rendered != direct_text, f"{label}: 重排未生效"
+        assert json.loads(rendered) == json.loads(direct_text), f"{label}: 值变了"
+        rc, blocked = _gate(contract, _mirror(tmp_path, rendered, timing_text))
+        assert rc == 0, f"{label}: 合法重排被误判红 {blocked}"
+
+
+def test_compact_colon_only_rendering_is_a_pre_existing_regex_limit(
+    tmp_path: Path, direct_text: str, timing_text: str
+) -> None:
+    """★ **如实登记的既有边界**（不是 #169 引入的，也不是摘要层的）。
+
+    ★ 实测事实：把产物按 `separators=(",", ":")` 压成**无冒号空格**的紧凑 JSON
+    （值逐字不变、摘要也不变）时，门禁 **rc=1**，且判红理由来自**正则层**
+    （`pattern=… 未匹配`），**不是** `content_digest`。
+
+    ★ 归因的取证方式：同一输入在**去掉 `content_digest` 的契约副本**（= #169 之前的
+    配置，该字段缺省 `null` 即不做摘要校验）下**同样 rc=1** ⇒ 该行为**先于本票存在**，
+    与摘要层无关。
+
+    ★ 根因：契约 pattern 里的 `"criterion_id": "D1-…"` 经 `re.escape` 后，冒号后是
+    **字面空格**（不是 ``\\s*``）⇒ 紧凑 JSON 里没有该空格，锚点失配。
+    ★ 本票**不修**它：修法要动 4 条 pattern 的锚定形态（把冒号后的空白改成 ``\\s*``），
+    那属**契约正则层**的口径变更，风险与归属都不同于本票（本票是给门禁加内容摘要）。
+    ⇒ 作为**已知边界登记**，并由本测试钉住「它的红来自正则层、且先于本票」。
+
+    ★ 为什么必须钉住而不是删掉：这条断言一旦变绿，说明有人改动了 pattern 的锚定形态 ——
+    那时应**显式更新本测试与 spec 的登记**，而不是让这条边界悄悄消失或悄悄变红。
+    """
+    rendered = json.dumps(json.loads(direct_text), sort_keys=True,
+                          separators=(",", ":"), ensure_ascii=False) + "\n"
+    assert json.loads(rendered) == json.loads(direct_text), "紧凑渲染改变了值"
+    assert portable_digest(rendered) == portable_digest(direct_text), (
+        "紧凑渲染改变了摘要 —— 那说明摘要对空白敏感，是**另一个**缺陷，请先修它"
+    )
+
+    # (a) 带摘要字段（今天的配置）
+    rc_with, blocked_with = _gate(
+        _write_eval_contract(tmp_path, with_digest=True),
+        _mirror(tmp_path, rendered, timing_text))
+    assert rc_with == 1, (
+        f"紧凑渲染现在判绿了（rc={rc_with}）—— 好于预期，请更新本测试与 spec 的登记"
+    )
+
+    # (b) 去掉摘要字段（= #169 之前的配置）⇒ 必须**同样**判红，才能把归因钉死在正则层
+    case = tmp_path / "pre169"
+    case.mkdir()
+    rc_without, blocked_without = _gate(
+        _write_eval_contract(case, with_digest=False),
+        _mirror(case, rendered, timing_text))
+    assert rc_without == 1, (
+        f"去掉 content_digest 后同一输入竟然判绿（rc={rc_without}）—— "
+        "那么这条边界就**不是**既有的，请重新归因"
+    )
+    assert blocked_with == blocked_without, (
+        f"带/不带摘要字段判红的 check 不一致：{blocked_with} vs {blocked_without} —— "
+        "说明摘要层也参与了判定，本测试的归因失效"
+    )
+    assert blocked_with == [
+        "eval-directed-axis-frozen-reading",
+        "eval-directed-axis-structural-guards",
+    ], blocked_with
+
+
+# --------------------------------------------------------------------------
+# ★ 前置定义：什么叫「同源副本」（工单要求先定义再修，否则又是一轮追字面）
+# --------------------------------------------------------------------------
+
+#: 两份副本**共有**且承载判据语义的字段（其余字段不属"同一事实"的定义域）。
+SEMANTIC_SHARED_FIELDS: dict[str, tuple[str, ...]] = {
+    "directed": ("statement", "metric", "scope", "direction", "threshold"),
+    "timing": ("statement", "metric", "kind"),
+}
+
+
+def registry_agree_problems(data: dict, key: str) -> tuple[int, list[str]]:
+    """比对 `criteria_registry` 与卡内 `criteria` 的**共有语义字段**，返回 (比对数, 问题列表).
+
+    ★ 为什么抽成函数（而不是把循环留在测试体里）：**负控必须打在同一个谓词上**。
+    本文件原先的负控在测试体里**另抄一份**同样的循环来"证明那条定义会抓" ——
+    那只证明了"抄件会抓"，真断言若被改坏它照样绿（评审 #169 实测指出，正是本仓
+    「守卫存在、但它不在这条路径上」那类）。抽出来之后，负控与真断言调用**同一个**
+    `registry_agree_problems`，两者不可能分叉。
+
+    Parameters
+    ----------
+    data : dict
+        已 ``json.loads`` 的产物。
+    key : str
+        ``"directed"`` 或 ``"timing"``（两轴的 criteria 形状不同）。
+
+    Returns
+    -------
+    tuple[int, list[str]]
+        ``(实际比对过的字段数, 问题描述列表)``；问题为空表示同源关系成立。
+    """
+    fields = SEMANTIC_SHARED_FIELDS[key]
+    compared = 0
+    problems: list[str] = []
+    for card_name, card in data["cards"].items():
+        registry = {r["criterion_id"]: r for r in (card.get("criteria_registry") or [])}
+        if not registry:
+            problems.append(f"{card_name}: 没有 criteria_registry —— 同源定义失去对象")
+            continue
+        items = card["criteria"] if key == "timing" else (
+            card["criteria"]["index"] + card["criteria"]["structural"])
+        if len(registry) != len(items):
+            problems.append(
+                f"{card_name}: registry {len(registry)} 条 vs criteria {len(items)} 条 —— "
+                "两份副本的**判据集合**不同，同源关系不成立"
+            )
+        for item in items:
+            cid = item["criterion_id"]
+            if cid not in registry:
+                problems.append(f"{card_name}: {cid} 不在 registry 里")
+                continue
+            for field in fields:
+                if field not in item and field not in registry[cid]:
+                    continue  # 两侧都没有该字段 ⇒ 不在"共有字段"定义域内
+                if item.get(field) != registry[cid].get(field):
+                    problems.append(
+                        f"{card_name} / {cid} / {field}: criteria={item.get(field)!r} "
+                        f"但 registry={registry[cid].get(field)!r} —— "
+                        "同一事实的两份副本对不上（这就是 W2 的形状）"
+                    )
+                compared += 1
+    return compared, problems
+
+
+@pytest.mark.parametrize("key", ["directed", "timing"])
+def test_criteria_registry_is_the_same_fact_as_the_criteria_copies(key: str) -> None:
+    """★★ **语义定义 + 断言**：`criteria_registry` 与卡内 `criteria` 是**同一事实**.
+
+    ★ 工单的硬要求：「**必须先定义哪些拷贝是同源事实**，否则退化成又一轮追字面」
+    （父票已因此返工三次：t6 补 `observed` → t7 漏 `overall`/`by_subset`/`S4`
+    → t8 才改成类别级的 canonical 摘要）。故把该关系写成**可执行**的定义：
+
+      对每张卡、每个 `criterion_id`：
+        `criteria_registry` 里那条与 `criteria`（index+structural / 列表）里那条，
+        **在两者共有的字段上必须逐字段相等** —— 具体是
+        `statement` / `metric` / `scope` / `direction` / `threshold`（定向轴）
+        与 `statement` / `metric` / `kind`（时序轴，其 threshold/direction 为 null）。
+
+    ⇒ 结论（供门禁设计用）：**registry 不是独立事实，而是同一批阈值/判据 id 的第二份
+    拷贝**。因此「只改 registry」不是"发现了一个新数字"，而是"同一事实的两份副本
+    对不上"—— 那正是 W2，也正是摘要层（绑**整份内容**）能抓住而正则层
+    （锚在 `criteria` 副本上，且 alias 缺 `observed` 字段）抓不住的形态。
+
+    ★ 作用域如实声明（不把话说大）：本测试只断言**共有字段**的一致性；
+    registry 独有的键（定向轴 `min_denominator`、时序轴 `statistic`）
+    **不参与**比对 —— 它们在 criteria 副本里没有对应物，故不属"同一事实"。
+    ★ 它也不声称"两份副本必须永远并存"：若哪天卡片改成只输出一份，本测试会
+    自然失效（`criteria_registry` 缺失时下面会判红并提示更新本定义），
+    那是一次**产物形态变更**，应当显式改这条定义而不是悄悄跳过。
+    """
+    rel = DIRECTED_ARTIFACT if key == "directed" else TIMING_ARTIFACT
+    data = json.loads((REPO_ROOT / rel).read_text(encoding="utf-8"))
+    compared, problems = registry_agree_problems(data, key)
+    assert not problems, "\n".join(problems)
+    assert compared > 0, f"{rel}: 一个字段都没比 —— 同源定义没真正跑"
+    # ★ 下限是**逐轴**的（本测试按 `key` 参数化，每次只跑一条轴）——
+    #   实测形态：定向轴每个 card 40 个字段 × 2 card = 80；时序轴 24 × 1 = 24。
+    #   若哪天有人把比对范围悄悄缩小（例如只比 `threshold`），下限会先红。
+    #   ★ 时序侧余量只有 4 个字段，比定向侧紧。
+    floor = 70 if key == "directed" else 20
+    assert compared >= floor, (
+        f"{rel}: 只比了 {compared} 个字段（下限 {floor}）—— 本测试没真正覆盖同源关系"
+    )
+
+
+def test_registry_agree_check_reds_on_a_forged_registry(direct_text: str) -> None:
+    """★ **负控**：把上面那条"同源定义"推红一次，证明它真会抓（不是恒绿的装饰）。
+
+    ★ 本仓教训：守卫必须有一条"它真抓到过东西"的证据，且该证据要**固化成测试**
+    而不是只写在结论里（票据关闭后结论会消失）。
+    ★★ 关键：本负控调用的是**真断言用的同一个谓词**
+    :func:`registry_agree_problems`（原先这里另抄了一份同样的循环 —— 那只证明
+    "抄件会抓"，真断言被改坏时它照样绿，正是本仓「守卫存在但它不在这条路径上」
+    那类形态）。
+    ★ 用**内存里**的副本改，不碰入库产物：测试中途被打断也不该留下被改的工作区。
+    """
+    data = json.loads(direct_text)
+    # (0) 基准必须先绿，否则下面测的不是负控
+    compared_ok, problems_ok = registry_agree_problems(data, "directed")
+    assert not problems_ok, f"基准就不干净，负控无效: {problems_ok[:3]}"
+    assert compared_ok > 0, "基准一个字段都没比 —— 负控无效"
+
+    # (1) 整份替换 registry（工单的最小反例）⇒ 必须被发现
+    data["cards"][DIRECTED_CARD_KEY]["criteria_registry"] = [
+        {"criterion_id": "D5-cost-index", "threshold": 999.0}
+    ]
+    _compared, problems = registry_agree_problems(data, "directed")
+    assert problems, (
+        "伪造 registry 后同源比对**没有**发现任何不一致 —— 那条定义是恒绿的装饰"
+    )
+
+    # (2) 更隐蔽的形态：条数相同、**只有一个字段**被改（阈值字面不动）⇒ 也必须被发现。
+    #     这一条才真正证明"逐字段"比对在起作用，而不只是靠条数不等。
+    subtle = json.loads(direct_text)
+    for item in subtle["cards"][DIRECTED_CARD_KEY]["criteria_registry"]:
+        if item["criterion_id"] == "D4-not-for-me-recall-generalization":
+            item["direction"] = "upper"  # 语义反转，threshold 一字不动
+    _c2, problems2 = registry_agree_problems(subtle, "directed")
+    assert problems2, "只改一个字段（方向反转）却没被发现 —— 比对不是逐字段的"
+    assert any("D4-not-for-me-recall-generalization" in p for p in problems2), problems2
 
 
 @pytest.mark.parametrize("key", ["directed", "timing"])

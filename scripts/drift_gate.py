@@ -27,7 +27,8 @@
     "not_pattern": "<regex>" | null,       # 可选；若设置则要求**不**匹配（一般不推荐）
     "severity": "block" | "warn",
     "present_when_missing": "skip" | "fail",  # 可选；**缺省 "skip"**
-    "parse_as": "json" | null                 # 可选；**缺省 null**（不做解析）
+    "parse_as": "json" | null,                # 可选；**缺省 null**（不做解析）
+    "content_digest": "<64位小写hex>" | null  # 可选；**缺省 null**（不做内容摘要校验）
   }
 
 `present_when_missing`（可选，逐 check 生效；只看 "paths 是否**全部**缺失/不可读"）：
@@ -57,6 +58,38 @@
   - 非法值（`"JSON"` / `true` / `1` / 未知字符串）-> `[META-ERROR]` + rc=2，
     **绝不**静默降级成 `null`。
 
+`content_digest`（可选，逐 check 生效；在 `parse_as` **之上**再加一层）：
+  - `null`（缺省，= 历史行为）：不做任何内容摘要校验。缺省**必须**是 null：既有 check
+    读的是配置 / 源码，对它们算摘要等于把「改一行注释就判红」装进 CI。
+  - `"<64位小写hex>"`：把**声明的摘要**与该 check 的**唯一一个**引用文件的实际
+    canonical 摘要比对（算法**只有一份**，在 `scripts/eval_card_digest.py`）。
+    不一致 -> **判红**（passed=False，detail 点名文件、期望值与实际值）。
+    是否为阻断同样只由 `severity` + `mode` 决定。
+  - ★ 这层堵的是 **W2 —— 「文件在、内容合法，但同源副本被改」**：产物里
+    `criteria` 与 `criteria_registry` 是同一批阈值/判据 id 的**两份拷贝**，契约只绑了
+    前者的字面 ⇒ 伪造后者（实测：把整份 registry 换成
+    `[{"criterion_id":"D5-cost-index","threshold":999.0}]`）时，旧设计**门禁 rc=0**，
+    而 pytest 侧的 canonical 摘要层判红。CI 的 `drift-gate` job **刻意独立跑**
+    （不加 `needs`），故「pytest 没跑或挂了」时那唯一一道守卫不在场 ⇒ 必须让门禁
+    自己也持有内容摘要。**父 spec §6.5 W2 / §7 第 7 条**随后由本字段闭环。
+  - ★ **它绑的是内容，不是签名**：一份「连声明的摘要一起改掉」的伪造产物在本地拦不住
+    （那属代码评审与 `git diff`）。别把覆盖面说大 —— 见父 spec §6.1 的同款推理。
+  - 缺失 / 不可读的文件**不归这一层管**（跳过），那是 `present_when_missing` 的既有
+    职责；**不可解析**的文件由 `parse_as` 判红，本层不重复报（但**绝不**静默放过，
+    见下条）。三层并列、互不覆盖。
+  - ★ 声明了摘要却**无法**算出实际摘要（内容不是合法 JSON）时，本层**判红而不是跳过**：
+    「声明了要校验却没校验」比不声明更坏（与 `parse_as` 的非法值同一条理由）。
+    实际报错文案仍由 `parse_as` 给出（若该 check 也声明了它），两层不争抢同一句话。
+  - **恰好一个引用文件**是硬要求：`paths` 为空或不止一个 -> `[META-ERROR]` + rc=2
+    （「一个摘要对应哪份文件」没有答案，猜一个就是在守一个没人读过的事实）。
+  - ★ 显式 `null` 是**合法**的（等于缺省，即"把缺省值写出来"），与 `parse_as` 一致、
+    与 `present_when_missing` 刻意不同 —— 理由同 `parse_as`：本字段的缺省值**本身就是**
+    JSON 的 `null`（"不做摘要校验"），而 `present_when_missing` 的缺省是字符串 `"skip"`，
+    写 `null` 在那里属于类型错。
+  - 非法值（`"ABC"` / `true` / `1` / **大写 hex** / 63 或 65 位 hex / 非 hex 字符 /
+    未知串 / 非字符串类型）-> `[META-ERROR]` + rc=2，**绝不**静默降级成 `null`。
+    ★ 形状校验的唯一实现在 `scripts/eval_card_digest.py` 的 `is_legal_digest`。
+
 用法：
   python scripts/drift_gate.py --contract config/drift-contract.json --phase static --mode open
   python scripts/drift_gate.py --contract config/drift-contract.json --phase runtime --mode closed --report drift_report.txt
@@ -65,8 +98,8 @@
 退出码：
   mode=open    -> 永远 0（仅打印告警）
   mode=closed  -> 任一 severity=block 的检查不符则 1，否则 0
-  契约缺失 / JSON 解析失败 / present_when_missing 或 parse_as 取非法值 -> 2
-      （meta-error，区别于业务漂移：契约本身写错了，判绿判红都不算数）
+  契约缺失 / JSON 解析失败 / present_when_missing / parse_as / content_digest 取非法值
+      -> 2（meta-error，区别于业务漂移：契约本身写错了，判绿判红都不算数）
   runtime 阶段 probe 刷新失败 -> 3（RUNTIME-PROBE-ERROR，见 F4-P1a 顺序保护）
 """
 from __future__ import annotations
@@ -79,6 +112,12 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# ★ 摘要算法是**唯一**的一份（`scripts/eval_card_digest.py`），执行器不自带实现：
+#   否则「执行器算的那个数」与「测试算的那个数」会各自漂移，而两边都对同一份产物
+#   下断言 —— 那种「都绿、但算的不是同一个数」的形态正是本仓反复付费的那一类。
+#   取证：`test_executor_and_tests_share_one_digest_implementation`。
+from eval_card_digest import canonical_digest, is_legal_digest
 
 logger = logging.getLogger("drift_gate")
 
@@ -102,6 +141,22 @@ VALID_PRESENT_WHEN_MISSING = ("skip", "fail")
 # 值但没填"），两者的"null 是否表达得清意图"并不相同。
 DEFAULT_PARSE_AS = None
 VALID_PARSE_AS = ("json",)
+
+
+# --- content_digest：逐 check 的「同源副本被改」语义（W2） -------------------
+# 决策表：键不存在 -> None；显式 null -> None；显式 64 位小写 hex -> 校验；
+# 其余任何值（大写 hex / 位数不对 / true / 1 / 未知串）-> meta-error rc=2。
+#
+# ★ 与 parse_as 同形：本字段的缺省值本身就是 JSON 的 null（"不做摘要校验"），
+# 故显式 null 是**合法**的写法（把缺省值写出来），与 present_when_missing 刻意不同。
+#
+# ★ 为什么值是**字符串摘要**而不是一个开关（如 `"content_digest_check": true`）：
+#   开关只能表达「要不要校验」，摘要值本身仍要有个落点，于是会变成「契约说校验、
+#   期望值写在哪？」—— 答案只可能是测试文件，而那正是本票要消灭的「同一事实两份副本」。
+#   故期望值**就写在契约里**，pytest 侧改为从契约读（详见新 spec 的单一来源一节）。
+DEFAULT_CONTENT_DIGEST = None
+#: 申报的摘要**必须**是 64 位小写十六进制（形状校验在 eval_card_digest.is_legal_digest）。
+CONTENT_DIGEST_HEX_LENGTH = 64
 
 
 # --- F4-P1a: runtime 顺序保护（gate 严格晚于 probe） -----------------------
@@ -298,6 +353,111 @@ def validate_parse_as(checks: list[dict]) -> None:
     )
 
 
+def content_digest_of(check: dict) -> str | None:
+    """返回该 check 声明的 ``content_digest``（已校验，只有 ``None`` / 小写 hex）。
+
+    ``load_contract`` 已把非法值挡在 rc=2；这里再兜一层并把"键不存在"映射到
+    :data:`DEFAULT_CONTENT_DIGEST`，故调用方读到的一定是合法值。
+
+    Parameters
+    ----------
+    check : dict
+        契约里的单条 check。
+
+    Returns
+    -------
+    str | None
+        ``None``（缺省，不做摘要校验）或 64 位小写十六进制摘要。
+
+    Raises
+    ------
+    ValueError
+        契约被绕过 ``load_contract`` 直接构造且值非法时（编程错误，不静默降级）。
+    """
+    value = check.get("content_digest", DEFAULT_CONTENT_DIGEST)
+    if value is DEFAULT_CONTENT_DIGEST:
+        return None
+    if not is_legal_digest(value):
+        raise ValueError(
+            f"check {check.get('id', '?')!r} 的 content_digest 非法: {value!r}"
+        )
+    return value
+
+
+def validate_content_digest(checks: list[dict]) -> None:
+    """校验全部 check 的 ``content_digest``；任一非法 -> meta-error rc=2.
+
+    与 :func:`validate_present_when_missing` / :func:`validate_parse_as` 同族、同形态：
+    本字段写错会被静默当成"不做摘要校验"，于是**声明了要校验却没校验** ——
+    门禁看起来在守却完全没守，而那正是本票要堵的 W2 的原始形态（守卫不在场）。
+
+    ★ **两处刻意与那两个字段不同**，都写在下面（不是遗漏）：
+
+    1. **不复用** :func:`_validate_enum_field`。那个 helper 建模的是「合法值集是
+       固定几个字面（含缺省）」的枚举字段；本字段的合法值是**开放集合**
+       （64 位小写 hex 有 16^64 个），只能做形状校验。硬把它塞进枚举模型会得到一个
+       「合法值集为空、缺省恒合法」的空壳校验器 —— 那比不共用更坏，因为它看起来校验过了。
+       ⇒ 共用的是**判定谓词**（:func:`eval_card_digest.is_legal_digest`），
+       即「合法 hex 摘要长什么样」只有一个定义。
+       ★ **不是**共用报错函数：本函数的报错文案是**手写**的（`_validate_enum_field`
+       拼的是"合法值只有 …"那种枚举句式，而本字段的合法值是开放集合，套进去会得到
+       一句指错方向的提示）。两处相似的是**报错纪律**（点名 check id + 非法值 +
+       "不静默降级"的理由），不是同一段代码 —— 别把它读成"共用实现"。
+    2. **额外校验"恰好一个引用文件"**（见 :func:`validate_content_digest_paths`）。
+       这是本字段独有的前提，不是形状问题。
+
+    ★ 显式 ``null`` 在这里是**合法**的（等于缺省），与 ``parse_as`` 一致。
+    """
+    for check in checks:
+        _reject_non_dict_check(check)
+        if "content_digest" not in check:
+            continue
+        value = check["content_digest"]
+        if value is None or is_legal_digest(value):
+            continue
+        print(
+            f"[META-ERROR] 契约 schema 错误: check '{check.get('id', '?')}' 的 "
+            f"content_digest={value!r} 非法；合法值是 "
+            f"{CONTENT_DIGEST_HEX_LENGTH} 位小写十六进制 sha256（如 "
+            f"'81c79bcd…'），或 null / 不写该键（缺省={DEFAULT_CONTENT_DIGEST!r}，"
+            f"即不做摘要校验）。不静默降级：本字段写错会让门禁看起来在守内容摘要"
+            f"却完全没守 —— 而它正是「同源副本被改」（W2）唯一的门禁侧守卫。"
+        )
+        sys.exit(2)
+
+
+def validate_content_digest_paths(checks: list[dict]) -> None:
+    """声明了摘要的 check **必须恰好引用一个文件**；否则 meta-error rc=2.
+
+    ★ 为什么这是硬要求（而不是"用第一个文件"或"合并后算一个"）：
+
+    * **一个摘要只能对应一份内容**。多 path 时把合并串拿去算摘要是错的 ——
+      `run_check_files` 的合并串含 ``--- <path> ---`` 头，算出来的不是任何一份
+      真实文件的内容；而"用第一个文件"会让**其余文件悄悄脱离校验**，
+      正是「守卫存在但它不在这条路径上」。
+    * **零 path** 更坏：一个没有对象的摘要恒真（vacuous truth），会变成一条
+      「永远及格」的门禁条目 —— 与 `paths: []` + `present_when_missing="fail"`
+      要杀的那类真空真是同一个形态。
+
+    ⇒ 与其猜一个，不如**让契约自己说清楚**：写错就 rc=2，人一眼就能改对。
+    """
+    for check in checks:
+        if "content_digest" not in check or check["content_digest"] is None:
+            continue
+        paths = check.get("paths") or []
+        if len(paths) == 1:
+            continue
+        print(
+            f"[META-ERROR] 契约 schema 错误: check '{check.get('id', '?')}' 声明了 "
+            f"content_digest 却引用了 {len(paths)} 个文件（paths={paths!r}）；"
+            f"一个摘要只能对应**恰好一个**文件的完整内容。"
+            f"多文件时「摘要算的是哪一份」没有答案 —— 合并串含 '--- <path> ---' 头，"
+            f"算出来的不是任何真实文件的内容；零文件则是一个恒真的空校验。"
+            f"请拆成多条 check，或去掉该字段。"
+        )
+        sys.exit(2)
+
+
 def load_contract(path: str) -> dict:
     """加载契约 JSON。缺失 / 解析失败 / 字段非法 → meta-error 退出码 2。"""
     try:
@@ -315,6 +475,8 @@ def load_contract(path: str) -> dict:
         sys.exit(2)
     validate_present_when_missing(data["checks"])
     validate_parse_as(data["checks"])
+    validate_content_digest(data["checks"])
+    validate_content_digest_paths(data["checks"])
     return data
 
 
@@ -399,6 +561,33 @@ def _fail_on_missing_detail(check: dict, output: str, mode: str) -> tuple[bool, 
     return False, "\n".join(lines)
 
 
+def _path_state(rel_path: str, repo_root: Path) -> tuple[str, str]:
+    """探测单个引用文件的**真实**状态：``("ok"|"missing"|"unreadable", 原因)``.
+
+    ★ 为什么必须问文件系统，而不是去 ``run_check_files`` 的合并串里找
+    ``<missing:path>`` 占位符（**这条是实测出来的 fail-open，不是洁癖**）：
+
+    合并串 = 已读文件的**内容** + 缺失文件的占位符，两者是**同一种文本**。于是
+    「产物内容里恰好含 ``<missing:<自己的路径>>`` 这个字符串」时，字面判定会认为
+    "该文件缺失 ⇒ 归 ``present_when_missing`` 管 ⇒ 本层跳过"，而文件其实好好地在。
+    实测（伪造 ``criteria_registry`` 的产物里再塞一个
+    ``"<missing:doc/research/data/decision_eval_directed_card.json>"`` 字面量）
+    ⇒ 摘要层返回"无不相符" ⇒ **门禁 rc=0**，即 #169 引入的那道守卫被产物**内容**
+    绕过。这与本仓 09-21「测试有效性」纪律是同一类病：守卫在场，但它的判据可以被
+    被守卫的对象伪造。
+
+    ⇒ 判据只认 ``Path.exists()`` / 真实读取结果。占位符仍然照旧进入合并内容参与
+    正则（那是既有语义，未改），但**这两层不再信任它**。
+    """
+    try:
+        (repo_root / rel_path).read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return "missing", f"<missing:{rel_path}>"
+    except OSError as exc:
+        return "unreadable", f"{exc!r}"
+    return "ok", ""
+
+
 def _json_parse_failures(check: dict, output: str, repo_root: Path) -> list[tuple[str, str]]:
     """逐文件尝试 ``json.loads``，返回 ``[(path, 原因)]``（空列表 = 全部可解析）.
 
@@ -414,13 +603,16 @@ def _json_parse_failures(check: dict, output: str, repo_root: Path) -> list[tupl
     ``present_when_missing`` 的既有职责，本条只管"文件在、内容不是 JSON"。
     两者是并列的一层，互不覆盖。
 
+    ★ 缺失判定经 :func:`_path_state` **问文件系统**，不再嗅探合并串里有没有
+    ``<missing:...>`` 字面量（理由见该函数：那是可被产物内容伪造的判据）。``output``
+    参数因此**只用于保持签名兼容**，不参与"文件在不在"的判定。
+
     Parameters
     ----------
     check : dict
         契约里的单条 check。
     output : str
-        ``run_check_files`` 的合并输出（用于复用它的 ``<missing:>`` /
-        ``<read-error:>`` 占位符判定，避免这里重复读盘口径不一致）。
+        ``run_check_files`` 的合并输出（**不再用于缺失判定**；保留以免调用点漂移）。
     repo_root : Path
         仓库根。
 
@@ -429,9 +621,11 @@ def _json_parse_failures(check: dict, output: str, repo_root: Path) -> list[tupl
     list[tuple[str, str]]
         ``(相对路径, 失败原因)``；空列表表示所有存在的文件都是合法 JSON。
     """
+    del output  # 见上：缺失判定已改为问文件系统，不再嗅探合并串
     failures: list[tuple[str, str]] = []
     for rel_path in check.get("paths") or []:
-        if f"<missing:{rel_path}>" in output or f"<read-error:{rel_path}:" in output:
+        state, _why = _path_state(rel_path, repo_root)
+        if state != "ok":
             continue  # 缺失/不可读归 present_when_missing 管，本层不越权
         full = repo_root / rel_path
         try:
@@ -496,6 +690,111 @@ def _fail_on_unparsable_detail(
     return False, "\n".join(lines)
 
 
+def _content_digest_mismatches(check: dict, output: str, repo_root: Path) -> list[tuple[str, str]]:
+    """按声明的摘要逐文件核内容，返回 ``[(path, 原因)]``（空列表 = 全部相符）.
+
+    ★ 判据与 :func:`_json_parse_failures` **同形但不同层**：那一层判"能不能解析"，
+    这一层判"解析出来的值是不是我们冻结的那一份"。两层都要，因为：
+
+      * 半截产物 ⇒ 解析不了 ⇒ 归 `parse_as`；
+      * **合法 JSON 但内容被改**（W2）⇒ 解析得了 ⇒ 只有摘要能判。
+
+    ★ 缺失 / 不可读的文件**不在这里判**（跳过）—— 那是 ``present_when_missing`` 的
+    既有职责，本条只管"文件在、内容变了"。三层并列、互不覆盖。
+
+    ★ 声明了摘要却**算不出**实际摘要（内容不可 canonical 化）时**返回失败而不是跳过**：
+    「声明了要校验却没校验」比不声明更坏（与 `parse_as` 非法值同一条理由）—— 那会让
+    门禁在"看起来最该守"的那条路径上静默放手。
+
+    ★ ★ **缺失判定问文件系统，绝不嗅探合并串**（#169 落地后实测出的 fail-open）：
+    本层是 W2 唯一的门禁侧守卫，而它原先与 :func:`_json_parse_failures` 一样，
+    用 ``f"<missing:{rel_path}>" in output`` 判断"文件缺失 ⇒ 跳过"。``output`` 是
+    ``run_check_files`` 的**合并内容**，占位符与真实内容同属一种文本 ⇒ **产物内容里
+    塞一个 ``<missing:<自己路径>>`` 字面量即可让本层整体跳过**。
+    实测：伪造 ``criteria_registry`` **并**注入该字面量 ⇒ 本层返回空 ⇒ **门禁 rc=0**，
+    与"没有这道守卫"完全一样。⇒ 改成问 :func:`_path_state`。
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        ``(相对路径, 失败原因)``；空列表表示所有存在的文件摘要都相符。
+    """
+    declared = content_digest_of(check)
+    if declared is None:
+        return []
+    failures: list[tuple[str, str]] = []
+    for rel_path in check.get("paths") or []:
+        state, _why = _path_state(rel_path, repo_root)
+        if state != "ok":
+            continue  # 缺失/不可读归 present_when_missing 管，本层不越权
+        full = repo_root / rel_path
+        try:
+            text = full.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            failures.append((rel_path, f"读取失败: {exc!r}"))
+            continue
+        try:
+            actual = canonical_digest(text)
+        except RecursionError:
+            failures.append((
+                rel_path,
+                "内容不是合法 JSON（嵌套过深，解码时超出 Python 递归上限），"
+                "声明的摘要**无法**被核验",
+            ))
+            continue
+        except ValueError as exc:
+            failures.append((
+                rel_path,
+                f"内容不是合法 JSON（{exc!r}），声明的摘要**无法**被核验",
+            ))
+            continue
+        if actual != declared:
+            failures.append((
+                rel_path,
+                f"内容摘要不符（期望 {declared}，实际 {actual}）",
+            ))
+    return failures
+
+
+def _fail_on_digest_mismatch_detail(
+    check: dict, failures: list[tuple[str, str]], mode: str
+) -> tuple[bool, str]:
+    """``content_digest`` 与产物实际内容不符时，构造判红结果.
+
+    ★ 为什么这条 detail 必须把「同源副本」这层意思写出来：本层堵的是 **W2**——
+    产物仍是一份**合法 JSON**，断言它"坏了"不能只靠 `parse_as` 那句话。
+    读到这句的人要能立刻明白：**不是文件坏了，是内容被改了**；而卡片里
+    `criteria` / `criteria_registry` 这类同源副本只改其中一份时，恰恰是这个形状。
+
+    ★ 措辞的边界（不把话说大）：摘要判的是「**内容变了**」，它**不**能区分
+    「无意的重跑漂移」与「蓄意伪造」，也**拦不住**一份连声明摘要一起改掉的产物
+    （那属评审与 `git diff`）。故这里只说事实，不宣称「挫败了伪造」。
+
+    Returns
+    -------
+    tuple[bool, str]
+        ``(passed=False, detail)``。点名文件、期望值、实际值；是否**阻断**仍由既有
+        severity + mode 决定（只有 block+closed 才 rc=1）。
+    """
+    ref = check.get("decision_ref", "?")
+    desc = check.get("description", "")
+    head = _severity_head(check, mode)
+    lines = [
+        f"{head} 引用的产物内容摘要不符（content_digest）: {ref}",
+        f"       description: {desc}",
+    ]
+    for rel_path, reason in failures:
+        lines.append(f"       {rel_path}: {reason}")
+    lines.append(
+        "       产物内容变了、但它**仍是一份合法 JSON** ⇒ 这不是解析失败，"
+        "而是**同源副本**里至少有一份被改动了（W2：如 criteria 与 "
+        "criteria_registry 是同一批阈值/判据 id 的两份拷贝）。"
+    )
+    if mode == "open":
+        lines.append("       mode=open：不阻断（rc=0），但该项判红必须被看见")
+    return False, "\n".join(lines)
+
+
 def evaluate(
     check: dict, output: str, mode: str, repo_root: Path
 ) -> tuple[bool, str]:
@@ -503,6 +802,13 @@ def evaluate(
 
     ``parse_as="json"``（可选）在正则之前**再加一层 fail-closed**：见
     :func:`_fail_on_unparsable_detail`。
+
+    ``content_digest``（可选）在**再上面又加一层**：见
+    :func:`_fail_on_digest_mismatch_detail`。三层**并列、互不覆盖**：
+
+      1. `present_when_missing` 管「文件**在不在**」；
+      2. `parse_as` 管「文件在、但内容**是不是一份完整卡片**」（W1：截断/半截产物）；
+      3. `content_digest` 管「文件在、内容合法，但**内容变了**」（W2：同源副本被改）。
 
     ★ ``repo_root`` 是**必需**参数（曾为可选、缺省 ``None``）。**不要**把它改回
     可选：解析层需要它去读 paths 列出的产物，而"没有 repo_root 就跳过解析"等于
@@ -534,6 +840,14 @@ def evaluate(
         parse_failures = _json_parse_failures(check, output, repo_root)
         if parse_failures:
             return _fail_on_unparsable_detail(check, parse_failures, mode)
+
+    # 又一层：文件在、内容合法 JSON，但内容是不是我们**冻结的那一份**（W2）。
+    # ★ 顺序刻意放在 parse_as **之后**：内容根本解析不了时，报"解析失败"比报
+    #   "摘要不符"更准确（前者才是根因），两层不争抢同一句话。
+    if content_digest_of(check) is not None:
+        digest_failures = _content_digest_mismatches(check, output, repo_root)
+        if digest_failures:
+            return _fail_on_digest_mismatch_detail(check, digest_failures, mode)
 
     _flags = re.MULTILINE
     matched = bool(re.search(pattern, output, _flags)) if pattern else False
@@ -692,6 +1006,7 @@ def run_all(contract: dict, phase: str, mode: str, repo_root: Path) -> dict:
                 # any_block_fail / results[].passed).
                 "present_when_missing": present_when_missing_of(c),
                 "parse_as": parse_as_of(c),
+                "content_digest": content_digest_of(c),
                 "passed": passed,
                 "detail": detail,
             }
