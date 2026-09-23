@@ -1,0 +1,691 @@
+{
+  "kind": "timing-axis-scorecard",
+  "ticket": "#158",
+  "spec": "#154",
+  "events": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\services\\webinfer\\tests\\fixtures\\live_decision_timing_events.jsonl",
+  "truth": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\services\\webinfer\\tests\\fixtures\\decision_timing_truth.json",
+  "cards": {
+    "frozen-fixture": {
+      "axis": "timing",
+      "axis_question": "就算判断对了，是不是说得是时候 —— onset 延迟 / 每秒误触发 / premature；**不**与定向轴合成单一 accuracy",
+      "source": {
+        "label": "冻结夹具",
+        "events": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\services\\webinfer\\tests\\fixtures\\live_decision_timing_events.jsonl",
+        "truth": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\services\\webinfer\\tests\\fixtures\\decision_timing_truth.json",
+        "truth_meta": {
+          "kind": "decision-timing-gold-labels",
+          "ticket": "#158",
+          "spec": "#154",
+          "authority_split": "决策 / ts / latency_ms **只**由 live_decision_timing_events.jsonl 承载；本文件只放真值（gold labels），按事件自身的 (session_id, ts) 键对齐。一个事实只有一处来源 —— 两处写同一件事必然分叉。",
+          "truth_source": "case_id 指向 decision_eval_set.CASES（本仓唯一真值源），expected 由它的 expected_action 映射：respond/delegate ⇒ speak，silent ⇒ quiet。本文件**不重抄**句子或组别。",
+          "labels_are_authored": "★ 本夹具的**决策**与 `user_still_speaking_at_decision` 都是**作者写的回放输入**，不是真机读数（与 #156 的事件夹具同性质）。它证明的是「时序轴能从冻结输入算出并且判红」，**不是**「生产模型的实际时机质量」。真机读数须另跑评估并落新产物。",
+          "premature_labeling_rule": "每一轮**开口**都有标注（True/False），故 premature rate 的分母完整；不开口的轮次不需要该标注（抢话只在开口时才可能发生）。",
+          "premature_requires_write_side": "★ 真机链路**当前不记录**「决策那一刻用户是否仍在说话」⇒ 本标注在真机上**没有来源**。故 premature rate 在真机产物上必然判「无法测量」（不得判绿）；补齐写入点是一条独立的接线工作。",
+          "sessions": [
+            {
+              "session_id": "sess-timing-a",
+              "n_rounds": 20
+            },
+            {
+              "session_id": "sess-timing-b",
+              "n_rounds": 14
+            }
+          ]
+        }
+      },
+      "reading": {
+        "n_rounds": 34,
+        "n_user_rounds": 30,
+        "n_proactive_rounds": 4,
+        "n_with_truth": 30,
+        "n_skipped_other_events": 0,
+        "n_malformed": 0,
+        "is_frozen_fixture": true,
+        "input_kind": "fixture",
+        "input_kind_why": "真值 sidecar 的 ``labels_are_authored`` 非空 ⇒ 它自己声明了「决策是作者写的回放输入」= 冻结夹具"
+      },
+      "metrics": {
+        "n_rounds": 34,
+        "n_speaking": 21,
+        "n_quiet": 13,
+        "n_empty_output": 0,
+        "onset_latency_ms": {
+          "n": 21,
+          "n_missing_stamp": 0,
+          "missing_stamp_ids": [],
+          "per_round": [
+            412,
+            528,
+            604,
+            651,
+            712,
+            466,
+            880,
+            599,
+            745,
+            483,
+            556,
+            402,
+            330,
+            447,
+            512,
+            588,
+            690,
+            731,
+            465,
+            573,
+            668
+          ],
+          "enough_samples": true,
+          "min_speaking_rounds": 10,
+          "median": 573.0,
+          "p90": 731.0,
+          "min": 330.0,
+          "max": 880.0
+        },
+        "n_spurious": 1,
+        "spurious_round_ids": [
+          "sess-timing-a#19"
+        ],
+        "session_seconds": 494.3,
+        "spurious_rate_measurable": true,
+        "n_expected_quiet": 11,
+        "n_premature": 6,
+        "premature_scope": {
+          "n_speaking": 21,
+          "n_not_applicable_proactive": 2,
+          "n_labeled": 19,
+          "n_unlabeled": 0,
+          "unlabeled_ids": [],
+          "denominator": 19,
+          "complete": true
+        },
+        "premature_rate_pct": 31.6,
+        "spurious_triggers_per_second": 0.002023,
+        "spurious_triggers_per_minute": 0.1214,
+        "n_expected_speak": 19,
+        "n_expected_speak_but_quiet": 1,
+        "expected_speak_missed_ids": [
+          "sess-timing-a#13"
+        ],
+        "latency_source": "decision_chain_round_stamp"
+      },
+      "latency_source_block": {
+        "source": "decision_chain_round_stamp",
+        "field": "latency_ms",
+        "origin": "live_mode._turn_started_at（轮次开启的单调时钟打点） → live_llm.resolve_latency_ms",
+        "reference_point": "用户轮：ASR endpoint 达成、该 BT 接话的那一刻；主动轮：proactive 轮开启的那一刻。两者都是「该开口的时刻」。",
+        "forbidden": [
+          "frame_capture_ts_ms",
+          "event_ts_diff"
+        ],
+        "why": "自洽性检查（**不是**取证）：逐行 latency_source 字段 + 「耗时恰好等于某段 ts 差值」的代数检验 + 钟粒度点阵检验。任何开口行缺耗时/缺出处/命中前两项之一 ⇒ legal=False（判红）。★ legal=True 的含义是「未发现矛盾」，不是「已证明」。",
+        "legal": true,
+        "evidence_kind": "consistency_checked",
+        "applicable": true,
+        "per_source": {
+          "decision_chain_round_stamp": 21
+        },
+        "n_attributed": 21,
+        "n_unattributed": 0,
+        "unattributed_ids": [],
+        "ts_derived_ids": [],
+        "unparsable_ts_ids": [],
+        "lattice_suspect_ids": [],
+        "lattice_gcd_ms": 1,
+        "lattice_checked": true,
+        "offset_suspect_ids": [],
+        "offset_matched_pairs": 0,
+        "offset_checked": true,
+        "cannot_prove": "本检查**不能**证明耗时出自链上单调钟。`latency_source` 是写入侧自己写死的常量，下列形态**在数学上不可证伪**（均由主控实测）：① **抖动**（ts 差值 ±1 ms 交替）—— 与真实噪声同分布；② **乘法缩放**（×1.001）—— 在毫秒尺度上与噪声重叠；③ **确定性加性漂移**（+i）—— 残差被 ts 增长主导而单调，与真实情形（如**机器降频导致耗时随会话缓慢上升**）不可区分；④ 逐行**独立**随机偏移 —— 等价于纯噪声。已能证伪的形态（曾漏网，现判红）：帧钟点阵、ts 差值+常数偏移、非 ISO 的 ts 字符串。合法值只表示「**未发现矛盾**」。要真正证明，需写入侧产出跨源可交叉核对的证据（单调钟窗 + 墙钟两份读数，或另一进程签名）。"
+      },
+      "rounds": {
+        "rounds_count": 34,
+        "sessions": [
+          "sess-timing-a",
+          "sess-timing-b"
+        ]
+      },
+      "criteria": [
+        {
+          "criterion_id": "T_LATENCY_SOURCE",
+          "statement": "★ onset 耗时必须出自**决策链路自身的轮次打点**（latency_ms）；用帧的采集端 ts_ms 或事件 ts 差值即判红 —— 后两者会把网络与编码抖动误归因成「模型反应慢」。",
+          "axis": "timing",
+          "metric": "latency_source",
+          "direction": null,
+          "threshold": null,
+          "source": "出处规则出自工单 #158 正文（★ 段）与 #156 的写入侧实现（live_llm.resolve_latency_ms）；**无阈值** —— 这是一条出处判据，不是一条计量判据",
+          "kind": "structural",
+          "observed": {
+            "latency_source": "decision_chain_round_stamp",
+            "latency_source_legal": true,
+            "n_speaking": 21,
+            "n_missing_stamp": 0,
+            "onset_samples": 21,
+            "session_seconds": 494.3,
+            "premature_scope": {
+              "n_speaking": 21,
+              "n_not_applicable_proactive": 2,
+              "n_labeled": 19,
+              "n_unlabeled": 0,
+              "unlabeled_ids": [],
+              "denominator": 19,
+              "complete": true
+            },
+            "forbidden_keys_found": []
+          },
+          "verdict": "pass",
+          "reason": "未发现矛盾：21 行逐行声明 'decision_chain_round_stamp'，且未命中 ts 差值恒等式 / 钟粒度点阵 / ts 钟仿射（被明令禁止的来源 ['frame_capture_ts_ms', 'event_ts_diff'] 均未被使用）。★ 这是「未发现矛盾」，不是「已证明」—— 见 cannot_prove。"
+        },
+        {
+          "criterion_id": "T_ONSET_MEASURED",
+          "statement": "★ 每一次开口都必须带轮次打点 —— 删掉打点即判红（**不得**退回用帧时间戳、静默出数）。",
+          "axis": "timing",
+          "metric": "onset_latency_ms",
+          "direction": null,
+          "threshold": null,
+          "source": "工单 #158 的 ★ 负控原文（「删掉轮次打点 → 时序轴判红」）；**无阈值**",
+          "kind": "structural",
+          "observed": {
+            "latency_source": "decision_chain_round_stamp",
+            "latency_source_legal": true,
+            "n_speaking": 21,
+            "n_missing_stamp": 0,
+            "onset_samples": 21,
+            "session_seconds": 494.3,
+            "premature_scope": {
+              "n_speaking": 21,
+              "n_not_applicable_proactive": 2,
+              "n_labeled": 19,
+              "n_unlabeled": 0,
+              "unlabeled_ids": [],
+              "denominator": 19,
+              "complete": true
+            },
+            "forbidden_keys_found": []
+          },
+          "verdict": "pass",
+          "reason": "21 次开口全部带决策链路的轮次打点"
+        },
+        {
+          "criterion_id": "T_NO_COMBINED_ACCURACY",
+          "statement": "★ 禁止把定向轴与时序轴合成单一 accuracy（含 f1 / combined / overall score） —— 父 spec §三明确否决：合成会抹平「误响应更贵」这条不对称。",
+          "axis": "timing",
+          "metric": null,
+          "direction": null,
+          "threshold": null,
+          "source": "父 spec #154 §三「两条正交轴，不合成单一 accuracy」；**无阈值**",
+          "kind": "structural",
+          "observed": {
+            "latency_source": "decision_chain_round_stamp",
+            "latency_source_legal": true,
+            "n_speaking": 21,
+            "n_missing_stamp": 0,
+            "onset_samples": 21,
+            "session_seconds": 494.3,
+            "premature_scope": {
+              "n_speaking": 21,
+              "n_not_applicable_proactive": 2,
+              "n_labeled": 19,
+              "n_unlabeled": 0,
+              "unlabeled_ids": [],
+              "denominator": 19,
+              "complete": true
+            },
+            "forbidden_keys_found": []
+          },
+          "verdict": "pass",
+          "reason": "未出现任何合并分数键（扫描表 ['accuracy', 'combined_score', 'overall_score', 'single_accuracy', 'f1', 'composite_score', 'weighted_total']）"
+        },
+        {
+          "criterion_id": "T_SPURIOUS_TIMEBASE",
+          "statement": "每秒误触发次数必须有真实的时间基准（ts 跨度）—— 没有基准时给「无法测量」，不得给 0.0（0.0 会被读成「一次都没乱插」）。",
+          "axis": "timing",
+          "metric": "spurious_triggers_per_second",
+          "direction": null,
+          "threshold": null,
+          "source": "工单 #158 正文（误触发频率是「铁驭最直接能感受到的量」）；**无阈值**",
+          "kind": "structural",
+          "observed": {
+            "latency_source": "decision_chain_round_stamp",
+            "latency_source_legal": true,
+            "n_speaking": 21,
+            "n_missing_stamp": 0,
+            "onset_samples": 21,
+            "session_seconds": 494.3,
+            "premature_scope": {
+              "n_speaking": 21,
+              "n_not_applicable_proactive": 2,
+              "n_labeled": 19,
+              "n_unlabeled": 0,
+              "unlabeled_ids": [],
+              "denominator": 19,
+              "complete": true
+            },
+            "forbidden_keys_found": []
+          },
+          "verdict": "pass",
+          "reason": "时间基准 494.3s 与真值（面向 19 / 非面向 11）齐备 —— ts 的**唯一**合法用途是速率分母，不参与任何耗时"
+        },
+        {
+          "criterion_id": "T_PREMATURE_MEASURED",
+          "statement": "premature rate 的标注必须完整 —— 缺标注给「无法测量」，不得给 0.0。",
+          "axis": "timing",
+          "metric": "premature_rate_pct",
+          "direction": null,
+          "threshold": null,
+          "source": "工单 #158 正文（premature rate）；★ 真机链路当前不记录该事实 ⇒ 本判据现在必然判「无法测量」，那是**如实读数**而非缺陷；**无阈值**",
+          "kind": "structural",
+          "observed": {
+            "latency_source": "decision_chain_round_stamp",
+            "latency_source_legal": true,
+            "n_speaking": 21,
+            "n_missing_stamp": 0,
+            "onset_samples": 21,
+            "session_seconds": 494.3,
+            "premature_scope": {
+              "n_speaking": 21,
+              "n_not_applicable_proactive": 2,
+              "n_labeled": 19,
+              "n_unlabeled": 0,
+              "unlabeled_ids": [],
+              "denominator": 19,
+              "complete": true
+            },
+            "forbidden_keys_found": []
+          },
+          "verdict": "pass",
+          "reason": "premature 分母完整（19 次开口有标注，其中主动轮 2 次不适用已单列）"
+        },
+        {
+          "criterion_id": "T_SAMPLE_FLOOR",
+          "statement": "开口样本量必须 ≥ 10 才能把 onset 分位数当结论 —— 低于它判「无法测量」（样本不足无法自证准不准）。",
+          "axis": "timing",
+          "metric": "onset_latency_ms",
+          "direction": null,
+          "threshold": null,
+          "source": "MIN_SPEAKING_ROUNDS=10 是**工程取值**（时序轴目前没有可支撑分位数的真机样本，见 TIMING_BASELINE_SNAPSHOT 的 limitation）；**无阈值**，且本票不假装它出自实测",
+          "kind": "structural",
+          "observed": {
+            "latency_source": "decision_chain_round_stamp",
+            "latency_source_legal": true,
+            "n_speaking": 21,
+            "n_missing_stamp": 0,
+            "onset_samples": 21,
+            "session_seconds": 494.3,
+            "premature_scope": {
+              "n_speaking": 21,
+              "n_not_applicable_proactive": 2,
+              "n_labeled": 19,
+              "n_unlabeled": 0,
+              "unlabeled_ids": [],
+              "denominator": 19,
+              "complete": true
+            },
+            "forbidden_keys_found": []
+          },
+          "verdict": "pass",
+          "reason": "开口样本 21 ≥ 10，分位数可作点估计"
+        },
+        {
+          "criterion_id": "T_ONSET_MEDIAN",
+          "statement": "onset 延迟中位数不得超过 898 ms（基线最差会话的 ceil(median+pstdev)；样本仅 4 例，属**宽松上界**）。",
+          "axis": "timing",
+          "metric": "onset_latency_ms",
+          "direction": "upper",
+          "threshold": 898.0,
+          "source": "阈值 = ceil(median + pstdev)，取自 TIMING_BASELINE_SNAPSHOT.latency_ms（冻结快照，**不**随活事件文件漂移）。用「中位 + 离散度」而非中位：单轮不可作点估计（#157 已为此付过一次费）。（保守上界，非基线水平）",
+          "kind": "metric",
+          "observed": 573.0,
+          "verdict": "pass",
+          "reason": "onset_latency_ms=573.0 <= 898.0（达标）"
+        },
+        {
+          "criterion_id": "T_ONSET_P90",
+          "statement": "onset 延迟 p90 不得超过 1120 ms（同上，宽松上界）。",
+          "axis": "timing",
+          "metric": "onset_latency_ms",
+          "direction": "upper",
+          "threshold": 1120.0,
+          "source": "阈值 = ceil(median + pstdev)，取自 TIMING_BASELINE_SNAPSHOT.latency_ms（冻结快照，**不**随活事件文件漂移）。用「中位 + 离散度」而非中位：单轮不可作点估计（#157 已为此付过一次费）。（保守上界，非基线水平）",
+          "kind": "metric",
+          "observed": 731.0,
+          "verdict": "pass",
+          "reason": "onset_latency_ms=731.0 <= 1120.0（达标）"
+        }
+      ],
+      "verdict": "pass",
+      "caveats": [],
+      "criteria_registry": [
+        {
+          "criterion_id": "T_LATENCY_SOURCE",
+          "statement": "★ onset 耗时必须出自**决策链路自身的轮次打点**（latency_ms）；用帧的采集端 ts_ms 或事件 ts 差值即判红 —— 后两者会把网络与编码抖动误归因成「模型反应慢」。",
+          "metric": "latency_source",
+          "statistic": null,
+          "direction": null,
+          "threshold": null,
+          "source": "出处规则出自工单 #158 正文（★ 段）与 #156 的写入侧实现（live_llm.resolve_latency_ms）；**无阈值** —— 这是一条出处判据，不是一条计量判据",
+          "kind": "structural"
+        },
+        {
+          "criterion_id": "T_ONSET_MEASURED",
+          "statement": "★ 每一次开口都必须带轮次打点 —— 删掉打点即判红（**不得**退回用帧时间戳、静默出数）。",
+          "metric": "onset_latency_ms",
+          "statistic": null,
+          "direction": null,
+          "threshold": null,
+          "source": "工单 #158 的 ★ 负控原文（「删掉轮次打点 → 时序轴判红」）；**无阈值**",
+          "kind": "structural"
+        },
+        {
+          "criterion_id": "T_NO_COMBINED_ACCURACY",
+          "statement": "★ 禁止把定向轴与时序轴合成单一 accuracy（含 f1 / combined / overall score） —— 父 spec §三明确否决：合成会抹平「误响应更贵」这条不对称。",
+          "metric": null,
+          "statistic": null,
+          "direction": null,
+          "threshold": null,
+          "source": "父 spec #154 §三「两条正交轴，不合成单一 accuracy」；**无阈值**",
+          "kind": "structural"
+        },
+        {
+          "criterion_id": "T_SPURIOUS_TIMEBASE",
+          "statement": "每秒误触发次数必须有真实的时间基准（ts 跨度）—— 没有基准时给「无法测量」，不得给 0.0（0.0 会被读成「一次都没乱插」）。",
+          "metric": "spurious_triggers_per_second",
+          "statistic": null,
+          "direction": null,
+          "threshold": null,
+          "source": "工单 #158 正文（误触发频率是「铁驭最直接能感受到的量」）；**无阈值**",
+          "kind": "structural"
+        },
+        {
+          "criterion_id": "T_PREMATURE_MEASURED",
+          "statement": "premature rate 的标注必须完整 —— 缺标注给「无法测量」，不得给 0.0。",
+          "metric": "premature_rate_pct",
+          "statistic": null,
+          "direction": null,
+          "threshold": null,
+          "source": "工单 #158 正文（premature rate）；★ 真机链路当前不记录该事实 ⇒ 本判据现在必然判「无法测量」，那是**如实读数**而非缺陷；**无阈值**",
+          "kind": "structural"
+        },
+        {
+          "criterion_id": "T_SAMPLE_FLOOR",
+          "statement": "开口样本量必须 ≥ 10 才能把 onset 分位数当结论 —— 低于它判「无法测量」（样本不足无法自证准不准）。",
+          "metric": "onset_latency_ms",
+          "statistic": null,
+          "direction": null,
+          "threshold": null,
+          "source": "MIN_SPEAKING_ROUNDS=10 是**工程取值**（时序轴目前没有可支撑分位数的真机样本，见 TIMING_BASELINE_SNAPSHOT 的 limitation）；**无阈值**，且本票不假装它出自实测",
+          "kind": "structural"
+        },
+        {
+          "criterion_id": "T_ONSET_MEDIAN",
+          "statement": "onset 延迟中位数不得超过 898 ms（基线最差会话的 ceil(median+pstdev)；样本仅 4 例，属**宽松上界**）。",
+          "metric": "onset_latency_ms",
+          "statistic": "median",
+          "direction": "upper",
+          "threshold": 898.0,
+          "source": "阈值 = ceil(median + pstdev)，取自 TIMING_BASELINE_SNAPSHOT.latency_ms（冻结快照，**不**随活事件文件漂移）。用「中位 + 离散度」而非中位：单轮不可作点估计（#157 已为此付过一次费）。（保守上界，非基线水平）",
+          "kind": "metric"
+        },
+        {
+          "criterion_id": "T_ONSET_P90",
+          "statement": "onset 延迟 p90 不得超过 1120 ms（同上，宽松上界）。",
+          "metric": "onset_latency_ms",
+          "statistic": "p90",
+          "direction": "upper",
+          "threshold": 1120.0,
+          "source": "阈值 = ceil(median + pstdev)，取自 TIMING_BASELINE_SNAPSHOT.latency_ms（冻结快照，**不**随活事件文件漂移）。用「中位 + 离散度」而非中位：单轮不可作点估计（#157 已为此付过一次费）。（保守上界，非基线水平）",
+          "kind": "metric"
+        }
+      ],
+      "negative_controls": [
+        {
+          "mutation_id": "identity",
+          "description": "恒等变换（什么都不改）—— 证明「判红」不是来自基线输入本身。",
+          "is_identity_control": true,
+          "must_fail": [],
+          "must_not_pass": [],
+          "observed_failed": [],
+          "status": "identity-baseline-clean",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "dropped-round-stamp",
+          "description": "★ 本票 ★ 负控的字面形态：**删掉轮次打点**（latency_ms 全为 None），而 ts 一律保留。期望：T_ONSET_MEASURED 判**红**（不是「无法测量」），且 onset 不得退回用 ts 差值重新出数。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_ONSET_MEASURED"
+          ],
+          "must_not_pass": [
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90",
+            "T_SAMPLE_FLOOR"
+          ],
+          "observed_failed": [
+            "T_LATENCY_SOURCE",
+            "T_ONSET_MEASURED"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "frame-ts-latency-source",
+          "description": "★ 耗时**真的**由**帧的采集端时间戳**算出（逐行出处标注帧钟，耗时取 1 Hz 的整数倍）。数字会变得更好看，但归因是错的 —— 必须判红。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE",
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "event-ts-diff-latency-source",
+          "description": "★★ 耗时**真的**由事件 ts 差值算出，而**声明一个字都不改**（逐行仍写着链上打点）。这一条专打「只查声明、不查数据」的实现 —— 对抗性复核实测正是用这种形态让初版判绿的。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE",
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "missing-origin-field",
+          "description": "★ 耗时在，但**逐行出处字段被抹掉**（模拟事件来自一个没写该字段的版本） —— 「这个数从哪来」没有证据 ⇒ 必须判红，不得替写入侧圆一句它没说过的话。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "frame-lattice-latency",
+          "description": "★★ 绕过①：耗时**真的**取帧钟点阵（10 fps ⇒ 100 ms 的整数倍），而逐行 latency_source **一字不改**。初版因「没有一个值等于 ts 差值」而判绿，且值落在阈值带内 ⇒ 卡片总判 pass（对抗复核发现，主控复现）。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "ts-affine-offset-1",
+          "description": "★★ 绕过②：耗时 = ts 差值 **+1 ms**，逐行声明不改。初版「恰好相等」检验对 offset 0..1999 中 1999/2000 全盲。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE",
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "ts-affine-offset-997",
+          "description": "★★ 绕过②的大偏移变体：offset=997 —— 证明修复不是只堵 offset=1 的补丁（仿射检验对偏移大小不敏感：常数在差分里消掉）。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE",
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "non-iso-ts",
+          "description": "★★ 绕过③：ts 换成 epoch 毫秒串（非 ISO）⇒ 初版差值集合为空、代数检验**空转恒真**通过。必须判红（fail-closed）。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_LATENCY_SOURCE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_LATENCY_SOURCE"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "failed-rounds",
+          "description": "★ 全部轮次标成推理失败（ok=False）⇒ 必须判红：「没测到」不是「判定沉默」，混入会把失效输出洗成正确的安静。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_SPURIOUS_TIMEBASE"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_SPURIOUS_TIMEBASE"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "combined-accuracy",
+          "description": "★ 往块里塞一个 accuracy 字段（「顺手合成两轴」）—— 父 spec §三明确否决，必须判红。",
+          "is_identity_control": false,
+          "must_fail": [
+            "T_NO_COMBINED_ACCURACY"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "T_NO_COMBINED_ACCURACY"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "dropped-premature-labels",
+          "description": "删掉全部 premature 标注（模拟**未接线的真机链路**）—— 必须判「无法测量」，**不得**判绿。",
+          "is_identity_control": false,
+          "must_fail": [],
+          "must_not_pass": [
+            "T_PREMATURE_MEASURED"
+          ],
+          "observed_failed": [],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "tiny-sample",
+          "description": "只留 2 次开口 —— onset 分位数不可作结论。",
+          "is_identity_control": false,
+          "must_fail": [],
+          "must_not_pass": [
+            "T_SAMPLE_FLOOR",
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90"
+          ],
+          "observed_failed": [],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "no-truth",
+          "description": "★ 抹掉**全部真值**（``expected=None``）—— 这正是真机事件流的形状。「误触发」是真值相关量：没有真值就没有「误」可言，故每秒误触发必须判「无法测量」，**不得**给 0.0。",
+          "is_identity_control": false,
+          "must_fail": [],
+          "must_not_pass": [
+            "T_SPURIOUS_TIMEBASE"
+          ],
+          "observed_failed": [],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "no-timebase",
+          "description": "抹掉全部 ts —— 每秒误触发失去时间基准，必须不可判绿。",
+          "is_identity_control": false,
+          "must_fail": [],
+          "must_not_pass": [
+            "T_SPURIOUS_TIMEBASE"
+          ],
+          "observed_failed": [
+            "T_LATENCY_SOURCE"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-silent",
+          "description": "★ 「永远沉默」的桩。在时序轴上它的产物是**没有开口样本** ⇒ 三个量全部「无法测量」。★ 它**没有** must_fail（见上方注释）：声明它必须判红会让自检假失败；要断言的是它**一条都没判绿**。",
+          "is_identity_control": false,
+          "must_fail": [],
+          "must_not_pass": [
+            "T_ONSET_MEDIAN",
+            "T_ONSET_P90",
+            "T_PREMATURE_MEASURED"
+          ],
+          "observed_failed": [],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        }
+      ],
+      "forbidden_combined_keys": []
+    }
+  }
+}

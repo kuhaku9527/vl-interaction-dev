@@ -8,7 +8,9 @@
       "decision_ref": "doc/research/kv-quantization-measured-2026-09-20.md",
       "description": "llama-server 必须启用对称 KV q8_0 且 flash-attn on。实测省 1320 MiB 显存且延迟略降（9535->8214 MiB；prompt 265.9->260.5ms）。★ FA 与量化 V 是焊死的：FA 关闭时 V 转置存储，q8_0 的 32 倍数断言无处落脚会导致启动失败。q4_0 明确否决（仅多省 112 MiB 而相似度 81.6%->8.3%）。",
       "phase": "static",
-      "paths": ["services/scripts/run-windows.ps1"],
+      "paths": [
+        "services/scripts/run-windows.ps1"
+      ],
       "pattern": "\"-ctk\",\\s*\"q8_0\"[\\s\\S]{0,200}?\"-ctv\",\\s*\"q8_0\"[\\s\\S]{0,200}?\"--flash-attn\",\\s*\"on\"",
       "not_pattern": "(\"-ctv\",\\s*\"q4_0\"|\"-ctk\",\\s*\"q4_0\")",
       "severity": "block"
@@ -18,7 +20,9 @@
       "decision_ref": "决策/业务-上下文架构.md D-050 / drift-历史.md DRIFT-1",
       "description": "VLM 运行时 n_ctx 必须等于 webinfer main_ctx_tokens=16384（避免 2026-07-28 DRIFT-1 复发）；通过 scripts/vlm_runtime_probe.py 写出的 logs/vlm-runtime-props.json 校验（替代旧的日志 grep 方案：launcher 从未真正写 log 文件）",
       "phase": "runtime",
-      "paths": ["logs/vlm-runtime-props.json"],
+      "paths": [
+        "logs/vlm-runtime-props.json"
+      ],
       "pattern": "\"n_ctx\":\\s*16384",
       "severity": "block"
     },
@@ -53,7 +57,9 @@
       "decision_ref": "决策/服务-VLM.md D-2026-07-13-027",
       "description": "run-windows.env 的 MAIN_CONTEXT / MAIN_CTX_TOKENS 必须显式设为 16384（启动兜底默认 4096 已知会回退）",
       "phase": "static",
-      "paths": ["services/scripts/run-windows.env"],
+      "paths": [
+        "services/scripts/run-windows.env"
+      ],
       "pattern": "^MAIN_CONTEXT\\s*=\\s*16384",
       "severity": "block"
     },
@@ -62,7 +68,9 @@
       "decision_ref": "决策/服务-webinfer.md D-030",
       "description": "webinfer live adapter 的 request_timeout_seconds 决策态为 300.0（F4-P0 从 verify.sh 迁移而来）",
       "phase": "static",
-      "paths": ["services/webinfer/adapter_types.py"],
+      "paths": [
+        "services/webinfer/adapter_types.py"
+      ],
       "pattern": "request_timeout_seconds: float = 300\\.0",
       "severity": "block"
     },
@@ -71,7 +79,9 @@
       "decision_ref": "决策/AI代码质量约法三章.md D-007",
       "description": "CI quality.yml 固定 ruff==0.15.22（F4-P0 从 verify.sh 迁移而来）",
       "phase": "static",
-      "paths": [".github/workflows/quality.yml"],
+      "paths": [
+        ".github/workflows/quality.yml"
+      ],
       "pattern": "ruff==0\\.15\\.22",
       "severity": "block"
     },
@@ -92,7 +102,9 @@
       "decision_ref": "决策/服务-webui.md D-033",
       "description": "前端模块化 window.JoyWiki 暴露（F4-P0 从 verify.sh 迁移而来）",
       "phase": "static",
-      "paths": ["services/webui/src/joy_interaction_webui/static/index.html"],
+      "paths": [
+        "services/webui/src/joy_interaction_webui/static/index.html"
+      ],
       "pattern": "window\\.JoyWiki",
       "severity": "warn"
     },
@@ -101,7 +113,9 @@
       "decision_ref": "决策/服务-webui.md D-036",
       "description": "前端 wiki_frontend.js 显式读取 wikiNamespace（F4-P0 从 verify.sh 迁移而来）",
       "phase": "static",
-      "paths": ["services/webui/src/joy_interaction_webui/static/wiki_frontend.js"],
+      "paths": [
+        "services/webui/src/joy_interaction_webui/static/wiki_frontend.js"
+      ],
       "pattern": "wikiNamespace",
       "severity": "warn"
     },
@@ -110,9 +124,64 @@
       "decision_ref": "决策/服务-webinfer.md D-076",
       "description": "webinfer memory_io 读取 WIKI_RECALL_NAMESPACES（F4-P0 从 verify.sh 迁移而来）",
       "phase": "static",
-      "paths": ["services/webinfer/memory_io.py"],
+      "paths": [
+        "services/webinfer/memory_io.py"
+      ],
       "pattern": "WIKI_RECALL_NAMESPACES",
       "severity": "warn"
+    },
+    {
+      "id": "eval-directed-axis-frozen-reading",
+      "decision_ref": "工单 #159（父 spec #154 的决策评测⑤·回归门禁）；决策书：决策/跨域铁律.md『Drift Gate 门禁』+ 决策/业务-评测.md；阈值出处：services/webinfer/decision_eval_criteria.py BOUNDS / decision_eval_timing_criteria.py TIMING_BOUNDS",
+      "description": "定向轴（#157）两个 variant 的入库读数必须与冻结基线逐字一致：各判据的 threshold、observed、verdict 与 reason **四者同时**被绑定；阈值 D1 ≤63.0 / D2 ≤21.0 / D3 ≥70.0 / D4 ≥17.0 / D5 ≤101.0 出自 decision_eval_criteria.py 的 BOUNDS（由 BASELINE_SNAPSHOT 冻结快照派生）。★ 本行**有意**登记「两 variant 的卡片级 criteria.verdict 均为 fail」这一**已知红**（= D4 未达标：observed 0.0 / 11.1 < 17.0，属 #157 的如实读数，**不是门禁误报**）。后人若看到 verdict=fail 请勿当作门禁故障去「修」它 —— 修 D4 必须显式更新本行。★ 两 variant 判据 id 相同，故 V1 段的窗口以 V2 的 card key 为终止界，V2 不可能顶替 V1 匹配（否则单 variant 退化会被静默放过）。",
+      "phase": "static",
+      "paths": [
+        "doc/research/data/decision_eval_directed_card.json"
+      ],
+      "pattern": "(?=---\\s*doc/research/data/decision_eval_directed_card\\.json\\s*---(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D1\\-nondirected\\-no\\-spurious\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*63(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*50(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?nondirected_spurious_response_rate_pct=50\\.0\\ <=\\ 63\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D3\\-not\\-for\\-me\\-precision\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*70(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*100(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"unmeasurable\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?只有\\ 1/3\\ 轮有分母))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D4\\-not\\-for\\-me\\-recall\\-generalization\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*17(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*0(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"fail\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?not_for_me_recall_pct=0\\.0\\ >=\\ 17\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D5\\-cost\\-index\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*101(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*82\\.4)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?cost_index=82\\.4\\ <=\\ 101\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D1\\-nondirected\\-no\\-spurious\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*63(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*34\\.6)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?nondirected_spurious_response_rate_pct=34\\.6\\ <=\\ 63\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D3\\-not\\-for\\-me\\-precision\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*70(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*100(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?not_for_me_precision_pct=100\\.0\\ >=\\ 70\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D4\\-not\\-for\\-me\\-recall\\-generalization\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*17(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*11\\.1)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"fail\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?not_for_me_recall_pct=11\\.1\\ >=\\ 17\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D5\\-cost\\-index\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*101(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*62\\.7)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?cost_index=62\\.7\\ <=\\ 101\\.0))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"D2\\-directed\\-nonresponse\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*21(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*12(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?directed_nonresponse_rate_pct=12\\.0\\ <=\\ 21\\.0))(?=(?:[\\s\\S]){0,150000}?\"cost_index\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*56\\.9[\\s\\n]*,\\s*82\\.4[\\s\\n]*,\\s*100(?:\\.0+)?[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*82\\.4\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"nondirected_spurious_response_rate_pct\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*30\\.8[\\s\\n]*,\\s*50(?:\\.0+)?[\\s\\n]*,\\s*61\\.5[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*50(?:\\.0+)?\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"directed_nonresponse_rate_pct\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*20(?:\\.0+)?[\\s\\n]*,\\s*12(?:\\.0+)?[\\s\\n]*,\\s*12(?:\\.0+)?[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*12(?:\\.0+)?\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"not_for_me_recall_pct\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*3\\.8[\\s\\n]*,\\s*0(?:\\.0+)?[\\s\\n]*,\\s*0(?:\\.0+)?[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*0(?:\\.0+)?\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"generalization\":\\ \\{(?:(?!\"criterion_id\")[\\s\\S]){0,12000}?\"not_for_me_recall_pct\":\\ \\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,300}?\"median\":\\s*0(?:\\.0+)?\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"cost_index\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*62\\.7[\\s\\n]*,\\s*70\\.6[\\s\\n]*,\\s*41\\.2[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*62\\.7\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"nondirected_spurious_response_rate_pct\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*34\\.6[\\s\\n]*,\\s*42\\.3[\\s\\n]*,\\s*26\\.9[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*34\\.6\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"directed_nonresponse_rate_pct\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*20(?:\\.0+)?[\\s\\n]*,\\s*12(?:\\.0+)?[\\s\\n]*,\\s*0(?:\\.0+)?[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*12(?:\\.0+)?\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"not_for_me_recall_pct\":\\s*\\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"per_round\":\\s*\\[[\\s\\n]*11\\.5[\\s\\n]*,\\s*3\\.8[\\s\\n]*,\\s*15\\.4[\\s\\n]*\\])(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,420}?\"median\":\\s*11\\.5\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"generalization\":\\ \\{(?:(?!\"criterion_id\")[\\s\\S]){0,12000}?\"not_for_me_recall_pct\":\\ \\{(?=(?:(?!\\n\\s*\"[A-Za-z_0-9]+\":\\s*\\{)[\\s\\S]){0,300}?\"median\":\\s*11\\.1\\s*,?))(?=(?:[\\s\\S]){0,150000}?\"verdict\":\\s*\"fail\"[\\s\\],}]{0,40}\"criteria_registry\"[\\s\\S]{0,150000}?\"verdict\":\\s*\"fail\"[\\s\\],}]{0,40}\"criteria_registry\")(?=(?:[\\s\\S]){0,150000}?\"kind\":\\s*\"directed-axis-scorecard\"(?=(?:[\\s\\S]){0,10}?\\s*)))",
+      "severity": "block",
+      "present_when_missing": "fail",
+      "parse_as": "json"
+    },
+    {
+      "id": "eval-directed-axis-structural-guards",
+      "decision_ref": "工单 #159（父 spec #154 的决策评测⑤·回归门禁）；决策书：决策/跨域铁律.md『Drift Gate 门禁』+ 决策/业务-评测.md；阈值出处：services/webinfer/decision_eval_criteria.py BOUNDS / decision_eval_timing_criteria.py TIMING_BOUNDS",
+      "description": "定向轴五条结构性判据 S1..S5 必须在**两个 variant 上分别** pass，且**其 observed 的具体数值**也要绑定：S1 分母 {n_directed:75, n_nondirected:78}、S2 失败行 =0、S3 rows_without_token_evidence =0、S4 quiet_rows 可归因、S5 rounds_count =3。★ 只绑 verdict 不足以守住「这份分数能不能信」——实测（t4 对抗复核 R1）把 S1 的 observed改成 {0,0} 而 verdict 保持 pass 时，门禁曾判绿。★ S3/S4 的 quiet_rows 两 variant 不同（54 / 59），必须分别绑定，不得用一组值覆盖两 variant（那会让其中一个 variant 的断言恒真）。",
+      "phase": "static",
+      "paths": [
+        "doc/research/data/decision_eval_directed_card.json"
+      ],
+      "pattern": "(?=---\\s*doc/research/data/decision_eval_directed_card\\.json\\s*---(?=(?:(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S1\\-denominators\\-present\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"n_directed\":\\s*75\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"n_nondirected\":\\s*78\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?分母齐备（面向\\ 75\\ /\\ 非面向\\ 78))[\\s\\S]{1,150000}?\"criterion_id\":\\ \"S1\\-denominators\\-present\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"n_directed\":\\s*75\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"n_nondirected\":\\s*78\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?分母齐备（面向\\ 75\\ /\\ 非面向\\ 78))(?=(?:(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S2\\-no\\-round\\-errors\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"sum\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?无失败行))[\\s\\S]{1,150000}?\"criterion_id\":\\ \"S2\\-no\\-round\\-errors\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"sum\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?无失败行))(?=(?:(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S5\\-multi\\-round\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"rounds_count\":\\s*3\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?3\\ 轮（分母跨轮一致性))[\\s\\S]{1,150000}?\"criterion_id\":\\ \"S5\\-multi\\-round\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"rounds_count\":\\s*3\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?3\\ 轮（分母跨轮一致性))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S3\\-token\\-evidence\\-complete\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"rows_without_token_evidence\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows\":\\s*54(?:\\.0+)?\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?所有不开口决策都有\\ token\\ 证据))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S4\\-no\\-unattributed\\-quiet\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows_unattributable\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows_empty_output\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows_contradictory\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows\":\\s*54(?:\\.0+)?\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?无不开口行的证据缺失或自相矛盾))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S3\\-token\\-evidence\\-complete\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"rows_without_token_evidence\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows\":\\s*59(?:\\.0+)?\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?所有不开口决策都有\\ token\\ 证据))(?=(?:[\\s\\S]){0,150000}?\"criterion_id\":\\ \"S4\\-no\\-unattributed\\-quiet\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows_unattributable\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows_empty_output\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows_contradictory\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"quiet_rows\":\\s*59(?:\\.0+)?\\s*,?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?无不开口行的证据缺失或自相矛盾)))",
+      "severity": "block",
+      "present_when_missing": "fail",
+      "parse_as": "json"
+    },
+    {
+      "id": "eval-timing-axis-frozen-reading",
+      "decision_ref": "工单 #159（父 spec #154 的决策评测⑤·回归门禁）；决策书：决策/跨域铁律.md『Drift Gate 门禁』+ 决策/业务-评测.md；阈值出处：services/webinfer/decision_eval_criteria.py BOUNDS / decision_eval_timing_criteria.py TIMING_BOUNDS",
+      "description": "时序轴（#158）入库读数：T_ONSET_MEDIAN threshold 898.0 / observed 573.0、T_ONSET_P90 threshold 1120.0 / observed 731.0，四者与 reason 同时绑定；阈值出自 decision_eval_timing_criteria.py 的 TIMING_BOUNDS（TIMING_BASELINE_SNAPSHOT 冻结快照派生；真机样本仅 4 例，属**宽松上界**）。另绑定卡片级 criteria.verdict = pass。",
+      "phase": "static",
+      "paths": [
+        "doc/research/data/decision_eval_timing_card.json"
+      ],
+      "pattern": "(?=---\\s*doc/research/data/decision_eval_timing_card\\.json\\s*---(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_ONSET_MEDIAN\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*898(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*573(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?onset_latency_ms=573\\.0\\ <=\\ 898\\.0))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_ONSET_P90\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"threshold\":\\s*1120(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"observed\":\\s*731(?:\\.0+)?)(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?onset_latency_ms=731\\.0\\ <=\\ 1120\\.0))(?=(?:[\\s\\S]){0,45000}?\"kind\":\\s*\"timing-axis-scorecard\"(?=(?:[\\s\\S]){0,10}?\\s*)))",
+      "severity": "block",
+      "present_when_missing": "fail",
+      "parse_as": "json"
+    },
+    {
+      "id": "eval-timing-axis-structural-guards",
+      "decision_ref": "工单 #159（父 spec #154 的决策评测⑤·回归门禁）；决策书：决策/跨域铁律.md『Drift Gate 门禁』+ 决策/业务-评测.md；阈值出处：services/webinfer/decision_eval_criteria.py BOUNDS / decision_eval_timing_criteria.py TIMING_BOUNDS",
+      "description": "时序轴六条结构性判据逐条 pass；其中 T_SAMPLE_FLOOR 另绑其 observed 的样本下限（n_speaking 21 ≥ 10、n_missing_stamp 0、onset_samples 21）——那是「分位数能不能当结论」的前提，只判 verdict 抓不到样本退化。★ not_pattern `\"verdict\":\\s*\"unmeasurable\"`（**空白不敏感**，t4 R3 实测：单空格写法会被双空格/制表符绕过）另设反断言。★ 这是**设计意图而非解析失败**：诚实判出的「无法测量」意味着「没测」，本门禁要求它判红（缺测 ≠ 通过）。卡片模块里那 7 处诚实的 VERDICT_UNMEASURABLE路径因此会触发 BLOCK —— 那是预期行为；修法是补齐缺失的测量/写入点，**不得**为此放宽 not_pattern。",
+      "phase": "static",
+      "paths": [
+        "doc/research/data/decision_eval_timing_card.json"
+      ],
+      "pattern": "(?=---\\s*doc/research/data/decision_eval_timing_card\\.json\\s*---(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_LATENCY_SOURCE\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\"))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_ONSET_MEASURED\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\"))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_NO_COMBINED_ACCURACY\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\"))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_SPURIOUS_TIMEBASE\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\"))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_PREMATURE_MEASURED\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\"))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_SAMPLE_FLOOR\"(?=(?:(?!\"criterion_id\")(?!premature_scope)[\\s\\S]){0,640}?\"n_speaking\":\\s*21\\s*,?)(?=(?:(?!\"criterion_id\")(?!premature_scope)[\\s\\S]){0,640}?\"n_missing_stamp\":\\s*0\\s*,?)(?=(?:(?!\"criterion_id\")(?!premature_scope)[\\s\\S]){0,640}?\"onset_samples\":\\s*21\\s*,?))(?=(?:[\\s\\S]){0,45000}?\"criterion_id\":\\ \"T_SAMPLE_FLOOR\"(?=(?:(?!\"criterion_id\")[\\s\\S]){0,2600}?\"verdict\":\\s*\"pass\")))",
+      "not_pattern": "(?i)\"verdict\"\\s*:\\s*\"unmeasurable\"",
+      "severity": "block",
+      "present_when_missing": "fail",
+      "parse_as": "json"
     }
   ]
 }

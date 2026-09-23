@@ -1386,12 +1386,35 @@ python -m decision_eval_card --json --diff-against <上一份卡片.json>
 
 | 判据 | 指标 | 方向 | 阈值 | 出处 |
 |---|---|---|---|---|
-| `D1-nondirected-no-spurious` | 非面向→开口率（**含 delegation**） | ≤ | 54% | 入库产物重算（基线最差 variant 上界） |
-| `D2-directed-nonresponse` | 面向句非响应率（**含被 silence 吞掉**） | ≤ | 27% | 同上（最坏轮） |
+| `D1-nondirected-no-spurious` | 非面向→开口率（**含 delegation**） | ≤ | 63% | 入库产物重算（基线最差 variant 上界） |
+| `D2-directed-nonresponse` | 面向句非响应率（**含被 silence 吞掉**） | ≤ | 21% | 同上（最坏轮） |
 | `D3-not-for-me-precision` | nfm 精确率 | ≥ | 70% | **保守取值**（真机预测数中位仅 2，样本不足以定阈值） |
-| `D4-not-for-me-recall-generalization` | **泛化子集** nfm 召回 | ≥ | 19% | 入库产物重算（泛化子集最坏轮） |
-| `D5-cost-index` | 代价加权（3×误响应 + 1×漏判） | ≤ | 93 | 入库产物重算（最坏轮） |
+| `D4-not-for-me-recall-generalization` | **泛化子集** nfm 召回 | ≥ | 17% | 入库产物重算（泛化子集最坏轮） |
+| `D5-cost-index` | 代价加权（3×误响应 + 1×漏判） | ≤ | 101 | 入库产物重算（最坏轮） |
 | `S1..S5` | 分母齐备 / 无失败行 / token 证据完整 / 无可归因缺失 / ≥2 轮 | — | 结构性 | fail-closed |
+
+> ⚠️ **本表阈值原为 54% / 27% / 70% / 19% / 93，已更正为 63% / 21% / 70% / 17% / 101**
+> —— 更正时间 **2026-09-23T20:32:24+08:00**，由 **#159 收口时查出**。
+> 取证命令（可重跑）：
+> ```
+> /d/AI/envs/joyai-main/python.exe -c "import sys;sys.path.insert(0,'services/webinfer');
+>   import decision_eval_criteria as c;print(c.BOUNDS)"
+> # => 63.0 / 21.0 / 70.0 / 17.0 / 101.0（与本表逐条相等 ⇒ 现一致）
+> ```
+> 原值正是 #157 修掉的**「发表版 vs 执行版分叉」** ——
+> 见本文件 §「Spec 轴 ① HIGH」：那四个数是旧 `Criterion.statement` 里**写死**的文本，
+> 而 `threshold` 一直是 63/21/17/101。代码侧已改为 f-string 从 `BOUNDS` 插值
+> （`statements_match_bounds()` 守着），**但本文件的引用表当时漏改，成了第二处副本**。
+> ⇒ **后审者别照抄本表的历史值**：真值源是
+> `services/webinfer/decision_eval_criteria.py` 的 `BOUNDS`，用 `--show-bounds` 复核；
+> #159 的 `scripts/tests/test_eval_gate_contract.py` 已把它与门禁产物跨层绑定。
+>
+> ★ **为何是就地更正而非追加新行**（本文件维护纪律 #1「不追改历史行」的例外说明）：
+> 上面这张表**不是历史读数，而是「当前该用哪个阈值」的指令** ——
+> 它的每一行都在告诉后来的维护者「门禁判定用的是这个数」。
+> 留着旧值不是「保留历史」，而是**发出一条错误的当前指令**。
+> 历史读数（三个 variant 各自的中位/离散度）在上文 §「定向轴记分卡」的读数表里**原样保留、未动**。
+> 纪律 #2「必须写测量时间」在本段补齐（见上方时间戳与取证命令）。
 
 > ★ **宽窄口径并列**：`D1` 把 `delegation` 算作开口（旧字段 `baseline_mis_response_rate_pct`
 > 只数 `response`），`D2` 把被 `</silence>` 吞掉的面向句算作漏判（旧字段

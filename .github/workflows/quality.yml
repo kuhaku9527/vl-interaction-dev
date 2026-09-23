@@ -102,6 +102,9 @@ jobs:
   # 见 ADR-0016 / 决策历史）。drift_gate.py 是单一真值（契约驱动、机器可读）；
   # runtime 阶段（vlm-n_ctx）依赖运行态，留给下方的 drift-gate-runtime job。
   # 引用文件缺失（如 .gitignore 忽略的 run-windows.env）按 fail-open 处理，CI 保持绿。
+  #   ⚠️ 2026-09-23（#159）例外：4 条决策评测 check 显式写了
+  #      present_when_missing="fail"，其引用的**结果产物**缺失即判红（缺结果
+  #      = 没测 ≠ 通过）。其余 check 的缺省 skip 语义一个字段都没动。
   # ---------------------------------------------------------------------------
   drift-gate:
     runs-on: ubuntu-latest
@@ -111,10 +114,124 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Generate decision-eval scorecards (stable paths, before the gate)
+        # #159（父 spec #154 的决策评测⑤）：沿用既有先例形态接线 ——
+        # 「产物写到稳定路径 → 门禁断言产物」，**不**新增第二个执行器、
+        # **不**新增 job、**不**加 needs。门禁读的是产物，它自己不跑卡片。
+        #
+        # ★ 退出码取舍（如实记录）：卡片的退出码是 0=全绿 / 1=有判据判红 /
+        #   2=有「无法测量」项。定向轴当前**实测 exit=1** —— D4
+        #   （not_for_me_recall_pct 泛化召回 0.0 < 17.0）未达标，那是 #157
+        #   的**如实读数**，不是本次接线的缺陷。若用 set -e 直接失败，CI 会因为
+        #   「读数如实」而红，等于把门禁的判定权搬进了生成步骤；而把非零退出
+        #   一律当成功又会把真实崩溃吞掉。故逐码分辨：
+        #     0 全绿            → 放行，交下一步 drift_gate 按产物内容判
+        #     1 有判据判红      → 放行，同上（已知红固定在契约里；判定权在门禁）
+        #     2 有「无法测量」项 → **失败** ★「没测 ≠ 通过」，不得放行
+        #     其它             → **失败**（这不是一个读数，卡片坏了）
+        # ★ R6 修复：生成前先 `rm -f` 两个目标产物。
+        #   原实现在卡片「无法出卡」时 rc=2 且**一个字节都没写**，而步骤只检查
+        #   「文件存在且可解析」⇒ **旧产物**被当成新产物 ⇒ 步骤 rc=0、
+        #   门禁 rc=0、CI 全绿而卡片从未产出结果（t4 对抗复核实测）。
+        # ★ t8（AC#6）改为「**临时目录生成 + 成功后原子替换**」：
+        #   `rm -f` + 原地写会在**卡片失败时破坏工作区**（t7 实测：卡片失败时
+        #   STEP-RC=1，但定向卡已被重写、时序卡被删）。现在卡片只写 `$STAGE`，
+        #   两张都校验通过后才 `mv` 到入库路径 ⇒ 失败时入库产物**逐字节不变**。
+        #   判据由 scripts/tests 里的 CI 步骤测试钉住（失败后产物仍在且 md5 不变）。
+        # ★ t8（AC#5）：把产物的 **sha256** 打进 CI 日志（不再只有 size）。
+        #   这样「同一次 CI 内生成 → 断言」的对象事后可核验：拿到内容指纹就能确认
+        #   被门禁断言的到底是哪一份产物。
+        # ★ 生成命令与本地**逐字一致**，只有解释器不同（本地
+        #   /d/AI/envs/joyai-main/python.exe ↔ CI python）。CI 是 ubuntu+py3.12，
+        #   故不得出现任何 Windows 专有路径。
+        run: |
+          set -u
+          DIRECTED=doc/research/data/decision_eval_directed_card.json
+          TIMING=doc/research/data/decision_eval_timing_card.json
+          # 暂存目录：卡片只写这里，入库路径在全部校验通过后才被替换。
+          # `${RUNNER_TEMP:-/tmp}` 使本步骤在 CI 与本地 shell 里行为一致
+          # （RUNNER_TEMP 是 GitHub runner 上的变量；本地跑时回落到 /tmp）。
+          STAGE="$(mktemp -d "${RUNNER_TEMP:-/tmp}/eval-cards.XXXXXX")"
+          D_STAGE="$STAGE/directed.json"
+          T_STAGE="$STAGE/timing.json"
+          rc_directed=0
+          rc_timing=0
+          python services/webinfer/decision_eval_card.py --json --out "$D_STAGE" || rc_directed=$?
+          python services/webinfer/decision_eval_timing_card.py --json --out "$T_STAGE" || rc_timing=$?
+          echo "card exit codes: directed=$rc_directed timing=$rc_timing (0=全绿 1=有判据判红 2=有无法测量项)"
+          for pair in "directed:$rc_directed" "timing:$rc_timing"; do
+            name=${pair%%:*}; rc=${pair##*:}
+            case "$rc" in
+              0) ;;
+              1) echo "[ok] $name: rc=1 —— 如实判红，判定权交给 drift_gate（按产物内容判）" ;;
+              2) echo "::error::$name card rc=2 —— 有「无法测量」项。没测 ≠ 通过，本步骤失败。"; echo "  入库产物未被改动（本步骤只写暂存目录）"; exit 1 ;;
+              *) echo "::error::$name card exited $rc — 这不是一个读数，卡片未正常产出"; echo "  入库产物未被改动（本步骤只写暂存目录）"; exit 1 ;;
+            esac
+          done
+          # 校验**暂存**产物：非空 + 可解析 + kind/ticket 对得上。
+          # 只在全部通过后才替换入库路径 ⇒ 失败时工作区零改动。
+          python - "$STAGE" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          stage = sys.argv[1]
+          expected = [
+              ("directed", "directed-axis-scorecard", "#157"),
+              ("timing", "timing-axis-scorecard", "#158"),
+          ]
+          for name, kind, ticket in expected:
+              path = os.path.join(stage, f"{name}.json")
+              try:
+                  size = os.path.getsize(path)
+              except OSError as exc:
+                  print(f"::error::评测产物缺失（卡片未写出）: {name} ({exc})")
+                  print("  入库产物未被改动（本步骤只写暂存目录）")
+                  sys.exit(1)
+              if size == 0:
+                  print(f"::error::评测产物为空文件: {name}")
+                  sys.exit(1)
+              raw = open(path, "rb").read()
+              try:
+                  data = json.loads(raw.decode("utf-8"))
+              except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                  print(f"::error::评测产物不可解析: {name} ({exc})")
+                  sys.exit(1)
+              if data.get("kind") != kind or data.get("ticket") != ticket:
+                  print(f"::error::{name} 不是预期的记分卡产物 "
+                        f"(kind={data.get('kind')!r} ticket={data.get('ticket')!r})")
+                  sys.exit(1)
+              # ★ AC#5：内容指纹进日志（不只 size）—— 事后可核验被断言的是哪一份
+              print(f"[ok] {name}: kind={kind} ticket={ticket} "
+                    f"cards={len(data.get('cards', {}))} bytes={size} "
+                    f"sha256={hashlib.sha256(raw).hexdigest()}")
+          PY
+          # ★ 校验失败必须**拦住替换**。本步骤是 `set -u`（不是 `set -e`），
+          #   所以 heredoc 里 `sys.exit(1)` 不会自动中止脚本 —— 不显式取 rc 的话，
+          #   校验判红后仍会执行下面的 `mv`，把坏产物盖到入库路径上
+          #   （t8 实测：空产物场景 rc=0 且产物被替换；由
+          #   test_failure_leaves_committed_artifacts_byte_identical 抓出）。
+          if [ "$?" -ne 0 ]; then
+            echo "::error::产物校验失败 —— 不执行替换"
+            echo "  入库产物未被改动（本步骤只写暂存目录）"
+            rm -rf "$STAGE"
+            exit 1
+          fi
+          # 暂存产物全部校验通过 ⇒ 原子替换入库路径（同一文件系统内 `mv` 是原子的）。
+          mv -f "$D_STAGE" "$DIRECTED"
+          mv -f "$T_STAGE" "$TIMING"
+          rm -rf "$STAGE"
+          echo "[ok] 两张产物已原子替换入库路径"
       - name: Run drift-gate static contract checks (fail-closed)
         # F4-P0: 改用 scripts/drift_gate.py 作为单一真值（替代旧的 verify.sh --ci
         # grep 子集）。仅跑 static 阶段（查配置/代码常量，无需起服务），任一
         # block 级检查不符即非零退出、阻断合并。
+        # #159：本 job 现在还会断言上一步生成的两张记分卡产物（4 条 eval-* check，
+        # 均为 block + present_when_missing=fail）。评测 check 刻意用 phase=static：
+        # 执行器对 static 是纯读文件 + re.search，不碰运行实例、不触发 VLM probe；
+        # 而「结果文件」本就是已落盘产物，对执行器而言正是 static 的语义。
+        # （若标成 runtime，_props_referenced_by_runtime 会因既有的 vlm-n_ctx 而
+        #   在每次 --phase runtime 前无条件跑 probe，无 llama 时 rc=3 ⇒ CI 永远跑不了。）
         run: python scripts/drift_gate.py --contract config/drift-contract.json --phase static --mode closed --no-history
       - name: Drift-gate smoke test (regression guard for P0-1 UnboundLocalError)
         # 唯一能防 drift_gate.py 非 --json 路径崩溃（P0-1 修复的 UnboundLocalError）

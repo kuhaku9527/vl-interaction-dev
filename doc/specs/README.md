@@ -39,6 +39,7 @@
 | `t05-memory-store-health-observability.md` | memory-store 健康端点可观测性 | ✅ Implemented（PR #85） |
 | `f34-live-adapter-drift-gate-safe-batch.md` | live adapter drift-gate 安全批 | ✅ Implemented（PR #87） |
 | `f40-drift-gate-launcher-wiring.md` | drift-gate launcher 接线 | ✅ 已落地 |
+| `2026-09-23-decision-eval-regression-gate.md` | **决策评测⑤·回归门禁**（两张记分卡接进既有 drift-gate；缺结果判红） | ✅ 已落地（2026-09-23，#159） |
 | `drift-gate-harness-spec.md` | drift-gate harness | ✅ APPROVED（2026-07-29） |
 | `interaction-mode-isolation.md` | 交互模式隔离 | ⚠️ 已落地（**全篇只有三态，缺第四态 not-for-me**） |
 | `live-transcript-ui-spec.md` | 直播转写 UI | ✅ 已实现 |

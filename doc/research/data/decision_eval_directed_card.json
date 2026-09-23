@@ -1,0 +1,2896 @@
+{
+  "kind": "directed-axis-scorecard",
+  "ticket": "#157",
+  "spec": "#154",
+  "artifact": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\doc\\research\\data\\benchmark_production_live_prompt_rounds.json",
+  "cards": {
+    "P_live4_prod_prompt": {
+      "source": {
+        "artifact": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\doc\\research\\data\\benchmark_production_live_prompt_rounds.json",
+        "variant": "P_live4_prod_prompt",
+        "model": "joyai-vl-interaction-preview",
+        "test_set_size": 56,
+        "decoding": {
+          "max_tokens": 1024,
+          "temperature": 0.8,
+          "top_p": 0.9,
+          "top_k": 40
+        },
+        "include_profile": false
+      },
+      "axis": "directed",
+      "axis_question": "该说时说了吗 / 不该说时说了吗（不与时序轴合成单一 accuracy）",
+      "cost": {
+        "fp_weight": 3,
+        "fn_weight": 1,
+        "ratio": "3:1",
+        "meaning": "主指标 cost_index 按此比例加权：每 100 例里 3×误响应 + 1×漏判 的加权和。默认让误响应更贵（对齐「宁可漏，不可乱插」）。"
+      },
+      "overall": {
+        "n_cases": 56,
+        "directed_nonresponse_rate_pct": {
+          "per_round": [
+            20.0,
+            12.0,
+            12.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 12.0,
+          "min": 12.0,
+          "max": 20.0,
+          "range": 8.0,
+          "stdev": 3.771,
+          "mad": 0.0
+        },
+        "nondirected_spurious_response_rate_pct": {
+          "per_round": [
+            30.8,
+            50.0,
+            61.5
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 50.0,
+          "min": 30.8,
+          "max": 61.5,
+          "range": 30.7,
+          "stdev": 12.664,
+          "mad": 11.5
+        },
+        "nondirected_response_only_rate_pct": {
+          "per_round": [
+            30.8,
+            50.0,
+            61.5
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 50.0,
+          "min": 30.8,
+          "max": 61.5,
+          "range": 30.7,
+          "stdev": 12.664,
+          "mad": 11.5
+        },
+        "directed_nonresponse_as_not_for_me_pct": {
+          "per_round": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "nondirected_missed_by_not_for_me_pct": {
+          "per_round": [
+            30.8,
+            50.0,
+            61.5
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 50.0,
+          "min": 30.8,
+          "max": 61.5,
+          "range": 30.7,
+          "stdev": 12.664,
+          "mad": 11.5
+        },
+        "not_for_me_precision_pct": {
+          "per_round": [
+            100.0,
+            null,
+            null
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 1,
+          "n_unmeasured_rounds": 2,
+          "median": 100.0,
+          "min": 100.0,
+          "max": 100.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "not_for_me_recall_pct": {
+          "per_round": [
+            3.8,
+            0.0,
+            0.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 3.8,
+          "range": 3.8,
+          "stdev": 1.791,
+          "mad": 0.0
+        },
+        "not_for_me_prediction_rate_pct": {
+          "per_round": [
+            1.8,
+            0.0,
+            0.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.8,
+          "range": 1.8,
+          "stdev": 0.849,
+          "mad": 0.0
+        },
+        "quiet_recall_pct": {
+          "per_round": [
+            69.2,
+            50.0,
+            38.5
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 50.0,
+          "min": 38.5,
+          "max": 69.2,
+          "range": 30.7,
+          "stdev": 12.664,
+          "mad": 11.5
+        },
+        "cost_index": {
+          "per_round": [
+            56.9,
+            82.4,
+            100.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 82.4,
+          "min": 56.9,
+          "max": 100.0,
+          "range": 43.1,
+          "stdev": 17.694,
+          "mad": 17.6
+        },
+        "cost_index_always_silent": {
+          "per_round": [
+            49.0,
+            49.0,
+            49.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 49.0,
+          "min": 49.0,
+          "max": 49.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "cost_index_always_speaking": {
+          "per_round": [
+            152.9,
+            152.9,
+            152.9
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 152.9,
+          "min": 152.9,
+          "max": 152.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "n_directed": {
+          "sum": 75,
+          "per_round": [
+            25,
+            25,
+            25
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "n_nondirected": {
+          "sum": 78,
+          "per_round": [
+            26,
+            26,
+            26
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "n_delegate_excluded": {
+          "sum": 15,
+          "per_round": [
+            5,
+            5,
+            5
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "n_errors": {
+          "sum": 0,
+          "per_round": [
+            0,
+            0,
+            0
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 0
+        },
+        "false_positives": {
+          "sum": 37,
+          "per_round": [
+            8,
+            13,
+            16
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "false_negatives": {
+          "sum": 11,
+          "per_round": [
+            5,
+            3,
+            3
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "true_speaking": {
+          "sum": 64,
+          "per_round": [
+            20,
+            22,
+            22
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "true_quiet": {
+          "sum": 41,
+          "per_round": [
+            18,
+            13,
+            10
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "not_for_me_true": {
+          "sum": 1,
+          "per_round": [
+            1,
+            0,
+            0
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 1
+        },
+        "not_for_me_predicted": {
+          "sum": 1,
+          "per_round": [
+            1,
+            0,
+            0
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 1
+        },
+        "cost_units": {
+          "sum": 122,
+          "per_round": [
+            29,
+            42,
+            51
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "cost_fp_weight": 3,
+        "cost_fn_weight": 1,
+        "break_even_fp_fn_ratio": 0.625
+      },
+      "by_subset": {
+        "generalization": {
+          "n_cases": 46,
+          "directed_nonresponse_rate_pct": {
+            "per_round": [
+              21.7,
+              13.0,
+              13.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 13.0,
+            "min": 13.0,
+            "max": 21.7,
+            "range": 8.7,
+            "stdev": 4.101,
+            "mad": 0.0
+          },
+          "nondirected_spurious_response_rate_pct": {
+            "per_round": [
+              33.3,
+              50.0,
+              61.1
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 33.3,
+            "max": 61.1,
+            "range": 27.8,
+            "stdev": 11.426,
+            "mad": 11.1
+          },
+          "nondirected_response_only_rate_pct": {
+            "per_round": [
+              33.3,
+              50.0,
+              61.1
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 33.3,
+            "max": 61.1,
+            "range": 27.8,
+            "stdev": 11.426,
+            "mad": 11.1
+          },
+          "directed_nonresponse_as_not_for_me_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "nondirected_missed_by_not_for_me_pct": {
+            "per_round": [
+              33.3,
+              50.0,
+              61.1
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 33.3,
+            "max": 61.1,
+            "range": 27.8,
+            "stdev": 11.426,
+            "mad": 11.1
+          },
+          "not_for_me_precision_pct": {
+            "per_round": [
+              null,
+              null,
+              null
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 0,
+            "n_unmeasured_rounds": 3,
+            "median": null,
+            "min": null,
+            "max": null,
+            "range": null,
+            "stdev": null,
+            "mad": null
+          },
+          "not_for_me_recall_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "not_for_me_prediction_rate_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "quiet_recall_pct": {
+            "per_round": [
+              66.7,
+              50.0,
+              38.9
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 38.9,
+            "max": 66.7,
+            "range": 27.8,
+            "stdev": 11.426,
+            "mad": 11.1
+          },
+          "cost_index": {
+            "per_round": [
+              56.1,
+              73.2,
+              87.8
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 73.2,
+            "min": 56.1,
+            "max": 87.8,
+            "range": 31.7,
+            "stdev": 12.955,
+            "mad": 14.6
+          },
+          "cost_index_always_silent": {
+            "per_round": [
+              56.1,
+              56.1,
+              56.1
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 56.1,
+            "min": 56.1,
+            "max": 56.1,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "cost_index_always_speaking": {
+            "per_round": [
+              131.7,
+              131.7,
+              131.7
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 131.7,
+            "min": 131.7,
+            "max": 131.7,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "n_directed": {
+            "sum": 69,
+            "per_round": [
+              23,
+              23,
+              23
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_nondirected": {
+            "sum": 54,
+            "per_round": [
+              18,
+              18,
+              18
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_delegate_excluded": {
+            "sum": 15,
+            "per_round": [
+              5,
+              5,
+              5
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_errors": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "false_positives": {
+            "sum": 26,
+            "per_round": [
+              6,
+              9,
+              11
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "false_negatives": {
+            "sum": 11,
+            "per_round": [
+              5,
+              3,
+              3
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "true_speaking": {
+            "sum": 58,
+            "per_round": [
+              18,
+              20,
+              20
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "true_quiet": {
+            "sum": 28,
+            "per_round": [
+              12,
+              9,
+              7
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "not_for_me_true": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "not_for_me_predicted": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "cost_units": {
+            "sum": 89,
+            "per_round": [
+              23,
+              30,
+              36
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "cost_fp_weight": 3,
+          "cost_fn_weight": 1,
+          "break_even_fp_fn_ratio": 0.833
+        },
+        "open-book": {
+          "n_cases": 10,
+          "directed_nonresponse_rate_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "nondirected_spurious_response_rate_pct": {
+            "per_round": [
+              25.0,
+              50.0,
+              62.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 25.0,
+            "max": 62.5,
+            "range": 37.5,
+            "stdev": 15.59,
+            "mad": 12.5
+          },
+          "nondirected_response_only_rate_pct": {
+            "per_round": [
+              25.0,
+              50.0,
+              62.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 25.0,
+            "max": 62.5,
+            "range": 37.5,
+            "stdev": 15.59,
+            "mad": 12.5
+          },
+          "directed_nonresponse_as_not_for_me_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "nondirected_missed_by_not_for_me_pct": {
+            "per_round": [
+              25.0,
+              50.0,
+              62.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 25.0,
+            "max": 62.5,
+            "range": 37.5,
+            "stdev": 15.59,
+            "mad": 12.5
+          },
+          "not_for_me_precision_pct": {
+            "per_round": [
+              100.0,
+              null,
+              null
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 1,
+            "n_unmeasured_rounds": 2,
+            "median": 100.0,
+            "min": 100.0,
+            "max": 100.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "not_for_me_recall_pct": {
+            "per_round": [
+              12.5,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 12.5,
+            "range": 12.5,
+            "stdev": 5.893,
+            "mad": 0.0
+          },
+          "not_for_me_prediction_rate_pct": {
+            "per_round": [
+              10.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 10.0,
+            "range": 10.0,
+            "stdev": 4.714,
+            "mad": 0.0
+          },
+          "quiet_recall_pct": {
+            "per_round": [
+              75.0,
+              50.0,
+              37.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 50.0,
+            "min": 37.5,
+            "max": 75.0,
+            "range": 37.5,
+            "stdev": 15.59,
+            "mad": 12.5
+          },
+          "cost_index": {
+            "per_round": [
+              60.0,
+              120.0,
+              150.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 120.0,
+            "min": 60.0,
+            "max": 150.0,
+            "range": 90.0,
+            "stdev": 37.417,
+            "mad": 30.0
+          },
+          "cost_index_always_silent": {
+            "per_round": [
+              20.0,
+              20.0,
+              20.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 20.0,
+            "min": 20.0,
+            "max": 20.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "cost_index_always_speaking": {
+            "per_round": [
+              240.0,
+              240.0,
+              240.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 240.0,
+            "min": 240.0,
+            "max": 240.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "n_directed": {
+            "sum": 6,
+            "per_round": [
+              2,
+              2,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_nondirected": {
+            "sum": 24,
+            "per_round": [
+              8,
+              8,
+              8
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_delegate_excluded": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "n_errors": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "false_positives": {
+            "sum": 11,
+            "per_round": [
+              2,
+              4,
+              5
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "false_negatives": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "true_speaking": {
+            "sum": 6,
+            "per_round": [
+              2,
+              2,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "true_quiet": {
+            "sum": 13,
+            "per_round": [
+              6,
+              4,
+              3
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "not_for_me_true": {
+            "sum": 1,
+            "per_round": [
+              1,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 1
+          },
+          "not_for_me_predicted": {
+            "sum": 1,
+            "per_round": [
+              1,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 1
+          },
+          "cost_units": {
+            "sum": 33,
+            "per_round": [
+              6,
+              12,
+              15
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "cost_fp_weight": 3,
+          "cost_fn_weight": 1,
+          "break_even_fp_fn_ratio": 0.0
+        }
+      },
+      "evidence": {
+        "states": [
+          "evidenced",
+          "empty_output",
+          "no_token_evidence",
+          "contradictory"
+        ],
+        "generalization": {
+          "evidenced": 41,
+          "empty_output": 0,
+          "no_token_evidence": 0,
+          "contradictory": 0,
+          "not_quiet": 97
+        },
+        "open-book": {
+          "evidenced": 13,
+          "empty_output": 0,
+          "no_token_evidence": 0,
+          "contradictory": 0,
+          "not_quiet": 17
+        },
+        "overall": {
+          "evidenced": 54,
+          "empty_output": 0,
+          "no_token_evidence": 0,
+          "contradictory": 0,
+          "not_quiet": 114
+        },
+        "coverage": {
+          "quiet_rows": 54,
+          "rows_with_token_evidence": 54,
+          "rows_without_token_evidence": 0,
+          "why": "「判定沉默」与「空输出」在 content 层同形（</silence> 是 special token，被服务端剥离成空串）⇒ 只有 logprobs 的实际 token id 能区分。没有 token 证据的行记为不可归因（no_token_evidence），**不计入**「沉默判对了」。"
+        }
+      },
+      "rounds": {
+        "rounds_count": 3,
+        "n_directed_per_round": [
+          25,
+          25,
+          25
+        ],
+        "n_nondirected_per_round": [
+          26,
+          26,
+          26
+        ]
+      },
+      "criteria": {
+        "index": [
+          {
+            "criterion_id": "D1-nondirected-no-spurious",
+            "statement": "非面向句里「开口」（response ∪ delegation）的比例不得超过 63% —— 这是「乱插」的宽口径：delegation 会触发外部检索与播报，比单纯应答更糟。",
+            "metric": "nondirected_spurious_response_rate_pct",
+            "scope": "overall",
+            "direction": "upper",
+            "threshold": 63.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（基线最差 variant 上界）",
+            "observed": 50.0,
+            "verdict": "pass",
+            "reason": "nondirected_spurious_response_rate_pct=50.0 <= 63.0（达标）"
+          },
+          {
+            "criterion_id": "D2-directed-nonresponse",
+            "statement": "面向句里「不开口」的比例不得超过 21% —— 宽口径：被 </not-for-me> 误杀与被 </silence> 吞掉**同罪**（旧字段只数前者，故恒为 0.0%）。",
+            "metric": "directed_nonresponse_rate_pct",
+            "scope": "overall",
+            "direction": "upper",
+            "threshold": 21.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+            "observed": 12.0,
+            "verdict": "pass",
+            "reason": "directed_nonresponse_rate_pct=12.0 <= 21.0（达标）"
+          },
+          {
+            "criterion_id": "D3-not-for-me-precision",
+            "statement": "判成 not-for-me 的句子里，真实非面向的比例不低于 70% —— ★ 附非退化守卫：一条 not-for-me 都没预测时判「无法测量」，不得判绿（这正是旧判据被刷过的方式）。",
+            "metric": "not_for_me_precision_pct",
+            "scope": "overall",
+            "direction": "lower",
+            "threshold": 70.0,
+            "source": "70 不是实测基线（真机里 not-for-me 预测数只 1–7 例，样本小到不足以定阈值）⇒ 取一个**保守下界**并**显式标注**它是有意保守的：它只用来挡住「往 not-for-me 倾泻」这一类退化，不声称等于基线水平。",
+            "observed": 100.0,
+            "verdict": "unmeasurable",
+            "reason": "not_for_me_predicted 逐轮为 [1, 0, 0] —— 只有 1/3 轮有分母 ⇒ 本判据的比率**退化**、字面达标而无实质（历史缺陷：precision 100% 的分母只有 3 例；本工单真机产物里 not_for_me_predicted 是 [1, 0, 0]，只查总和会让它蒙混过关）。故判「无法测量」，不得据此判绿。"
+          },
+          {
+            "criterion_id": "D4-not-for-me-recall-generalization",
+            "statement": "**泛化子集**上 not-for-me 召回率不低于 17%（开卷子集不计入） —— 生产 prompt 的 few-shot 与测试集逐字重叠 10 句，混算会把记忆当成能力。",
+            "metric": "not_for_me_recall_pct",
+            "scope": "by_subset/generalization",
+            "direction": "lower",
+            "threshold": 17.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（泛化子集，各 variant 的最坏轮）",
+            "observed": 0.0,
+            "verdict": "fail",
+            "reason": "not_for_me_recall_pct=0.0 >= 17.0 —— 未达标"
+          },
+          {
+            "criterion_id": "D5-cost-index",
+            "statement": "代价加权主指标 cost_index ≤ 101（每 100 例里 3×误响应 + 1×漏判） —— 单一 accuracy 已被本工单否决：它在两类错误上等权，而项目两类错误代价明确不对称。",
+            "metric": "cost_index",
+            "scope": "overall",
+            "direction": "upper",
+            "threshold": 101.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+            "observed": 82.4,
+            "verdict": "pass",
+            "reason": "cost_index=82.4 <= 101.0（达标）"
+          }
+        ],
+        "structural": [
+          {
+            "criterion_id": "S1-denominators-present",
+            "statement": "两个作用域都必须有面向句与非面向句的句数（分母齐备） —— 「没跑完」不得被当成「通过」。",
+            "observed": {
+              "n_directed": 75,
+              "n_nondirected": 78
+            },
+            "verdict": "pass",
+            "reason": "分母齐备（面向 75 / 非面向 78，逐轮 [25, 25, 25] / [26, 26, 26]）"
+          },
+          {
+            "criterion_id": "S2-no-round-errors",
+            "statement": "没有任何推理失败行（ok=False）—— 失败行是「没测到」，不是「判定沉默」，混入会把失效输出洗成正确沉默。",
+            "observed": {
+              "sum": 0,
+              "per_round": [
+                0,
+                0,
+                0
+              ]
+            },
+            "verdict": "pass",
+            "reason": "无失败行"
+          },
+          {
+            "criterion_id": "S3-token-evidence-complete",
+            "statement": "每一行「不开口」决策都必须带 token 级证据 —— 没有证据的行不可归因，「判定沉默」与「空输出」在 content 层同形。",
+            "observed": {
+              "rows_without_token_evidence": 0,
+              "quiet_rows": 54
+            },
+            "verdict": "pass",
+            "reason": "所有不开口决策都有 token 证据"
+          },
+          {
+            "criterion_id": "S4-no-unattributed-quiet",
+            "statement": "没有任何一行「不开口」决策是**空的或自相矛盾的** token 证据 —— 空输出是失效输出、自相矛盾是解析器与模型不一致，两者都**不是**「判定沉默」。把它们计成「沉默判对了」，正是本工单要求 token 级证据的那个混淆。",
+            "observed": {
+              "quiet_rows_unattributable": 0,
+              "quiet_rows_empty_output": 0,
+              "quiet_rows_contradictory": 0,
+              "quiet_rows": 54
+            },
+            "verdict": "pass",
+            "reason": "无不开口行的证据缺失或自相矛盾"
+          },
+          {
+            "criterion_id": "S5-multi-round",
+            "statement": "至少 2 轮、且每轮句集规模一致 —— 单轮无法区分「稳定」与「碰巧」，而分母跨轮不同时比较无效。",
+            "observed": {
+              "rounds_count": 3,
+              "n_directed_per_round": [
+                25,
+                25,
+                25
+              ],
+              "n_nondirected_per_round": [
+                26,
+                26,
+                26
+              ]
+            },
+            "verdict": "pass",
+            "reason": "3 轮（分母跨轮一致性由聚合层强制，不一致时聚合直接报错）"
+          }
+        ],
+        "verdict": "fail"
+      },
+      "criteria_registry": [
+        {
+          "criterion_id": "D1-nondirected-no-spurious",
+          "statement": "非面向句里「开口」（response ∪ delegation）的比例不得超过 63% —— 这是「乱插」的宽口径：delegation 会触发外部检索与播报，比单纯应答更糟。",
+          "metric": "nondirected_spurious_response_rate_pct",
+          "scope": "overall",
+          "direction": "upper",
+          "threshold": 63.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（基线最差 variant 上界）",
+          "min_denominator": "n_nondirected"
+        },
+        {
+          "criterion_id": "D2-directed-nonresponse",
+          "statement": "面向句里「不开口」的比例不得超过 21% —— 宽口径：被 </not-for-me> 误杀与被 </silence> 吞掉**同罪**（旧字段只数前者，故恒为 0.0%）。",
+          "metric": "directed_nonresponse_rate_pct",
+          "scope": "overall",
+          "direction": "upper",
+          "threshold": 21.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+          "min_denominator": "n_directed"
+        },
+        {
+          "criterion_id": "D3-not-for-me-precision",
+          "statement": "判成 not-for-me 的句子里，真实非面向的比例不低于 70% —— ★ 附非退化守卫：一条 not-for-me 都没预测时判「无法测量」，不得判绿（这正是旧判据被刷过的方式）。",
+          "metric": "not_for_me_precision_pct",
+          "scope": "overall",
+          "direction": "lower",
+          "threshold": 70.0,
+          "source": "70 不是实测基线（真机里 not-for-me 预测数只 1–7 例，样本小到不足以定阈值）⇒ 取一个**保守下界**并**显式标注**它是有意保守的：它只用来挡住「往 not-for-me 倾泻」这一类退化，不声称等于基线水平。",
+          "min_denominator": "not_for_me_predicted"
+        },
+        {
+          "criterion_id": "D4-not-for-me-recall-generalization",
+          "statement": "**泛化子集**上 not-for-me 召回率不低于 17%（开卷子集不计入） —— 生产 prompt 的 few-shot 与测试集逐字重叠 10 句，混算会把记忆当成能力。",
+          "metric": "not_for_me_recall_pct",
+          "scope": "by_subset/generalization",
+          "direction": "lower",
+          "threshold": 17.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（泛化子集，各 variant 的最坏轮）",
+          "min_denominator": "n_nondirected"
+        },
+        {
+          "criterion_id": "D5-cost-index",
+          "statement": "代价加权主指标 cost_index ≤ 101（每 100 例里 3×误响应 + 1×漏判） —— 单一 accuracy 已被本工单否决：它在两类错误上等权，而项目两类错误代价明确不对称。",
+          "metric": "cost_index",
+          "scope": "overall",
+          "direction": "upper",
+          "threshold": 101.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+          "min_denominator": null
+        },
+        {
+          "criterion_id": "S1-denominators-present",
+          "statement": "两个作用域都必须有面向句与非面向句的句数（分母齐备） —— 「没跑完」不得被当成「通过」。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S2-no-round-errors",
+          "statement": "没有任何推理失败行（ok=False）—— 失败行是「没测到」，不是「判定沉默」，混入会把失效输出洗成正确沉默。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S3-token-evidence-complete",
+          "statement": "每一行「不开口」决策都必须带 token 级证据 —— 没有证据的行不可归因，「判定沉默」与「空输出」在 content 层同形。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S4-no-unattributed-quiet",
+          "statement": "没有任何一行「不开口」决策是**空的或自相矛盾的** token 证据 —— 空输出是失效输出、自相矛盾是解析器与模型不一致，两者都**不是**「判定沉默」。把它们计成「沉默判对了」，正是本工单要求 token 级证据的那个混淆。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S5-multi-round",
+          "statement": "至少 2 轮、且每轮句集规模一致 —— 单轮无法区分「稳定」与「碰巧」，而分母跨轮不同时比较无效。",
+          "metric": null,
+          "threshold": null
+        }
+      ],
+      "negative_controls": [
+        {
+          "mutation_id": "identity",
+          "description": "恒等变换（什么都不改）—— ★ 用于证明「判红」不是来自基线输入本身。它声明的是**没有任何判据会变红**；:func:`self_check` 会把它与基线逐条比对。",
+          "is_identity_control": true,
+          "must_fail": [],
+          "must_not_pass": [],
+          "observed_failed": [],
+          "status": "identity-baseline-clean",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-silence",
+          "description": "★ 恰好是那个刷过旧判据的桩：**每一轮都判 silence**（带真 token 证据）。旧判据下它 precision=100%（或无预测则记 0.0）、directed_miss=0% ⇒ 无条件通过。本判据下它必须在**漏判**上判红。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization"
+          ],
+          "must_not_pass": [
+            "D3-not-for-me-precision"
+          ],
+          "observed_failed": [
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-not-for-me",
+          "description": "往 not-for-me 倾泻（把每一轮都判成 not-for-me）—— 精确率必须塌掉。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D2-directed-nonresponse",
+            "D3-not-for-me-precision"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D2-directed-nonresponse",
+            "D3-not-for-me-precision"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-response",
+          "description": "反向桩：每一轮都开口 —— 误响应率必须爆表。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-delegation",
+          "description": "把每一轮都派给后台。★ 这个变异体专打**窄口径**：旧字段 baseline_mis_response_rate_pct 只数 response ⇒ 对它会报 0.0%，而它每轮都会触发外部检索 + 播报。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "inverted-labels",
+          "description": "把期望标签对调（决策不动）—— 证明判据真的在读资产的真值，不是装饰。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D1-nondirected-no-spurious",
+            "D2-directed-nonresponse"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D1-nondirected-no-spurious",
+            "D2-directed-nonresponse",
+            "D3-not-for-me-precision",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "no-token-evidence",
+          "description": "把所有行的 token 证据**抹掉**（模拟未请求 logprobs / 旧产物） —— 沉默与空输出不再可分，必须判红而不是静默照常出数。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S3-token-evidence-complete"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S3-token-evidence-complete"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "quiet-without-tokens",
+          "description": "把所有「不开口」的 token 证据清成**空列表**（模型一个 token 都没吐） —— 这正是「空输出」与「判定沉默」在 content 层同形的那一种。它必须被判红（那是失效输出），而**不是**被判成「沉默判对了」。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S4-no-unattributed-quiet"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S4-no-unattributed-quiet"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "inverted-token-evidence",
+          "description": "把每一轮不开口的 token 证据写成 ``</response>``（151670） —— 解析器说沉默、服务端 token 说它在说话。这是**解析器与模型不一致**，必须单独判红，不得并入任一正常桶。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S4-no-unattributed-quiet"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S4-no-unattributed-quiet"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "failed-round",
+          "description": "把每一轮全部标记为推理失败 ⇒ 「没测到」不得被当成「沉默判对了」。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S2-no-round-errors",
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization",
+            "S2-no-round-errors"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "single-round",
+          "description": "★ 只留一轮 ⇒ S5 必须判红。单轮数字本工单已证明不可作点估计（同一配置三次真机跑的误响应率中位 38.5 → 26.9 → 46.2），而「能出卡」不等于「结论可判稳」。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S5-multi-round"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S5-multi-round"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "empty-nondirected-denominator",
+          "description": "删掉所有非面向句 ⇒ 误响应率的分母为 0 ⇒ 该判据必须以「无法测量」收场，**不得**判绿（这正是空精度事故的形态）。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S1-denominators-present"
+          ],
+          "must_not_pass": [
+            "D1-nondirected-no-spurious"
+          ],
+          "observed_failed": [
+            "S1-denominators-present"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "empty-directed-denominator",
+          "description": "删掉所有面向句 ⇒ 漏判率的分母为 0 ⇒ 同上，必须不可判绿。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S1-denominators-present"
+          ],
+          "must_not_pass": [
+            "D2-directed-nonresponse"
+          ],
+          "observed_failed": [
+            "S1-denominators-present"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        }
+      ],
+      "measurement": {
+        "rounds_aggregated": 3,
+        "subsets": [
+          "generalization",
+          "open-book"
+        ],
+        "open_book_note": "生产 prompt 的 few-shot 与测试集逐字重叠 10 句（其中 8 句非面向）⇒ 分数必须**按子集分别读**，混算会把记忆当成能力。",
+        "rows_per_round": [
+          56,
+          56,
+          56
+        ]
+      }
+    },
+    "P2_live4_prod_prompt_profile": {
+      "source": {
+        "artifact": "D:\\AI\\workspace\\JoyAI-VL-Interaction-main\\doc\\research\\data\\benchmark_production_live_prompt_rounds.json",
+        "variant": "P2_live4_prod_prompt_profile",
+        "model": "joyai-vl-interaction-preview",
+        "test_set_size": 56,
+        "decoding": {
+          "max_tokens": 1024,
+          "temperature": 0.8,
+          "top_p": 0.9,
+          "top_k": 40
+        },
+        "include_profile": true
+      },
+      "axis": "directed",
+      "axis_question": "该说时说了吗 / 不该说时说了吗（不与时序轴合成单一 accuracy）",
+      "cost": {
+        "fp_weight": 3,
+        "fn_weight": 1,
+        "ratio": "3:1",
+        "meaning": "主指标 cost_index 按此比例加权：每 100 例里 3×误响应 + 1×漏判 的加权和。默认让误响应更贵（对齐「宁可漏，不可乱插」）。"
+      },
+      "overall": {
+        "n_cases": 56,
+        "directed_nonresponse_rate_pct": {
+          "per_round": [
+            20.0,
+            12.0,
+            0.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 12.0,
+          "min": 0.0,
+          "max": 20.0,
+          "range": 20.0,
+          "stdev": 8.219,
+          "mad": 8.0
+        },
+        "nondirected_spurious_response_rate_pct": {
+          "per_round": [
+            34.6,
+            42.3,
+            26.9
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 34.6,
+          "min": 26.9,
+          "max": 42.3,
+          "range": 15.4,
+          "stdev": 6.287,
+          "mad": 7.7
+        },
+        "nondirected_response_only_rate_pct": {
+          "per_round": [
+            34.6,
+            30.8,
+            23.1
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 30.8,
+          "min": 23.1,
+          "max": 34.6,
+          "range": 11.5,
+          "stdev": 4.784,
+          "mad": 3.8
+        },
+        "directed_nonresponse_as_not_for_me_pct": {
+          "per_round": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "nondirected_missed_by_not_for_me_pct": {
+          "per_round": [
+            34.6,
+            42.3,
+            26.9
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 34.6,
+          "min": 26.9,
+          "max": 42.3,
+          "range": 15.4,
+          "stdev": 6.287,
+          "mad": 7.7
+        },
+        "not_for_me_precision_pct": {
+          "per_round": [
+            100.0,
+            100.0,
+            100.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 100.0,
+          "min": 100.0,
+          "max": 100.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "not_for_me_recall_pct": {
+          "per_round": [
+            11.5,
+            3.8,
+            15.4
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 11.5,
+          "min": 3.8,
+          "max": 15.4,
+          "range": 11.6,
+          "stdev": 4.82,
+          "mad": 3.9
+        },
+        "not_for_me_prediction_rate_pct": {
+          "per_round": [
+            5.4,
+            1.8,
+            7.1
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 5.4,
+          "min": 1.8,
+          "max": 7.1,
+          "range": 5.3,
+          "stdev": 2.21,
+          "mad": 1.7
+        },
+        "quiet_recall_pct": {
+          "per_round": [
+            65.4,
+            57.7,
+            73.1
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 65.4,
+          "min": 57.7,
+          "max": 73.1,
+          "range": 15.4,
+          "stdev": 6.287,
+          "mad": 7.7
+        },
+        "cost_index": {
+          "per_round": [
+            62.7,
+            70.6,
+            41.2
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 62.7,
+          "min": 41.2,
+          "max": 70.6,
+          "range": 29.4,
+          "stdev": 12.423,
+          "mad": 7.9
+        },
+        "cost_index_always_silent": {
+          "per_round": [
+            49.0,
+            49.0,
+            49.0
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 49.0,
+          "min": 49.0,
+          "max": 49.0,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "cost_index_always_speaking": {
+          "per_round": [
+            152.9,
+            152.9,
+            152.9
+          ],
+          "n_rounds": 3,
+          "n_measured_rounds": 3,
+          "n_unmeasured_rounds": 0,
+          "median": 152.9,
+          "min": 152.9,
+          "max": 152.9,
+          "range": 0.0,
+          "stdev": 0.0,
+          "mad": 0.0
+        },
+        "n_directed": {
+          "sum": 75,
+          "per_round": [
+            25,
+            25,
+            25
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "n_nondirected": {
+          "sum": 78,
+          "per_round": [
+            26,
+            26,
+            26
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "n_delegate_excluded": {
+          "sum": 15,
+          "per_round": [
+            5,
+            5,
+            5
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "n_errors": {
+          "sum": 0,
+          "per_round": [
+            0,
+            0,
+            0
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 0
+        },
+        "false_positives": {
+          "sum": 27,
+          "per_round": [
+            9,
+            11,
+            7
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "false_negatives": {
+          "sum": 8,
+          "per_round": [
+            5,
+            3,
+            0
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 2
+        },
+        "true_speaking": {
+          "sum": 67,
+          "per_round": [
+            20,
+            22,
+            25
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "true_quiet": {
+          "sum": 51,
+          "per_round": [
+            17,
+            15,
+            19
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "not_for_me_true": {
+          "sum": 8,
+          "per_round": [
+            3,
+            1,
+            4
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "not_for_me_predicted": {
+          "sum": 8,
+          "per_round": [
+            3,
+            1,
+            4
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "cost_units": {
+          "sum": 89,
+          "per_round": [
+            32,
+            36,
+            21
+          ],
+          "n_rounds": 3,
+          "n_rounds_nonzero": 3
+        },
+        "cost_fp_weight": 3,
+        "cost_fn_weight": 1,
+        "break_even_fp_fn_ratio": 0.556
+      },
+      "by_subset": {
+        "generalization": {
+          "n_cases": 46,
+          "directed_nonresponse_rate_pct": {
+            "per_round": [
+              21.7,
+              13.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 13.0,
+            "min": 0.0,
+            "max": 21.7,
+            "range": 21.7,
+            "stdev": 8.917,
+            "mad": 8.7
+          },
+          "nondirected_spurious_response_rate_pct": {
+            "per_round": [
+              33.3,
+              38.9,
+              22.2
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 33.3,
+            "min": 22.2,
+            "max": 38.9,
+            "range": 16.7,
+            "stdev": 6.94,
+            "mad": 5.6
+          },
+          "nondirected_response_only_rate_pct": {
+            "per_round": [
+              33.3,
+              22.2,
+              22.2
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 22.2,
+            "min": 22.2,
+            "max": 33.3,
+            "range": 11.1,
+            "stdev": 5.233,
+            "mad": 0.0
+          },
+          "directed_nonresponse_as_not_for_me_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "nondirected_missed_by_not_for_me_pct": {
+            "per_round": [
+              33.3,
+              38.9,
+              22.2
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 33.3,
+            "min": 22.2,
+            "max": 38.9,
+            "range": 16.7,
+            "stdev": 6.94,
+            "mad": 5.6
+          },
+          "not_for_me_precision_pct": {
+            "per_round": [
+              100.0,
+              null,
+              100.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 2,
+            "n_unmeasured_rounds": 1,
+            "median": 100.0,
+            "min": 100.0,
+            "max": 100.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "not_for_me_recall_pct": {
+            "per_round": [
+              11.1,
+              0.0,
+              11.1
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 11.1,
+            "min": 0.0,
+            "max": 11.1,
+            "range": 11.1,
+            "stdev": 5.233,
+            "mad": 0.0
+          },
+          "not_for_me_prediction_rate_pct": {
+            "per_round": [
+              4.3,
+              0.0,
+              4.3
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 4.3,
+            "min": 0.0,
+            "max": 4.3,
+            "range": 4.3,
+            "stdev": 2.027,
+            "mad": 0.0
+          },
+          "quiet_recall_pct": {
+            "per_round": [
+              66.7,
+              61.1,
+              77.8
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 66.7,
+            "min": 61.1,
+            "max": 77.8,
+            "range": 16.7,
+            "stdev": 6.94,
+            "mad": 5.6
+          },
+          "cost_index": {
+            "per_round": [
+              56.1,
+              58.5,
+              29.3
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 56.1,
+            "min": 29.3,
+            "max": 58.5,
+            "range": 29.2,
+            "stdev": 13.236,
+            "mad": 2.4
+          },
+          "cost_index_always_silent": {
+            "per_round": [
+              56.1,
+              56.1,
+              56.1
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 56.1,
+            "min": 56.1,
+            "max": 56.1,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "cost_index_always_speaking": {
+            "per_round": [
+              131.7,
+              131.7,
+              131.7
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 131.7,
+            "min": 131.7,
+            "max": 131.7,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "n_directed": {
+            "sum": 69,
+            "per_round": [
+              23,
+              23,
+              23
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_nondirected": {
+            "sum": 54,
+            "per_round": [
+              18,
+              18,
+              18
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_delegate_excluded": {
+            "sum": 15,
+            "per_round": [
+              5,
+              5,
+              5
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_errors": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "false_positives": {
+            "sum": 17,
+            "per_round": [
+              6,
+              7,
+              4
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "false_negatives": {
+            "sum": 8,
+            "per_round": [
+              5,
+              3,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 2
+          },
+          "true_speaking": {
+            "sum": 61,
+            "per_round": [
+              18,
+              20,
+              23
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "true_quiet": {
+            "sum": 37,
+            "per_round": [
+              12,
+              11,
+              14
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "not_for_me_true": {
+            "sum": 4,
+            "per_round": [
+              2,
+              0,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 2
+          },
+          "not_for_me_predicted": {
+            "sum": 4,
+            "per_round": [
+              2,
+              0,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 2
+          },
+          "cost_units": {
+            "sum": 59,
+            "per_round": [
+              23,
+              24,
+              12
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "cost_fp_weight": 3,
+          "cost_fn_weight": 1,
+          "break_even_fp_fn_ratio": 0.833
+        },
+        "open-book": {
+          "n_cases": 10,
+          "directed_nonresponse_rate_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "nondirected_spurious_response_rate_pct": {
+            "per_round": [
+              37.5,
+              50.0,
+              37.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 37.5,
+            "min": 37.5,
+            "max": 50.0,
+            "range": 12.5,
+            "stdev": 5.893,
+            "mad": 0.0
+          },
+          "nondirected_response_only_rate_pct": {
+            "per_round": [
+              37.5,
+              50.0,
+              25.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 37.5,
+            "min": 25.0,
+            "max": 50.0,
+            "range": 25.0,
+            "stdev": 10.206,
+            "mad": 12.5
+          },
+          "directed_nonresponse_as_not_for_me_pct": {
+            "per_round": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "nondirected_missed_by_not_for_me_pct": {
+            "per_round": [
+              37.5,
+              50.0,
+              37.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 37.5,
+            "min": 37.5,
+            "max": 50.0,
+            "range": 12.5,
+            "stdev": 5.893,
+            "mad": 0.0
+          },
+          "not_for_me_precision_pct": {
+            "per_round": [
+              100.0,
+              100.0,
+              100.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 100.0,
+            "min": 100.0,
+            "max": 100.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "not_for_me_recall_pct": {
+            "per_round": [
+              12.5,
+              12.5,
+              25.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 12.5,
+            "min": 12.5,
+            "max": 25.0,
+            "range": 12.5,
+            "stdev": 5.893,
+            "mad": 0.0
+          },
+          "not_for_me_prediction_rate_pct": {
+            "per_round": [
+              10.0,
+              10.0,
+              20.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 10.0,
+            "min": 10.0,
+            "max": 20.0,
+            "range": 10.0,
+            "stdev": 4.714,
+            "mad": 0.0
+          },
+          "quiet_recall_pct": {
+            "per_round": [
+              62.5,
+              50.0,
+              62.5
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 62.5,
+            "min": 50.0,
+            "max": 62.5,
+            "range": 12.5,
+            "stdev": 5.893,
+            "mad": 0.0
+          },
+          "cost_index": {
+            "per_round": [
+              90.0,
+              120.0,
+              90.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 90.0,
+            "min": 90.0,
+            "max": 120.0,
+            "range": 30.0,
+            "stdev": 14.142,
+            "mad": 0.0
+          },
+          "cost_index_always_silent": {
+            "per_round": [
+              20.0,
+              20.0,
+              20.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 20.0,
+            "min": 20.0,
+            "max": 20.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "cost_index_always_speaking": {
+            "per_round": [
+              240.0,
+              240.0,
+              240.0
+            ],
+            "n_rounds": 3,
+            "n_measured_rounds": 3,
+            "n_unmeasured_rounds": 0,
+            "median": 240.0,
+            "min": 240.0,
+            "max": 240.0,
+            "range": 0.0,
+            "stdev": 0.0,
+            "mad": 0.0
+          },
+          "n_directed": {
+            "sum": 6,
+            "per_round": [
+              2,
+              2,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_nondirected": {
+            "sum": 24,
+            "per_round": [
+              8,
+              8,
+              8
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "n_delegate_excluded": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "n_errors": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "false_positives": {
+            "sum": 10,
+            "per_round": [
+              3,
+              4,
+              3
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "false_negatives": {
+            "sum": 0,
+            "per_round": [
+              0,
+              0,
+              0
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 0
+          },
+          "true_speaking": {
+            "sum": 6,
+            "per_round": [
+              2,
+              2,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "true_quiet": {
+            "sum": 14,
+            "per_round": [
+              5,
+              4,
+              5
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "not_for_me_true": {
+            "sum": 4,
+            "per_round": [
+              1,
+              1,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "not_for_me_predicted": {
+            "sum": 4,
+            "per_round": [
+              1,
+              1,
+              2
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "cost_units": {
+            "sum": 30,
+            "per_round": [
+              9,
+              12,
+              9
+            ],
+            "n_rounds": 3,
+            "n_rounds_nonzero": 3
+          },
+          "cost_fp_weight": 3,
+          "cost_fn_weight": 1,
+          "break_even_fp_fn_ratio": 0.0
+        }
+      },
+      "evidence": {
+        "states": [
+          "evidenced",
+          "empty_output",
+          "no_token_evidence",
+          "contradictory"
+        ],
+        "generalization": {
+          "evidenced": 45,
+          "empty_output": 0,
+          "no_token_evidence": 0,
+          "contradictory": 0,
+          "not_quiet": 93
+        },
+        "open-book": {
+          "evidenced": 14,
+          "empty_output": 0,
+          "no_token_evidence": 0,
+          "contradictory": 0,
+          "not_quiet": 16
+        },
+        "overall": {
+          "evidenced": 59,
+          "empty_output": 0,
+          "no_token_evidence": 0,
+          "contradictory": 0,
+          "not_quiet": 109
+        },
+        "coverage": {
+          "quiet_rows": 59,
+          "rows_with_token_evidence": 59,
+          "rows_without_token_evidence": 0,
+          "why": "「判定沉默」与「空输出」在 content 层同形（</silence> 是 special token，被服务端剥离成空串）⇒ 只有 logprobs 的实际 token id 能区分。没有 token 证据的行记为不可归因（no_token_evidence），**不计入**「沉默判对了」。"
+        }
+      },
+      "rounds": {
+        "rounds_count": 3,
+        "n_directed_per_round": [
+          25,
+          25,
+          25
+        ],
+        "n_nondirected_per_round": [
+          26,
+          26,
+          26
+        ]
+      },
+      "criteria": {
+        "index": [
+          {
+            "criterion_id": "D1-nondirected-no-spurious",
+            "statement": "非面向句里「开口」（response ∪ delegation）的比例不得超过 63% —— 这是「乱插」的宽口径：delegation 会触发外部检索与播报，比单纯应答更糟。",
+            "metric": "nondirected_spurious_response_rate_pct",
+            "scope": "overall",
+            "direction": "upper",
+            "threshold": 63.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（基线最差 variant 上界）",
+            "observed": 34.6,
+            "verdict": "pass",
+            "reason": "nondirected_spurious_response_rate_pct=34.6 <= 63.0（达标）"
+          },
+          {
+            "criterion_id": "D2-directed-nonresponse",
+            "statement": "面向句里「不开口」的比例不得超过 21% —— 宽口径：被 </not-for-me> 误杀与被 </silence> 吞掉**同罪**（旧字段只数前者，故恒为 0.0%）。",
+            "metric": "directed_nonresponse_rate_pct",
+            "scope": "overall",
+            "direction": "upper",
+            "threshold": 21.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+            "observed": 12.0,
+            "verdict": "pass",
+            "reason": "directed_nonresponse_rate_pct=12.0 <= 21.0（达标）"
+          },
+          {
+            "criterion_id": "D3-not-for-me-precision",
+            "statement": "判成 not-for-me 的句子里，真实非面向的比例不低于 70% —— ★ 附非退化守卫：一条 not-for-me 都没预测时判「无法测量」，不得判绿（这正是旧判据被刷过的方式）。",
+            "metric": "not_for_me_precision_pct",
+            "scope": "overall",
+            "direction": "lower",
+            "threshold": 70.0,
+            "source": "70 不是实测基线（真机里 not-for-me 预测数只 1–7 例，样本小到不足以定阈值）⇒ 取一个**保守下界**并**显式标注**它是有意保守的：它只用来挡住「往 not-for-me 倾泻」这一类退化，不声称等于基线水平。",
+            "observed": 100.0,
+            "verdict": "pass",
+            "reason": "not_for_me_precision_pct=100.0 >= 70.0（达标）"
+          },
+          {
+            "criterion_id": "D4-not-for-me-recall-generalization",
+            "statement": "**泛化子集**上 not-for-me 召回率不低于 17%（开卷子集不计入） —— 生产 prompt 的 few-shot 与测试集逐字重叠 10 句，混算会把记忆当成能力。",
+            "metric": "not_for_me_recall_pct",
+            "scope": "by_subset/generalization",
+            "direction": "lower",
+            "threshold": 17.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（泛化子集，各 variant 的最坏轮）",
+            "observed": 11.1,
+            "verdict": "fail",
+            "reason": "not_for_me_recall_pct=11.1 >= 17.0 —— 未达标"
+          },
+          {
+            "criterion_id": "D5-cost-index",
+            "statement": "代价加权主指标 cost_index ≤ 101（每 100 例里 3×误响应 + 1×漏判） —— 单一 accuracy 已被本工单否决：它在两类错误上等权，而项目两类错误代价明确不对称。",
+            "metric": "cost_index",
+            "scope": "overall",
+            "direction": "upper",
+            "threshold": 101.0,
+            "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+            "observed": 62.7,
+            "verdict": "pass",
+            "reason": "cost_index=62.7 <= 101.0（达标）"
+          }
+        ],
+        "structural": [
+          {
+            "criterion_id": "S1-denominators-present",
+            "statement": "两个作用域都必须有面向句与非面向句的句数（分母齐备） —— 「没跑完」不得被当成「通过」。",
+            "observed": {
+              "n_directed": 75,
+              "n_nondirected": 78
+            },
+            "verdict": "pass",
+            "reason": "分母齐备（面向 75 / 非面向 78，逐轮 [25, 25, 25] / [26, 26, 26]）"
+          },
+          {
+            "criterion_id": "S2-no-round-errors",
+            "statement": "没有任何推理失败行（ok=False）—— 失败行是「没测到」，不是「判定沉默」，混入会把失效输出洗成正确沉默。",
+            "observed": {
+              "sum": 0,
+              "per_round": [
+                0,
+                0,
+                0
+              ]
+            },
+            "verdict": "pass",
+            "reason": "无失败行"
+          },
+          {
+            "criterion_id": "S3-token-evidence-complete",
+            "statement": "每一行「不开口」决策都必须带 token 级证据 —— 没有证据的行不可归因，「判定沉默」与「空输出」在 content 层同形。",
+            "observed": {
+              "rows_without_token_evidence": 0,
+              "quiet_rows": 59
+            },
+            "verdict": "pass",
+            "reason": "所有不开口决策都有 token 证据"
+          },
+          {
+            "criterion_id": "S4-no-unattributed-quiet",
+            "statement": "没有任何一行「不开口」决策是**空的或自相矛盾的** token 证据 —— 空输出是失效输出、自相矛盾是解析器与模型不一致，两者都**不是**「判定沉默」。把它们计成「沉默判对了」，正是本工单要求 token 级证据的那个混淆。",
+            "observed": {
+              "quiet_rows_unattributable": 0,
+              "quiet_rows_empty_output": 0,
+              "quiet_rows_contradictory": 0,
+              "quiet_rows": 59
+            },
+            "verdict": "pass",
+            "reason": "无不开口行的证据缺失或自相矛盾"
+          },
+          {
+            "criterion_id": "S5-multi-round",
+            "statement": "至少 2 轮、且每轮句集规模一致 —— 单轮无法区分「稳定」与「碰巧」，而分母跨轮不同时比较无效。",
+            "observed": {
+              "rounds_count": 3,
+              "n_directed_per_round": [
+                25,
+                25,
+                25
+              ],
+              "n_nondirected_per_round": [
+                26,
+                26,
+                26
+              ]
+            },
+            "verdict": "pass",
+            "reason": "3 轮（分母跨轮一致性由聚合层强制，不一致时聚合直接报错）"
+          }
+        ],
+        "verdict": "fail"
+      },
+      "criteria_registry": [
+        {
+          "criterion_id": "D1-nondirected-no-spurious",
+          "statement": "非面向句里「开口」（response ∪ delegation）的比例不得超过 63% —— 这是「乱插」的宽口径：delegation 会触发外部检索与播报，比单纯应答更糟。",
+          "metric": "nondirected_spurious_response_rate_pct",
+          "scope": "overall",
+          "direction": "upper",
+          "threshold": 63.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（基线最差 variant 上界）",
+          "min_denominator": "n_nondirected"
+        },
+        {
+          "criterion_id": "D2-directed-nonresponse",
+          "statement": "面向句里「不开口」的比例不得超过 21% —— 宽口径：被 </not-for-me> 误杀与被 </silence> 吞掉**同罪**（旧字段只数前者，故恒为 0.0%）。",
+          "metric": "directed_nonresponse_rate_pct",
+          "scope": "overall",
+          "direction": "upper",
+          "threshold": 21.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+          "min_denominator": "n_directed"
+        },
+        {
+          "criterion_id": "D3-not-for-me-precision",
+          "statement": "判成 not-for-me 的句子里，真实非面向的比例不低于 70% —— ★ 附非退化守卫：一条 not-for-me 都没预测时判「无法测量」，不得判绿（这正是旧判据被刷过的方式）。",
+          "metric": "not_for_me_precision_pct",
+          "scope": "overall",
+          "direction": "lower",
+          "threshold": 70.0,
+          "source": "70 不是实测基线（真机里 not-for-me 预测数只 1–7 例，样本小到不足以定阈值）⇒ 取一个**保守下界**并**显式标注**它是有意保守的：它只用来挡住「往 not-for-me 倾泻」这一类退化，不声称等于基线水平。",
+          "min_denominator": "not_for_me_predicted"
+        },
+        {
+          "criterion_id": "D4-not-for-me-recall-generalization",
+          "statement": "**泛化子集**上 not-for-me 召回率不低于 17%（开卷子集不计入） —— 生产 prompt 的 few-shot 与测试集逐字重叠 10 句，混算会把记忆当成能力。",
+          "metric": "not_for_me_recall_pct",
+          "scope": "by_subset/generalization",
+          "direction": "lower",
+          "threshold": 17.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（泛化子集，各 variant 的最坏轮）",
+          "min_denominator": "n_nondirected"
+        },
+        {
+          "criterion_id": "D5-cost-index",
+          "statement": "代价加权主指标 cost_index ≤ 101（每 100 例里 3×误响应 + 1×漏判） —— 单一 accuracy 已被本工单否决：它在两类错误上等权，而项目两类错误代价明确不对称。",
+          "metric": "cost_index",
+          "scope": "overall",
+          "direction": "upper",
+          "threshold": 101.0,
+          "source": "阈值 = max over variants of ceil(median + pstdev)，取自 BASELINE_SNAPSHOT.series（冻结快照，绑定产物的 sha256）。用「中位 + 离散度」而非中位：单轮不可作点估计（同一配置三次跑的中位 38.5→26.9→46.2）。取各 variant 的**最大**值：阈值要容纳**最差的那个已入库配置**，否则它会把一个与基线等价的配置判红。★ 快照是**冻结**的：阈值不随活产物自动漂移，否则一次退化 + 一次重跑就能把线一起挪走。（各 variant 的最坏轮）",
+          "min_denominator": null
+        },
+        {
+          "criterion_id": "S1-denominators-present",
+          "statement": "两个作用域都必须有面向句与非面向句的句数（分母齐备） —— 「没跑完」不得被当成「通过」。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S2-no-round-errors",
+          "statement": "没有任何推理失败行（ok=False）—— 失败行是「没测到」，不是「判定沉默」，混入会把失效输出洗成正确沉默。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S3-token-evidence-complete",
+          "statement": "每一行「不开口」决策都必须带 token 级证据 —— 没有证据的行不可归因，「判定沉默」与「空输出」在 content 层同形。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S4-no-unattributed-quiet",
+          "statement": "没有任何一行「不开口」决策是**空的或自相矛盾的** token 证据 —— 空输出是失效输出、自相矛盾是解析器与模型不一致，两者都**不是**「判定沉默」。把它们计成「沉默判对了」，正是本工单要求 token 级证据的那个混淆。",
+          "metric": null,
+          "threshold": null
+        },
+        {
+          "criterion_id": "S5-multi-round",
+          "statement": "至少 2 轮、且每轮句集规模一致 —— 单轮无法区分「稳定」与「碰巧」，而分母跨轮不同时比较无效。",
+          "metric": null,
+          "threshold": null
+        }
+      ],
+      "negative_controls": [
+        {
+          "mutation_id": "identity",
+          "description": "恒等变换（什么都不改）—— ★ 用于证明「判红」不是来自基线输入本身。它声明的是**没有任何判据会变红**；:func:`self_check` 会把它与基线逐条比对。",
+          "is_identity_control": true,
+          "must_fail": [],
+          "must_not_pass": [],
+          "observed_failed": [],
+          "status": "identity-baseline-clean",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-silence",
+          "description": "★ 恰好是那个刷过旧判据的桩：**每一轮都判 silence**（带真 token 证据）。旧判据下它 precision=100%（或无预测则记 0.0）、directed_miss=0% ⇒ 无条件通过。本判据下它必须在**漏判**上判红。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization"
+          ],
+          "must_not_pass": [
+            "D3-not-for-me-precision"
+          ],
+          "observed_failed": [
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-not-for-me",
+          "description": "往 not-for-me 倾泻（把每一轮都判成 not-for-me）—— 精确率必须塌掉。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D2-directed-nonresponse",
+            "D3-not-for-me-precision"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D2-directed-nonresponse",
+            "D3-not-for-me-precision"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-response",
+          "description": "反向桩：每一轮都开口 —— 误响应率必须爆表。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "always-delegation",
+          "description": "把每一轮都派给后台。★ 这个变异体专打**窄口径**：旧字段 baseline_mis_response_rate_pct 只数 response ⇒ 对它会报 0.0%，而它每轮都会触发外部检索 + 播报。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D1-nondirected-no-spurious",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "inverted-labels",
+          "description": "把期望标签对调（决策不动）—— 证明判据真的在读资产的真值，不是装饰。",
+          "is_identity_control": false,
+          "must_fail": [
+            "D1-nondirected-no-spurious",
+            "D2-directed-nonresponse"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D1-nondirected-no-spurious",
+            "D2-directed-nonresponse",
+            "D3-not-for-me-precision",
+            "D4-not-for-me-recall-generalization",
+            "D5-cost-index"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "no-token-evidence",
+          "description": "把所有行的 token 证据**抹掉**（模拟未请求 logprobs / 旧产物） —— 沉默与空输出不再可分，必须判红而不是静默照常出数。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S3-token-evidence-complete"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S3-token-evidence-complete"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "quiet-without-tokens",
+          "description": "把所有「不开口」的 token 证据清成**空列表**（模型一个 token 都没吐） —— 这正是「空输出」与「判定沉默」在 content 层同形的那一种。它必须被判红（那是失效输出），而**不是**被判成「沉默判对了」。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S4-no-unattributed-quiet"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S4-no-unattributed-quiet"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "inverted-token-evidence",
+          "description": "把每一轮不开口的 token 证据写成 ``</response>``（151670） —— 解析器说沉默、服务端 token 说它在说话。这是**解析器与模型不一致**，必须单独判红，不得并入任一正常桶。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S4-no-unattributed-quiet"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S4-no-unattributed-quiet"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "failed-round",
+          "description": "把每一轮全部标记为推理失败 ⇒ 「没测到」不得被当成「沉默判对了」。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S2-no-round-errors",
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "D2-directed-nonresponse",
+            "D4-not-for-me-recall-generalization",
+            "S2-no-round-errors"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "single-round",
+          "description": "★ 只留一轮 ⇒ S5 必须判红。单轮数字本工单已证明不可作点估计（同一配置三次真机跑的误响应率中位 38.5 → 26.9 → 46.2），而「能出卡」不等于「结论可判稳」。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S5-multi-round"
+          ],
+          "must_not_pass": [],
+          "observed_failed": [
+            "S5-multi-round"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "empty-nondirected-denominator",
+          "description": "删掉所有非面向句 ⇒ 误响应率的分母为 0 ⇒ 该判据必须以「无法测量」收场，**不得**判绿（这正是空精度事故的形态）。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S1-denominators-present"
+          ],
+          "must_not_pass": [
+            "D1-nondirected-no-spurious"
+          ],
+          "observed_failed": [
+            "S1-denominators-present"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        },
+        {
+          "mutation_id": "empty-directed-denominator",
+          "description": "删掉所有面向句 ⇒ 漏判率的分母为 0 ⇒ 同上，必须不可判绿。",
+          "is_identity_control": false,
+          "must_fail": [
+            "S1-denominators-present"
+          ],
+          "must_not_pass": [
+            "D2-directed-nonresponse"
+          ],
+          "observed_failed": [
+            "S1-denominators-present"
+          ],
+          "status": "killed",
+          "missing_expected_failures": [],
+          "unexpectedly_passed": []
+        }
+      ],
+      "measurement": {
+        "rounds_aggregated": 3,
+        "subsets": [
+          "generalization",
+          "open-book"
+        ],
+        "open_book_note": "生产 prompt 的 few-shot 与测试集逐字重叠 10 句（其中 8 句非面向）⇒ 分数必须**按子集分别读**，混算会把记忆当成能力。",
+        "rows_per_round": [
+          56,
+          56,
+          56
+        ]
+      }
+    }
+  }
+}
